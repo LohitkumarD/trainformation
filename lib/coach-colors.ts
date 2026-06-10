@@ -3,12 +3,23 @@ import type { CoachType } from '@/types';
 export function detectCoachType(code: string): CoachType {
   const upper = code.toUpperCase().trim();
 
+  // Engine / Locomotive
   if (/^(ENG|ENGINE|LOCO|WDP|WAP|WDG|WAG)/.test(upper)) return 'engine';
+
+  // Sleeper class — S1–S15, M1–M9 (Modified sleeper)
   if (/^S\d+$/.test(upper)) return 'sleeper';
-  if (/^(B\d+|A\d+|EC\d*|1A|2A|3A|CC\d*|AC\d*)$/.test(upper)) return 'ac';
+  if (/^M\d+$/.test(upper)) return 'sleeper';
+
+  // AC class — B (2nd AC), A (1st AC), H (AC Chair), EC, CC, HA
+  if (/^(B\d+|A\d+|H\d+|HA\d*|EC\d*|CC\d*|AC\d*|1A|2A|3A)$/.test(upper)) return 'ac';
+
+  // General / Unreserved — also handles codes like 2GEN, 3GEN, GENR
   if (/^(GEN|GS|UR|UNRESERVED)$/.test(upper)) return 'general';
-  if (/^(SLRD?|D\d*|SLR)$/.test(upper)) return 'general';
-  if (/^(PC|EOG|GUARD|BRK|BRAKE)/.test(upper)) return 'other';
+  if (/GEN$/.test(upper)) return 'general';       // 2GEN, 3GEN …
+  if (/^(SLRD?|SLR|D\d*)$/.test(upper)) return 'general';
+
+  // Utility / Special coaches
+  if (/^(PC|EOG|GUARD|BRK|BRAKE|LPR|LSLRD|WLRRM|GEN-C|LAGEN)/.test(upper)) return 'other';
 
   return 'other';
 }
