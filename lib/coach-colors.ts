@@ -6,20 +6,22 @@ export function detectCoachType(code: string): CoachType {
   // Engine / Locomotive
   if (/^(ENG|ENGINE|LOCO|WDP|WAP|WDG|WAG)/.test(upper)) return 'engine';
 
-  // Sleeper — S1–S15, M1–M9 (Modified sleeper)
+  // Sleeper — S, M (Modified), SE (Economy Sleeper)
   if (/^S\d+$/.test(upper)) return 'sleeper';
   if (/^M\d+$/.test(upper)) return 'sleeper';
+  if (/^SE\d*$/.test(upper)) return 'sleeper';
 
-  // AC — B (2nd AC), A (1st AC), H (AC Chair), EC, CC, HA
-  if (/^(B\d+|A\d+|H\d+|HA\d*|EC\d*|CC\d*|AC\d*|1A|2A|3A)$/.test(upper)) return 'ac';
+  // AC — B (2nd AC), A (1st AC), H (AC Chair), HA (Handicapped AC),
+  //       AE (AC Economy), EC, CC
+  if (/^(B\d+|A\d+|H\d+|HA\d*|AE\d*|EC\d*|CC\d*|AC\d*|1A|2A|3A)$/.test(upper)) return 'ac';
 
-  // General / Unreserved — also handles 2GEN, 3GEN, GENR…
+  // General / Guard vans
   if (/^(GEN|GS|UR|UNRESERVED)$/.test(upper)) return 'general';
-  if (/GEN$/.test(upper)) return 'general';
-  if (/^(SLRD?|SLR|D\d*)$/.test(upper)) return 'general';
+  if (/GEN$/.test(upper)) return 'general';               // 2GEN, 3GEN …
+  if (/^(SLRD?|SLR\d*|LSLR\d*|D\d*|DE\d*|C\d*|SE\d*)$/.test(upper)) return 'general';
 
-  // Utility / Special
-  if (/^(PC|EOG|GUARD|BRK|BRAKE|LPR|LSLRD|WLRRM)/.test(upper)) return 'other';
+  // Utility / Special coaches
+  if (/^(PC\d*|EOG|GUARD|BRK|BRAKE|LPR\d*|VP\d*|WLRRM)/.test(upper)) return 'other';
 
   return 'other';
 }
@@ -31,7 +33,7 @@ export interface CoachColorConfig {
   border: string;
   dot: string;
   label: string;
-  /* Hex values used as inline style fallback so purging can never break colours */
+  /* Hex — used as inline style so CSS purging can never strip colours */
   hex: string;
 }
 
