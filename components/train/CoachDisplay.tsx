@@ -27,23 +27,20 @@ export function CoachDisplay({ coaches, className, showLegend = true }: CoachDis
       {/* Vertical wrap grid — [position#][CODE] compound chips */}
       <div className="flex flex-wrap gap-2">
         {coaches.map((coach, idx) => {
-          const colors = COACH_COLORS[coach.type];
+          const cfg = COACH_COLORS[coach.type];
           return (
             <div
               key={coach.id || idx}
-              className="flex items-stretch rounded-xl overflow-hidden border border-border shadow-sm"
+              className="flex items-stretch rounded-xl overflow-hidden border border-slate-200 shadow-sm"
             >
               {/* Position number */}
-              <span className="flex items-center justify-center min-w-[1.8rem] px-1.5 bg-muted text-[11px] font-semibold text-muted-foreground leading-none select-none">
+              <span className="flex items-center justify-center min-w-[1.75rem] px-1.5 bg-slate-100 text-[11px] font-semibold text-slate-500 leading-none select-none">
                 {idx + 1}
               </span>
-              {/* Coach code with type colour */}
+              {/* Coach code — inline style so purging never strips the colour */}
               <span
-                className={cn(
-                  'flex items-center justify-center px-2.5 py-2 text-xs font-bold leading-none select-none',
-                  colors.bg,
-                  colors.text
-                )}
+                className="flex items-center justify-center px-2.5 py-2 text-xs font-bold leading-none text-white select-none"
+                style={{ backgroundColor: cfg.hex }}
               >
                 {coach.code}
               </span>
@@ -60,7 +57,10 @@ export function CoachDisplay({ coaches, className, showLegend = true }: CoachDis
             const count = coaches.filter((c) => c.type === type).length;
             return (
               <div key={type} className="flex items-center gap-1.5">
-                <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', cfg.dot)} />
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: cfg.hex }}
+                />
                 <span className="text-xs text-muted-foreground">
                   {cfg.label} ({count})
                 </span>

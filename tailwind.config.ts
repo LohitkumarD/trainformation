@@ -7,6 +7,15 @@ const config: Config = {
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  /* Tailwind purges classes that only appear inside data objects at runtime.
+     Every coach-colour class must be explicitly safelisted. */
+  safelist: [
+    'bg-red-500',     'border-red-600',
+    'bg-blue-500',    'border-blue-600',
+    'bg-emerald-500', 'border-emerald-600',
+    'bg-slate-400',   'border-slate-500',
+    'bg-purple-400',  'border-purple-500',
+  ],
   theme: {
     extend: {
       colors: {
