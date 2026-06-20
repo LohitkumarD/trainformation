@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14171A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Coach Position — SWR DVG</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14171A;
+    --surface:#1E2227;
+    --surface-2:#262B31;
+    --line:#30363D;
+    --text:#F2EFE9;
+    --muted:#8B93A1;
+    --amber:#FF9F1C;
+    --green:#3DDC84;
+    --red:#E5484D;
+    --blue:#5B9BD5;
+    --teal:#5BA3B0;
+    --brown:#B07D4F;
+    --radius:10px;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  html,body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-tap-highlight-color:transparent;
+  }
+  button{font-family:inherit;}
+  .app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+  header.bar{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;background:var(--bg);z-index:5;
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;}
+  .brand .title{
+    font-family:var(--mono);font-weight:700;letter-spacing:.06em;
+    color:var(--amber);font-size:15px;
+  }
+  .brand .sub{font-size:12px;color:var(--muted);}
+  .me{
+    font-size:12px;color:var(--muted);background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;padding:6px 10px;
+    display:flex;align-items:center;gap:6px;cursor:pointer;
+  }
+  .me b{color:var(--text);font-weight:600;}
+  main{flex:1;padding:18px;display:flex;flex-direction:column;gap:18px;padding-bottom:90px;}
+
+  .search-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px;display:flex;flex-direction:column;gap:10px;
+  }
+  .row{display:flex;gap:10px;}
+  label.field-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:block;}
+  input,textarea,select{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);
+    color:var(--text);border-radius:8px;padding:11px 12px;font-size:15px;font-family:var(--sans);
+  }
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--amber);outline-offset:1px;}
+  input.train-no{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.04em;}
+  .btn{
+    border:none;border-radius:8px;padding:12px 16px;font-weight:600;font-size:14px;
+    cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .btn-primary{background:var(--amber);color:#1A1300;}
+  .btn-primary:active{filter:brightness(.92);}
+  .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line);}
+  .btn-block{width:100%;}
+  .chips-row{display:flex;flex-wrap:wrap;gap:8px;}
+  .recent-chip{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--muted);
+    border-radius:999px;padding:6px 12px;font-size:12px;font-family:var(--mono);cursor:pointer;
+  }
+
+  .result-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;display:none;flex-direction:column;gap:14px;
+  }
+  .result-card.show{display:flex;}
+  .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .result-head .tno{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--amber);}
+  .result-head .tname{font-size:13px;color:var(--muted);margin-top:2px;}
+  .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);}
+
+  .strip-wrap{overflow-x:auto;padding-bottom:6px;}
+  .strip{display:flex;gap:6px;min-width:min-content;}
+  .chip{
+    flex:0 0 auto;min-width:48px;height:48px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:12px;
+    border:1px solid rgba(255,255,255,.08);
+  }
+  .chip.eng{background:#3A3F45;color:var(--amber);border:1px solid var(--amber);min-width:40px;}
+  .chip.pwr{background:var(--amber);color:#1A1300;}
+  .chip.gen{background:var(--surface-2);color:var(--text);}
+  .chip.d2s{background:var(--teal);color:#06231F;}
+  .chip.ac{background:var(--blue);color:#08203B;}
+  .chip.pc{background:var(--brown);color:#fff;}
+  .chip.sl{background:var(--green);color:#06230F;}
+  .chip.end{background:var(--red);color:#fff;}
+  .chip.unk{background:transparent;color:var(--muted);border:1px dashed var(--muted);}
+
+  .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .meta-line b{color:var(--text);}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
+
+  .empty-card{
+    background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
+    padding:24px 16px;text-align:center;display:none;flex-direction:column;gap:10px;align-items:center;
+  }
+  .empty-card.show{display:flex;}
+  .empty-card .tno{font-family:var(--mono);font-weight:700;color:var(--amber);font-size:18px;}
+  .empty-card p{margin:0;color:var(--muted);font-size:13px;}
+
+  .legend-link{font-size:12px;color:var(--muted);text-align:center;text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;}
+
+  /* Modal */
+  .overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+    align-items:flex-end;justify-content:center;z-index:50;
+  }
+  .overlay.show{display:flex;}
+  .sheet{
+    background:var(--surface);border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:520px;
+    max-height:88vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;
+  }
+  .sheet h3{margin:0;font-size:16px;}
+  .sheet .close{align-self:flex-end;background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;}
+  .preview-strip{min-height:54px;}
+  .hint{font-size:12px;color:var(--muted);line-height:1.5;}
+  .legend-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;}
+  .legend-grid .code{font-family:var(--mono);color:var(--amber);font-weight:700;}
+
+  .fab{
+    position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:center;z-index:10;
+  }
+  .fab .btn{box-shadow:0 6px 20px rgba(0,0,0,.4);}
+
+  .toast{
+    position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--green);color:#06230F;padding:10px 18px;border-radius:999px;
+    font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:all .25s ease;z-index:60;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .section-title{font-size:13px;color:var(--muted);font-weight:600;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="bar">
+    <div class="brand">
+      <div class="title">COACH POSITION</div>
+      <div class="sub">SWR · Davangere Division</div>
+    </div>
+    <button class="me" id="meBtn">👤 <span id="meLabel">Set name</span></button>
+  </header>
+
+  <main>
+    <div class="search-card">
+      <div>
+        <label class="field-label">Train number</label>
+        <input class="train-no" id="trainNoInput" inputmode="numeric" maxlength="5" placeholder="e.g. 17302" autocomplete="off">
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <label class="field-label">Date</label>
+          <input type="date" id="dateInput">
+        </div>
+        <div style="align-self:flex-end">
+          <button class="btn btn-primary" id="findBtn">Find</button>
+        </div>
+      </div>
+      <div class="chips-row" id="recentChips"></div>
+    </div>
+
+    <div class="result-card" id="resultCard">
+      <div class="result-head">
+        <div>
+          <div class="tno" id="rTrainNo"></div>
+          <div class="tname" id="rTrainName"></div>
+        </div>
+        <div class="date" id="rDate"></div>
+      </div>
+      <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
+      <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
+      <button class="btn btn-ghost btn-block" id="updateBtn">Update this train</button>
+    </div>
+
+    <div class="empty-card" id="emptyCard">
+      <div class="tno" id="eTrainNo"></div>
+      <p>No coach position saved yet for this train and date.</p>
+      <button class="btn btn-primary" id="addBtn">Add coach position</button>
+    </div>
+
+    <button class="legend-link" id="legendLink">Standard coach codes (legend)</button>
+  </main>
+
+  <div class="fab">
+    <button class="btn btn-primary" id="fabAdd">+ Add / Update a train</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- Identity sheet -->
+<div class="overlay" id="identityOverlay">
+  <div class="sheet">
+    <button class="close" data-close="identityOverlay">✕</button>
+    <h3>Who's submitting?</h3>
+    <p class="hint">Your name and number get stamped on entries you submit, so others know who to check with. No OTP — just type it once.</p>
+    <div>
+      <label class="field-label">Name</label>
+      <input id="idName" placeholder="e.g. Ramesh Kumar">
+    </div>
+    <div>
+      <label class="field-label">Phone number</label>
+      <input id="idPhone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number">
+    </div>
+    <div>
+      <label class="field-label">Station (optional)</label>
+      <input id="idStation" placeholder="e.g. BGM, DVG, Anantapur">
+    </div>
+    <button class="btn btn-primary btn-block" id="idSaveBtn">Save and continue</button>
+  </div>
+</div>
+
+<!-- Submit sheet -->
+<div class="overlay" id="submitOverlay">
+  <div class="sheet">
+    <button class="close" data-close="submitOverlay">✕</button>
+    <h3>Add / update coach position</h3>
+    <div>
+      <label class="field-label">Train number</label>
+      <input class="train-no" id="sTrainNo" inputmode="numeric" maxlength="5">
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label class="field-label">Train name (optional)</label>
+        <input id="sTrainName" placeholder="e.g. BGM-MYS EXPRESS">
+      </div>
+    </div>
+    <div>
+      <label class="field-label">Date</label>
+      <input type="date" id="sDate">
+    </div>
+    <div>
+      <label class="field-label">Coach list (from engine end)</label>
+      <textarea id="sList" rows="2" placeholder="ENG,LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
+      <p class="hint">Comma-separate. Use a count prefix for repeats (2GEN) and a dash for ranges (S1-S7). See legend for standard codes.</p>
+    </div>
+    <div>
+      <label class="field-label">Preview</label>
+      <div class="strip-wrap"><div class="strip preview-strip" id="sPreview"></div></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="sSaveBtn">Save</button>
+  </div>
+</div>
+
+<!-- Legend sheet -->
+<div class="overlay" id="legendOverlay">
+  <div class="sheet">
+    <button class="close" data-close="legendOverlay">✕</button>
+    <h3>Standard coach codes</h3>
+    <div class="legend-grid">
+      <div class="code">ENG</div><div>Engine</div>
+      <div class="code">LPR / VP</div><div>Luggage / pilot van</div>
+      <div class="code">PWR</div><div>Power car</div>
+      <div class="code">GEN</div><div>General / unreserved</div>
+      <div class="code">D1–D4</div><div>Second seating (2S)</div>
+      <div class="code">C1–C14</div><div>Chair car (CC)</div>
+      <div class="code">HA1</div><div>Composite 1A+2A</div>
+      <div class="code">A1, A2…</div><div>AC 2-tier</div>
+      <div class="code">B1–B5…</div><div>AC 3-tier</div>
+      <div class="code">M1, M2</div><div>AC 3-tier economy</div>
+      <div class="code">PC</div><div>Pantry car</div>
+      <div class="code">S1–S10…</div><div>Sleeper</div>
+      <div class="code">SLRD / LSLRD</div><div>Guard cum Divyangjan coach</div>
+    </div>
+    <p class="hint">Type in this order, from the engine end, the same way your station already writes it down — just keep the codes standard so everyone reads the same shorthand.</p>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc, serverTimestamp,
+  enableIndexedDbPersistence
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ====== REPLACE WITH YOUR FIREBASE CONFIG (see SETUP.md) ======
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+// ================================================================
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+try { enableIndexedDbPersistence(db); } catch(e) { /* fine if it fails, e.g. multiple tabs */ }
+
+// ---------- helpers ----------
+const $ = (id) => document.getElementById(id);
+const todayStr = () => new Date().toISOString().slice(0,10);
+
+function showOverlay(id){ $(id).classList.add('show'); }
+function hideOverlay(id){ $(id).classList.remove('show'); }
+document.querySelectorAll('[data-close]').forEach(b=>{
+  b.addEventListener('click', ()=>hideOverlay(b.dataset.close));
+});
+
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function relTime(date){
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.floor(diffMs/60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min${mins>1?'s':''} ago`;
+  const hrs = Math.floor(mins/60);
+  if (hrs < 24) return `${hrs} hr${hrs>1?'s':''} ago`;
+  const days = Math.floor(hrs/24);
+  return `${days} day${days>1?'s':''} ago`;
+}
+
+// ---------- parsing ----------
+function parseCompressed(input){
+  const tokens = (input||'').split(',').map(t=>t.trim().toUpperCase()).filter(Boolean);
+  const out = [];
+  for (const tok of tokens){
+    let m = tok.match(/^(\d+)([A-Z]+\d*)$/); // e.g. 2GEN, 3PC
+    if (m){
+      const count = parseInt(m[1],10);
+      for(let i=0;i<count;i++) out.push(m[2]);
+      continue;
+    }
+    m = tok.match(/^([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)$/); // e.g. S1-S7, B1-4, D1-D4
+    if (m){
+      const prefix = m[1];
+      let start = parseInt(m[2],10), end = parseInt(m[3],10);
+      if (start <= end){ for(let i=start;i<=end;i++) out.push(prefix+i); }
+      else { for(let i=start;i>=end;i--) out.push(prefix+i); }
+      continue;
+    }
+    out.push(tok);
+  }
+  return out;
+}
+
+function classOf(code){
+  if (code === 'ENG') return 'eng';
+  if (['LPR','VP','PWR'].includes(code)) return 'pwr';
+  if (code === 'GEN') return 'gen';
+  if (/^D\d+$/.test(code)) return 'd2s';
+  if (/^C\d+$/.test(code)) return 'd2s';
+  if (/^HA\d*$/.test(code)) return 'ac';
+  if (/^A\d+$/.test(code)) return 'ac';
+  if (/^B\d+$/.test(code)) return 'ac';
+  if (/^M\d+$/.test(code)) return 'ac';
+  if (code === 'PC') return 'pc';
+  if (/^S\d+$/.test(code)) return 'sl';
+  if (code === 'SLRD' || code === 'LSLRD') return 'end';
+  return 'unk';
+}
+
+function renderStrip(container, codes){
+  container.innerHTML = '';
+  codes.forEach(code=>{
+    const d = document.createElement('div');
+    d.className = `chip ${classOf(code)}`;
+    d.textContent = code;
+    container.appendChild(d);
+  });
+}
+
+// ---------- identity ----------
+function getIdentity(){
+  const raw = localStorage.getItem('cp_identity');
+  return raw ? JSON.parse(raw) : null;
+}
+function setIdentity(obj){
+  localStorage.setItem('cp_identity', JSON.stringify(obj));
+  updateMeLabel();
+}
+function updateMeLabel(){
+  const id = getIdentity();
+  $('meLabel').textContent = id ? id.name.split(' ')[0] : 'Set name';
+}
+$('meBtn').addEventListener('click', ()=>{
+  const id = getIdentity();
+  if (id){ $('idName').value=id.name; $('idPhone').value=id.phone; $('idStation').value=id.station||''; }
+  showOverlay('identityOverlay');
+});
+$('idSaveBtn').addEventListener('click', ()=>{
+  const name = $('idName').value.trim();
+  const phone = $('idPhone').value.trim();
+  const station = $('idStation').value.trim();
+  if (!name || phone.length < 10){ toast('Enter name and 10-digit number'); return; }
+  setIdentity({name, phone, station});
+  hideOverlay('identityOverlay');
+  toast('Saved');
+});
+
+// ---------- recent trains ----------
+function getRecent(){
+  const raw = localStorage.getItem('cp_recent');
+  return raw ? JSON.parse(raw) : [];
+}
+function pushRecent(trainNo, date){
+  let list = getRecent().filter(r=>!(r.trainNo===trainNo && r.date===date));
+  list.unshift({trainNo, date});
+  list = list.slice(0,6);
+  localStorage.setItem('cp_recent', JSON.stringify(list));
+  renderRecent();
+}
+function renderRecent(){
+  const wrap = $('recentChips');
+  wrap.innerHTML = '';
+  getRecent().forEach(r=>{
+    const c = document.createElement('button');
+    c.className = 'recent-chip';
+    c.textContent = `${r.trainNo} · ${r.date.slice(5)}`;
+    c.addEventListener('click', ()=>{
+      $('trainNoInput').value = r.trainNo;
+      $('dateInput').value = r.date;
+      lookup();
+    });
+    wrap.appendChild(c);
+  });
+}
+
+// ---------- lookup / save ----------
+async function lookup(){
+  const trainNo = $('trainNoInput').value.trim();
+  const date = $('dateInput').value || todayStr();
+  if (!trainNo){ toast('Enter a train number'); return; }
+  $('resultCard').classList.remove('show');
+  $('emptyCard').classList.remove('show');
+
+  const ref = doc(db, 'trains', `${trainNo}_${date}`);
+  const snap = await getDoc(ref);
+  pushRecent(trainNo, date);
+
+  if (snap.exists()){
+    const d = snap.data();
+    $('rTrainNo').textContent = d.trainNo;
+    $('rTrainName').textContent = d.trainName || '';
+    $('rDate').textContent = d.date;
+    renderStrip($('rStrip'), d.parsedList || []);
+    $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone||'').slice(-4)})`;
+    const ts = d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate() : new Date();
+    $('rWhen').textContent = relTime(ts);
+    $('resultCard').classList.add('show');
+    $('updateBtn').onclick = ()=> openSubmit(trainNo, date, d.trainName, d.rawList);
+  } else {
+    $('eTrainNo').textContent = trainNo;
+    $('emptyCard').classList.add('show');
+    $('addBtn').onclick = ()=> openSubmit(trainNo, date, '', '');
+  }
+}
+$('findBtn').addEventListener('click', lookup);
+$('trainNoInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') lookup(); });
+
+function openSubmit(trainNo, date, trainName, rawList){
+  if (!getIdentity()){ showOverlay('identityOverlay'); toast('Add your name first'); return; }
+  $('sTrainNo').value = trainNo || $('trainNoInput').value || '';
+  $('sTrainName').value = trainName || '';
+  $('sDate').value = date || $('dateInput').value || todayStr();
+  $('sList').value = rawList || '';
+  renderStrip($('sPreview'), parseCompressed($('sList').value));
+  showOverlay('submitOverlay');
+}
+$('fabAdd').addEventListener('click', ()=> openSubmit());
+$('sList').addEventListener('input', ()=>{
+  renderStrip($('sPreview'), parseCompressed($('sList').value));
+});
+
+$('sSaveBtn').addEventListener('click', async ()=>{
+  const identity = getIdentity();
+  if (!identity){ showOverlay('identityOverlay'); return; }
+  const trainNo = $('sTrainNo').value.trim();
+  const trainName = $('sTrainName').value.trim();
+  const date = $('sDate').value || todayStr();
+  const rawList = $('sList').value.trim();
+  if (!trainNo || !rawList){ toast('Train number and coach list required'); return; }
+  const parsedList = parseCompressed(rawList);
+
+  const ref = doc(db, 'trains', `${trainNo}_${date}`);
+  await setDoc(ref, {
+    trainNo, trainName, date, rawList, parsedList,
+    submittedByName: identity.name,
+    submittedByPhone: identity.phone,
+    submittedByStation: identity.station || '',
+    updatedAt: serverTimestamp()
+  });
+  hideOverlay('submitOverlay');
+  toast('Saved');
+  $('trainNoInput').value = trainNo;
+  $('dateInput').value = date;
+  lookup();
+});
+
+$('legendLink').addEventListener('click', ()=> showOverlay('legendOverlay'));
+
+// ---------- init ----------
+$('dateInput').value = todayStr();
+updateMeLabel();
+renderRecent();
+if (!getIdentity()) showOverlay('identityOverlay');
+
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>

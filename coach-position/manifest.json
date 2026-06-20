@@ -1,0 +1,19 @@
+{
+  "name": "Coach Position - SWR Davangere",
+  "short_name": "CoachPos",
+  "description": "Standardized coach position lookup for SWR Davangere Division staff",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14171A",
+  "theme_color": "#14171A",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
