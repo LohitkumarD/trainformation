@@ -375,20 +375,15 @@ function toast(msg){
   setTimeout(()=>t.classList.remove('show'), 1800);
 }
 
-function relTime(date){
-  const diffMs = Date.now() - date.getTime();
-  const mins = Math.floor(diffMs/60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min${mins>1?'s':''} ago`;
-  const hrs = Math.floor(mins/60);
-  if (hrs < 24) return `${hrs} hr${hrs>1?'s':''} ago`;
-  const days = Math.floor(hrs/24);
-  return `${days} day${days>1?'s':''} ago`;
-}
+function pad2(n){ return String(n).padStart(2,'0'); }
 
-function formatDate(iso){
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+// All dates/times in this app are shown as dd-mm-yyyy hh:mm (24-hour), regardless of device locale.
+function formatDateOnly(iso){
+  const [y,m,dd] = iso.split('-');
+  return `${dd}-${m}-${y}`;
+}
+function formatDateTime(date){
+  return `${pad2(date.getDate())}-${pad2(date.getMonth()+1)}-${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 // ---------- parsing ----------
@@ -493,7 +488,7 @@ function renderRecent(){
   list.forEach(r=>{
     const c = document.createElement('button');
     c.className = 'recent-chip';
-    c.textContent = `${r.trainNo} · ${r.date.slice(5)}`;
+    c.textContent = `${r.trainNo} · ${formatDateOnly(r.date)}`;
     c.addEventListener('click', ()=>{
       $('trainNoInput').value = r.trainNo;
       $('dateInput').value = r.date;
@@ -511,7 +506,7 @@ function renderConfirmLine(d){
   el.style.display = 'flex';
   const latest = list[list.length - 1];
   const names = list.length === 1 ? latest.name : `${latest.name} +${list.length - 1} more`;
-  el.innerHTML = `✓ Confirmed by <b>${names}</b> · ${relTime(new Date(latest.at))}`;
+  el.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
 }
 
 function confirmRecord(key){
@@ -532,10 +527,7 @@ async function shareAsImage(trainNo, date){
   if (typeof html2canvas !== 'function'){ toast('Image tool still loading — try again in a moment'); return; }
   const node = $('shareCapture');
   const genEl = $('shareGenAt');
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
-  const timeStr = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
-  genEl.textContent = `Image generated ${dateStr} · ${timeStr}`;
+  genEl.textContent = `Image generated ${formatDateTime(new Date())}`;
   genEl.style.display = 'block';
   try{
     const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
@@ -574,11 +566,11 @@ function lookup(){
   if (d){
     $('rTrainNo').textContent = d.trainNo;
     $('rTrainName').textContent = d.trainName || '';
-    $('rDate').textContent = formatDate(d.date);
+    $('rDate').textContent = formatDateOnly(d.date);
     renderStrip($('rStrip'), d.parsedList || []);
     const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
     $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone||'').slice(-4)})${stationPart}`;
-    $('rWhen').textContent = `${relTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
+    $('rWhen').textContent = `${formatDateTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
     renderConfirmLine(d);
     $('resultCard').classList.add('show');
     $('updateBtn').onclick = ()=> openSubmit(trainNo, date, d.trainName, d.rawList);
