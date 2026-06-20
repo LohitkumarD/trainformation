@@ -105,7 +105,10 @@
     padding:16px;display:none;flex-direction:column;gap:14px;
   }
   .result-card.show{display:flex;animation:fadeSlideIn .22s ease;}
-  .share-capture{display:flex;flex-direction:column;gap:14px;}
+  .share-capture{
+    display:flex;flex-direction:column;gap:14px;
+    background:var(--surface);border:2px solid var(--amber);border-radius:12px;padding:16px;
+  }
   .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
   .result-head .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
   .result-head .tname{font-size:13px;color:var(--muted);margin-top:2px;}
@@ -228,6 +231,7 @@
         <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
         <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
         <div class="confirm-line" id="rConfirmLine"></div>
+        <div class="share-footer" id="shareGenAt" style="display:none"></div>
         <div class="share-footer">via Coach Position · SWR Davangere Division</div>
       </div>
       <div class="btn-row">
@@ -527,8 +531,15 @@ function confirmRecord(key){
 async function shareAsImage(trainNo, date){
   if (typeof html2canvas !== 'function'){ toast('Image tool still loading — try again in a moment'); return; }
   const node = $('shareCapture');
+  const genEl = $('shareGenAt');
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  const timeStr = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+  genEl.textContent = `Image generated ${dateStr} · ${timeStr}`;
+  genEl.style.display = 'block';
   try{
     const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
+    genEl.style.display = 'none';
     canvas.toBlob((blob) => {
       if (!blob) return;
       const fileName = `train-${trainNo}-${date}.png`;
@@ -544,6 +555,7 @@ async function shareAsImage(trainNo, date){
       toast('Image saved — share it from your gallery');
     });
   }catch(e){
+    genEl.style.display = 'none';
     toast("Couldn't create image");
   }
 }
