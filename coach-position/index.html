@@ -90,14 +90,32 @@
   .btn-block{width:100%;}
   .btn-row{display:flex;gap:10px;}
   .btn-row .btn{flex:1;}
-  .recent-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;}
-  .chips-row{display:flex;flex-wrap:wrap;gap:8px;}
-  .recent-chip{
-    background:var(--surface-2);border:1px solid var(--line);color:var(--muted);
-    border-radius:999px;padding:6px 12px;font-size:12px;font-family:var(--mono);cursor:pointer;
-    transition:transform .12s ease;
+  .trains-toggle{
+    display:flex;align-items:center;justify-content:space-between;width:100%;
+    background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;
+    padding:4px 0;cursor:pointer;
   }
-  .recent-chip:active{transform:scale(.95);}
+  .trains-toggle .chev{transition:transform .18s ease;font-size:11px;}
+  .trains-toggle.open .chev{transform:rotate(180deg);}
+  .trains-panel{
+    max-height:0;overflow:hidden;transition:max-height .22s ease;
+  }
+  .trains-panel.open{max-height:340px;overflow-y:auto;}
+  .trains-search{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    color:var(--text);font-size:13px;padding:8px 10px;margin:8px 0;box-sizing:border-box;
+  }
+  .trains-list{display:flex;flex-direction:column;gap:6px;padding-bottom:4px;}
+  .trains-empty{font-size:12px;color:var(--muted);padding:8px 2px;}
+  .train-row{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;cursor:pointer;transition:transform .12s ease;text-align:left;
+  }
+  .train-row:active{transform:scale(.97);}
+  .train-row .tr-no{font-family:var(--mono);font-weight:700;color:var(--amber);font-size:13px;}
+  .train-row .tr-name{font-size:11px;color:var(--muted);}
+  .train-row .tr-when{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:right;white-space:nowrap;}
 
   @keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
   .result-card{
@@ -215,8 +233,14 @@
           <button class="btn btn-primary" id="findBtn">Find</button>
         </div>
       </div>
-      <label class="recent-label" id="recentLabel" style="display:none">Recent searches</label>
-      <div class="chips-row" id="recentChips"></div>
+      <button class="trains-toggle" id="trainsToggle" type="button">
+        <span id="trainsToggleLabel">All trains</span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="trains-panel" id="trainsPanel">
+        <input class="trains-search" id="trainsSearch" placeholder="Search by train number or name" autocomplete="off">
+        <div class="trains-list" id="trainsList"></div>
+      </div>
     </div>
 
     <div class="result-card" id="resultCard">
@@ -468,35 +492,52 @@ $('idSaveBtn').addEventListener('click', ()=>{
   toast('Saved');
 });
 
-// ---------- recent trains ----------
-function getRecent(){
-  const raw = localStorage.getItem('cp_recent');
-  return raw ? JSON.parse(raw) : [];
+// ---------- all trains list ----------
+function getAllTrains(){
+  const store = getTrainsStore();
+  return Object.values(store).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
-function pushRecent(trainNo, date){
-  let list = getRecent().filter(r=>!(r.trainNo===trainNo && r.date===date));
-  list.unshift({trainNo, date});
-  list = list.slice(0,6);
-  localStorage.setItem('cp_recent', JSON.stringify(list));
-  renderRecent();
-}
-function renderRecent(){
-  const wrap = $('recentChips');
+function renderTrainsList(){
+  const all = getAllTrains();
+  $('trainsToggleLabel').textContent = `All trains (${all.length})`;
+  const filter = ($('trainsSearch').value || '').trim().toLowerCase();
+  const list = filter
+    ? all.filter(d => d.trainNo.toLowerCase().includes(filter) || (d.trainName || '').toLowerCase().includes(filter))
+    : all;
+
+  const wrap = $('trainsList');
   wrap.innerHTML = '';
-  const list = getRecent();
-  $('recentLabel').style.display = list.length ? 'block' : 'none';
-  list.forEach(r=>{
-    const c = document.createElement('button');
-    c.className = 'recent-chip';
-    c.textContent = `${r.trainNo} · ${formatDateOnly(r.date)}`;
-    c.addEventListener('click', ()=>{
-      $('trainNoInput').value = r.trainNo;
-      $('dateInput').value = r.date;
+  if (!list.length){
+    wrap.innerHTML = `<div class="trains-empty">${all.length ? 'No match' : 'No trains saved yet'}</div>`;
+    return;
+  }
+  list.forEach(d => {
+    const row = document.createElement('button');
+    row.className = 'train-row';
+    row.type = 'button';
+    row.innerHTML = `
+      <span>
+        <span class="tr-no">${d.trainNo}</span>
+        <span class="tr-name">${d.trainName ? ' · ' + d.trainName : ''}</span>
+      </span>
+      <span class="tr-when">${formatDateOnly(d.date)}<br>${formatDateTime(new Date(d.updatedAt))}</span>
+    `;
+    row.addEventListener('click', ()=>{
+      $('trainNoInput').value = d.trainNo;
+      $('dateInput').value = d.date;
+      $('trainsPanel').classList.remove('open');
+      $('trainsToggle').classList.remove('open');
       lookup();
     });
-    wrap.appendChild(c);
+    wrap.appendChild(row);
   });
 }
+$('trainsToggle').addEventListener('click', ()=>{
+  const open = $('trainsPanel').classList.toggle('open');
+  $('trainsToggle').classList.toggle('open', open);
+  if (open){ renderTrainsList(); }
+});
+$('trainsSearch').addEventListener('input', renderTrainsList);
 
 // ---------- confirmations ----------
 function renderConfirmLine(d){
@@ -561,7 +602,6 @@ function lookup(){
   $('emptyCard').classList.remove('show');
 
   const d = getTrainRecord(`${trainNo}_${date}`);
-  pushRecent(trainNo, date);
 
   if (d){
     $('rTrainNo').textContent = d.trainNo;
@@ -625,6 +665,7 @@ $('sSaveBtn').addEventListener('click', ()=>{
   $('trainNoInput').value = trainNo;
   $('dateInput').value = date;
   lookup();
+  renderTrainsList();
 });
 
 $('legendLink').addEventListener('click', ()=> showOverlay('legendOverlay'));
@@ -632,7 +673,7 @@ $('legendLink').addEventListener('click', ()=> showOverlay('legendOverlay'));
 // ---------- init ----------
 $('dateInput').value = todayStr();
 updateMeLabel();
-renderRecent();
+renderTrainsList();
 if (!getIdentity()) showOverlay('identityOverlay');
 
 if ('serviceWorker' in navigator){
