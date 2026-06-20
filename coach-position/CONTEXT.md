@@ -23,8 +23,11 @@ list instantly. Replaces hunting through WhatsApp images.
 - **Identity**: Simple name + phone number typed once, stored in localStorage.
   No OTP, no verification — this is a trusted internal pilot, not a public app.
   Every submission is stamped with who entered it and when, for accountability.
-- **Backend**: Firebase Firestore (no Auth needed since no OTP). One document
-  per train+date: `trains/{trainNo}_{date}`.
+- **Backend**: Started with `localStorage` (one record per train+date, key
+  `trainNo_date`) to get the search/save/colour flow working and testable
+  immediately. Firebase Firestore sync across devices is the planned next
+  phase, deferred until the local-only version is confirmed to work well —
+  see `SETUP.md`.
 - **Scope**: Pilot with a few key trains first, not full division rollout yet.
 
 ## IMPORTANT — lessons from a previous failed attempt

@@ -27,6 +27,8 @@
     --blue:#5B9BD5;
     --teal:#5BA3B0;
     --brown:#B07D4F;
+    --violet:#9B7FD4;
+    --grey-blue:#6B7B8C;
     --radius:10px;
     --mono:'JetBrains Mono',ui-monospace,monospace;
     --sans:'Inter',system-ui,sans-serif;
@@ -97,8 +99,10 @@
   .result-head .tname{font-size:13px;color:var(--muted);margin-top:2px;}
   .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);}
 
-  .strip-wrap{overflow-x:auto;padding-bottom:6px;}
-  .strip{display:flex;gap:6px;min-width:min-content;}
+  .strip-wrap{padding-bottom:6px;}
+  .strip{display:flex;flex-wrap:wrap;gap:10px 8px;}
+  .chip-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .chip-index{font-size:10px;color:var(--muted);font-family:var(--mono);line-height:1;}
   .chip{
     flex:0 0 auto;min-width:48px;height:48px;border-radius:6px;
     display:flex;align-items:center;justify-content:center;
@@ -107,8 +111,9 @@
   }
   .chip.eng{background:#3A3F45;color:var(--amber);border:1px solid var(--amber);min-width:40px;}
   .chip.pwr{background:var(--amber);color:#1A1300;}
-  .chip.gen{background:var(--surface-2);color:var(--text);}
+  .chip.gen{background:var(--grey-blue);color:#fff;}
   .chip.d2s{background:var(--teal);color:#06231F;}
+  .chip.cc{background:var(--violet);color:#1F1033;}
   .chip.ac{background:var(--blue);color:#08203B;}
   .chip.pc{background:var(--brown);color:#fff;}
   .chip.sl{background:var(--green);color:#06230F;}
@@ -298,27 +303,20 @@
   </div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore, doc, getDoc, setDoc, serverTimestamp,
-  enableIndexedDbPersistence
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-// ====== REPLACE WITH YOUR FIREBASE CONFIG (see SETUP.md) ======
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-// ================================================================
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-try { enableIndexedDbPersistence(db); } catch(e) { /* fine if it fails, e.g. multiple tabs */ }
+<script>
+// ---------- train data store (localStorage, per-device — cloud sync planned later) ----------
+function getTrainsStore(){
+  const raw = localStorage.getItem('cp_trains');
+  return raw ? JSON.parse(raw) : {};
+}
+function getTrainRecord(key){
+  return getTrainsStore()[key] || null;
+}
+function saveTrainRecord(key, data){
+  const store = getTrainsStore();
+  store[key] = data;
+  localStorage.setItem('cp_trains', JSON.stringify(store));
+}
 
 // ---------- helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -375,26 +373,30 @@ function parseCompressed(input){
 function classOf(code){
   if (code === 'ENG') return 'eng';
   if (['LPR','VP','PWR'].includes(code)) return 'pwr';
-  if (code === 'GEN') return 'gen';
-  if (/^D\d+$/.test(code)) return 'd2s';
-  if (/^C\d+$/.test(code)) return 'd2s';
-  if (/^HA\d*$/.test(code)) return 'ac';
-  if (/^A\d+$/.test(code)) return 'ac';
-  if (/^B\d+$/.test(code)) return 'ac';
-  if (/^M\d+$/.test(code)) return 'ac';
+  if (/^(GEN|GS|UR)$/.test(code)) return 'gen';
+  if (/^D\d*$/.test(code)) return 'd2s';
+  if (/^C\d*$/.test(code)) return 'cc';
+  if (/^(HA\d*|A\d+|B\d+|M\d+)$/.test(code)) return 'ac';
   if (code === 'PC') return 'pc';
   if (/^S\d+$/.test(code)) return 'sl';
-  if (code === 'SLRD' || code === 'LSLRD') return 'end';
+  if (/^(SLR|SLRD|LSLR|LSLRD)\d*$/.test(code)) return 'end';
   return 'unk';
 }
 
 function renderStrip(container, codes){
   container.innerHTML = '';
-  codes.forEach(code=>{
+  codes.forEach((code, i)=>{
+    const cell = document.createElement('div');
+    cell.className = 'chip-cell';
+    const idx = document.createElement('div');
+    idx.className = 'chip-index';
+    idx.textContent = i + 1;
     const d = document.createElement('div');
     d.className = `chip ${classOf(code)}`;
     d.textContent = code;
-    container.appendChild(d);
+    cell.appendChild(idx);
+    cell.appendChild(d);
+    container.appendChild(cell);
   });
 }
 
@@ -455,26 +457,23 @@ function renderRecent(){
 }
 
 // ---------- lookup / save ----------
-async function lookup(){
+function lookup(){
   const trainNo = $('trainNoInput').value.trim();
   const date = $('dateInput').value || todayStr();
   if (!trainNo){ toast('Enter a train number'); return; }
   $('resultCard').classList.remove('show');
   $('emptyCard').classList.remove('show');
 
-  const ref = doc(db, 'trains', `${trainNo}_${date}`);
-  const snap = await getDoc(ref);
+  const d = getTrainRecord(`${trainNo}_${date}`);
   pushRecent(trainNo, date);
 
-  if (snap.exists()){
-    const d = snap.data();
+  if (d){
     $('rTrainNo').textContent = d.trainNo;
     $('rTrainName').textContent = d.trainName || '';
     $('rDate').textContent = d.date;
     renderStrip($('rStrip'), d.parsedList || []);
     $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone||'').slice(-4)})`;
-    const ts = d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate() : new Date();
-    $('rWhen').textContent = relTime(ts);
+    $('rWhen').textContent = relTime(new Date(d.updatedAt));
     $('resultCard').classList.add('show');
     $('updateBtn').onclick = ()=> openSubmit(trainNo, date, d.trainName, d.rawList);
   } else {
@@ -500,7 +499,7 @@ $('sList').addEventListener('input', ()=>{
   renderStrip($('sPreview'), parseCompressed($('sList').value));
 });
 
-$('sSaveBtn').addEventListener('click', async ()=>{
+$('sSaveBtn').addEventListener('click', ()=>{
   const identity = getIdentity();
   if (!identity){ showOverlay('identityOverlay'); return; }
   const trainNo = $('sTrainNo').value.trim();
@@ -510,13 +509,12 @@ $('sSaveBtn').addEventListener('click', async ()=>{
   if (!trainNo || !rawList){ toast('Train number and coach list required'); return; }
   const parsedList = parseCompressed(rawList);
 
-  const ref = doc(db, 'trains', `${trainNo}_${date}`);
-  await setDoc(ref, {
+  saveTrainRecord(`${trainNo}_${date}`, {
     trainNo, trainName, date, rawList, parsedList,
     submittedByName: identity.name,
     submittedByPhone: identity.phone,
     submittedByStation: identity.station || '',
-    updatedAt: serverTimestamp()
+    updatedAt: Date.now()
   });
   hideOverlay('submitOverlay');
   toast('Saved');
