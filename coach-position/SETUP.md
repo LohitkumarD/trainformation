@@ -35,6 +35,12 @@ If you're starting a fresh site instead:
 - Close and reopen the app, search the same train number — it should still be
   there (read from localStorage)
 - Note: a second phone/browser will NOT see this entry yet (local-only storage)
+- Tap "✓ Confirm" on a result — it should show "Confirmed by <your name> ·
+  just now" under the "Updated by" line; saving a new version of the train
+  should clear that confirmation
+- Tap "📤 Share as image" — on a phone this should open the native share sheet
+  with a generated image (pick WhatsApp to forward it into a group); on a
+  desktop browser without share support it downloads a PNG instead
 
 ## Notes for the pilot
 
@@ -42,8 +48,10 @@ If you're starting a fresh site instead:
   a different day doesn't clash with yesterday's data.
 - "Add to Home Screen" from the browser menu makes it behave like an app icon,
   same as QuickCash.
-- Works fully offline since there's no network dependency for data — it's all
-  on-device.
+- Works offline for search/save/confirm — no network dependency for data,
+  it's all on-device. The "Share as image" button loads a small image-render
+  library (`html2canvas`) from a CDN, so that one feature needs a network
+  connection at least the first time it's used.
 
 ## Next: cloud sync
 

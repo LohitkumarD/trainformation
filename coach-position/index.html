@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 <style>
   :root{
     --bg:#14171A;
@@ -34,6 +35,7 @@
     --sans:'Inter',system-ui,sans-serif;
   }
   *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
   body{margin:0;}
   html,body{
     background:var(--bg);
@@ -78,26 +80,39 @@
   .btn{
     border:none;border-radius:8px;padding:12px 16px;font-weight:600;font-size:14px;
     cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    transition:transform .12s ease, filter .12s ease;
   }
+  .btn:active{transform:scale(.97);}
   .btn-primary{background:var(--amber);color:#1A1300;}
   .btn-primary:active{filter:brightness(.92);}
+  .btn-secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--line);}
   .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line);}
   .btn-block{width:100%;}
+  .btn-row{display:flex;gap:10px;}
+  .btn-row .btn{flex:1;}
+  .recent-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;}
   .chips-row{display:flex;flex-wrap:wrap;gap:8px;}
   .recent-chip{
     background:var(--surface-2);border:1px solid var(--line);color:var(--muted);
     border-radius:999px;padding:6px 12px;font-size:12px;font-family:var(--mono);cursor:pointer;
+    transition:transform .12s ease;
   }
+  .recent-chip:active{transform:scale(.95);}
 
+  @keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
   .result-card{
     background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
     padding:16px;display:none;flex-direction:column;gap:14px;
   }
-  .result-card.show{display:flex;}
+  .result-card.show{display:flex;animation:fadeSlideIn .22s ease;}
+  .share-capture{display:flex;flex-direction:column;gap:14px;}
   .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-  .result-head .tno{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--amber);}
+  .result-head .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
   .result-head .tname{font-size:13px;color:var(--muted);margin-top:2px;}
-  .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);}
+  .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);text-align:right;}
+  .confirm-line{font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .confirm-line b{color:var(--text);}
+  .share-footer{font-size:10px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.04em;}
 
   .strip-wrap{padding-bottom:6px;}
   .strip{display:flex;flex-wrap:wrap;gap:10px 8px;}
@@ -128,7 +143,7 @@
     background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
     padding:24px 16px;text-align:center;display:none;flex-direction:column;gap:10px;align-items:center;
   }
-  .empty-card.show{display:flex;}
+  .empty-card.show{display:flex;animation:fadeSlideIn .22s ease;}
   .empty-card .tno{font-family:var(--mono);font-weight:700;color:var(--amber);font-size:18px;}
   .empty-card p{margin:0;color:var(--muted);font-size:13px;}
 
@@ -136,15 +151,19 @@
 
   /* Modal */
   .overlay{
-    position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+    position:fixed;inset:0;background:rgba(0,0,0,0);display:none;
     align-items:flex-end;justify-content:center;z-index:50;
+    transition:background .22s ease;
   }
   .overlay.show{display:flex;}
+  .overlay.open{background:rgba(0,0,0,.6);}
   .sheet{
     background:var(--surface);border-top:1px solid var(--line);
     border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:520px;
     max-height:88vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;
+    transform:translateY(100%);transition:transform .22s ease;
   }
+  .overlay.open .sheet{transform:translateY(0);}
   .sheet h3{margin:0;font-size:16px;}
   .sheet .close{align-self:flex-end;background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;}
   .preview-strip{min-height:54px;}
@@ -193,20 +212,29 @@
           <button class="btn btn-primary" id="findBtn">Find</button>
         </div>
       </div>
+      <label class="recent-label" id="recentLabel" style="display:none">Recent searches</label>
       <div class="chips-row" id="recentChips"></div>
     </div>
 
     <div class="result-card" id="resultCard">
-      <div class="result-head">
-        <div>
-          <div class="tno" id="rTrainNo"></div>
-          <div class="tname" id="rTrainName"></div>
+      <div class="share-capture" id="shareCapture">
+        <div class="result-head">
+          <div>
+            <div class="tno" id="rTrainNo"></div>
+            <div class="tname" id="rTrainName"></div>
+          </div>
+          <div class="date" id="rDate"></div>
         </div>
-        <div class="date" id="rDate"></div>
+        <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
+        <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
+        <div class="confirm-line" id="rConfirmLine"></div>
+        <div class="share-footer">via Coach Position · SWR Davangere Division</div>
       </div>
-      <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
-      <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
-      <button class="btn btn-ghost btn-block" id="updateBtn">Update this train</button>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="updateBtn">Update</button>
+        <button class="btn btn-secondary" id="confirmBtn">✓ Confirm</button>
+      </div>
+      <button class="btn btn-primary btn-block" id="shareImgBtn">📤 Share as image</button>
     </div>
 
     <div class="empty-card" id="emptyCard">
@@ -322,8 +350,16 @@ function saveTrainRecord(key, data){
 const $ = (id) => document.getElementById(id);
 const todayStr = () => new Date().toISOString().slice(0,10);
 
-function showOverlay(id){ $(id).classList.add('show'); }
-function hideOverlay(id){ $(id).classList.remove('show'); }
+function showOverlay(id){
+  const ov = $(id);
+  ov.classList.add('show');
+  requestAnimationFrame(()=> requestAnimationFrame(()=> ov.classList.add('open')));
+}
+function hideOverlay(id){
+  const ov = $(id);
+  ov.classList.remove('open');
+  setTimeout(()=> ov.classList.remove('show'), 220);
+}
 document.querySelectorAll('[data-close]').forEach(b=>{
   b.addEventListener('click', ()=>hideOverlay(b.dataset.close));
 });
@@ -344,6 +380,11 @@ function relTime(date){
   if (hrs < 24) return `${hrs} hr${hrs>1?'s':''} ago`;
   const days = Math.floor(hrs/24);
   return `${days} day${days>1?'s':''} ago`;
+}
+
+function formatDate(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
 }
 
 // ---------- parsing ----------
@@ -443,7 +484,9 @@ function pushRecent(trainNo, date){
 function renderRecent(){
   const wrap = $('recentChips');
   wrap.innerHTML = '';
-  getRecent().forEach(r=>{
+  const list = getRecent();
+  $('recentLabel').style.display = list.length ? 'block' : 'none';
+  list.forEach(r=>{
     const c = document.createElement('button');
     c.className = 'recent-chip';
     c.textContent = `${r.trainNo} · ${r.date.slice(5)}`;
@@ -454,6 +497,55 @@ function renderRecent(){
     });
     wrap.appendChild(c);
   });
+}
+
+// ---------- confirmations ----------
+function renderConfirmLine(d){
+  const el = $('rConfirmLine');
+  const list = d.confirmations || [];
+  if (!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'flex';
+  const latest = list[list.length - 1];
+  const names = list.length === 1 ? latest.name : `${latest.name} +${list.length - 1} more`;
+  el.innerHTML = `✓ Confirmed by <b>${names}</b> · ${relTime(new Date(latest.at))}`;
+}
+
+function confirmRecord(key){
+  const identity = getIdentity();
+  if (!identity){ showOverlay('identityOverlay'); toast('Add your name first'); return; }
+  const rec = getTrainRecord(key);
+  if (!rec) return;
+  const list = (rec.confirmations || []).filter(c => c.phone !== identity.phone);
+  list.push({ name: identity.name, phone: identity.phone, station: identity.station || '', at: Date.now() });
+  rec.confirmations = list;
+  saveTrainRecord(key, rec);
+  renderConfirmLine(rec);
+  toast('Marked as confirmed');
+}
+
+// ---------- share as image ----------
+async function shareAsImage(trainNo, date){
+  if (typeof html2canvas !== 'function'){ toast('Image tool still loading — try again in a moment'); return; }
+  const node = $('shareCapture');
+  try{
+    const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const fileName = `train-${trainNo}-${date}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })){
+        navigator.share({ files: [file], title: `Train ${trainNo} coach position` }).catch(()=>{});
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
+      toast('Image saved — share it from your gallery');
+    });
+  }catch(e){
+    toast("Couldn't create image");
+  }
 }
 
 // ---------- lookup / save ----------
@@ -470,12 +562,16 @@ function lookup(){
   if (d){
     $('rTrainNo').textContent = d.trainNo;
     $('rTrainName').textContent = d.trainName || '';
-    $('rDate').textContent = d.date;
+    $('rDate').textContent = formatDate(d.date);
     renderStrip($('rStrip'), d.parsedList || []);
-    $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone||'').slice(-4)})`;
-    $('rWhen').textContent = relTime(new Date(d.updatedAt));
+    const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
+    $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone||'').slice(-4)})${stationPart}`;
+    $('rWhen').textContent = `${relTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
+    renderConfirmLine(d);
     $('resultCard').classList.add('show');
     $('updateBtn').onclick = ()=> openSubmit(trainNo, date, d.trainName, d.rawList);
+    $('confirmBtn').onclick = ()=> confirmRecord(`${trainNo}_${date}`);
+    $('shareImgBtn').onclick = ()=> shareAsImage(trainNo, date);
   } else {
     $('eTrainNo').textContent = trainNo;
     $('emptyCard').classList.add('show');
@@ -508,13 +604,17 @@ $('sSaveBtn').addEventListener('click', ()=>{
   const rawList = $('sList').value.trim();
   if (!trainNo || !rawList){ toast('Train number and coach list required'); return; }
   const parsedList = parseCompressed(rawList);
+  const key = `${trainNo}_${date}`;
+  const existing = getTrainRecord(key);
 
-  saveTrainRecord(`${trainNo}_${date}`, {
+  saveTrainRecord(key, {
     trainNo, trainName, date, rawList, parsedList,
     submittedByName: identity.name,
     submittedByPhone: identity.phone,
     submittedByStation: identity.station || '',
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    updateCount: (existing?.updateCount || 0) + 1,
+    confirmations: []
   });
   hideOverlay('submitOverlay');
   toast('Saved');
