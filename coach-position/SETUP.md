@@ -58,8 +58,16 @@ const firebaseConfig = {
 
 Replace it with the real values you copied from Firebase. Save the file.
 
-## 3. Deploy (same as QuickCash Tools)
+## 3. Deploy
 
+If your Netlify site is connected to this GitHub repo (it is, if you see
+deploy preview comments on PRs), deployment is automatic: `netlify.toml`
+publishes the `coach-position` folder directly, no build step. Just push to
+the branch and Netlify deploys it — the live link is shown in the deploy
+preview comment on the PR, or in your Netlify dashboard for the production
+branch.
+
+If you're starting a fresh site instead:
 1. Go to https://app.netlify.com
 2. Drag and drop the whole `coach-position` folder onto the deploy area
 3. Netlify gives you a live link (e.g. `coachposition.netlify.app`) — that's
