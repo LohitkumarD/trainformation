@@ -1,6 +1,6 @@
 [build]
-  command = "true"
-  publish = "coach-position"
+  base = "coach-position"
+  publish = "."
 
 [[headers]]
   for = "/sw.js"
