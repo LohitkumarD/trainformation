@@ -2,6 +2,9 @@
   base = "coach-position"
   publish = "."
 
+[build.environment]
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
+
 [[headers]]
   for = "/sw.js"
   [headers.values]
