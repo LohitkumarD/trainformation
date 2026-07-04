@@ -127,7 +127,7 @@
   }
   .chip-index{font-family:var(--mono);font-size:10px;opacity:.85;font-weight:400;line-height:1;}
   .chip-code{font-size:14px;font-weight:700;line-height:1;}
-  .chip.eng{background:#3D2200;color:#FFB84D;}
+  .chip.eng{background:#3D0808;color:#FF5555;}
   .chip.pwr{background:#2E2200;color:#FFD060;}
   .chip.gen{background:#182E1A;color:#88EE88;}
   .chip.d2s{background:#162038;color:#90CCFF;}
@@ -993,10 +993,7 @@ async function renderTrainsList() {
       </div>
       <div class="train-item-body">
         <div class="inline-card">
-          <div style="display:flex;align-items:center;justify-content:space-between">
-            <div class="inline-label">COACH POSITION</div>
-            <button class="tool-btn" id="flipBtn_${key}">⇅ Flip</button>
-          </div>
+          <div class="inline-label">COACH POSITION</div>
           <div class="inline-head">
             <div>
               <div class="inline-tno">${d.trainNo}</div>
@@ -1019,16 +1016,8 @@ async function renderTrainsList() {
 
     wrap.appendChild(item);
 
-    let flipped = false;
     const stripEl = document.getElementById(`strip_${key}`);
     renderStrip(stripEl, d.parsedList || []);
-
-    document.getElementById(`flipBtn_${key}`).addEventListener('click', () => {
-      flipped = !flipped;
-      const codes = flipped ? [...(d.parsedList || [])].reverse() : (d.parsedList || []);
-      renderStrip(stripEl, codes);
-      document.getElementById(`flipBtn_${key}`).textContent = flipped ? '⇅ Original' : '⇅ Flip';
-    });
 
     if (confirmList.length) {
       const clEl = document.getElementById(`cl_${key}`);
@@ -1154,8 +1143,13 @@ $('fabAdd').addEventListener('click', () => openSubmit());
 $('sList').addEventListener('input', renderPreview);
 $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 $('sReverseBtn').addEventListener('click', () => {
-  const codes = parseCompressed($('sList').value).reverse();
-  $('sList').value = codes.join(',');
+  const codes = parseCompressed($('sList').value);
+  if (!codes.length) return;
+  const isEng = codes[0].toUpperCase() === 'ENG';
+  const result = isEng
+    ? [codes[0], ...codes.slice(1).reverse()]
+    : codes.reverse();
+  $('sList').value = result.join(',');
   renderPreview();
 });
 
