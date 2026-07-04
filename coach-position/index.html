@@ -831,7 +831,11 @@ async function shareAsImage(trainNo, date) {
       const fileName = `train-${trainNo}-${date}.png`;
       const file = new File([blob], fileName, { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file], title: `Train ${trainNo} coach position` }).catch(() => {});
+        navigator.share({
+          files: [file],
+          title: `Train ${trainNo} coach position`,
+          text: `Train ${trainNo} coach position — check more trains:\nhttps://cptrains.netlify.app`
+        }).catch(() => {});
         return;
       }
       const url = URL.createObjectURL(blob);
