@@ -691,11 +691,18 @@ function showAuthScreen(name) {
 
 function initRecaptcha() {
   if (!window.recaptchaVerifier) {
-    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'normal' });
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'invisible',
+      callback: () => {}
+    });
+    window.recaptchaVerifier.render().catch(() => {});
   }
 }
 
-$('staffLoginBtn').addEventListener('click', () => showAuthScreen('phone'));
+$('staffLoginBtn').addEventListener('click', () => {
+  showAuthScreen('phone');
+  initRecaptcha(); // pre-render while user types phone number
+});
 $('backToChoiceBtn').addEventListener('click', () => showAuthScreen('choice'));
 $('backToPhoneBtn').addEventListener('click', () => showAuthScreen('phone'));
 
@@ -715,7 +722,6 @@ $('sendOtpBtn').addEventListener('click', async () => {
   $('otpSending').style.display = 'block';
   try {
     initRecaptcha();
-    await window.recaptchaVerifier.render();
     window.confirmationResult = await auth.signInWithPhoneNumber('+91' + phone, window.recaptchaVerifier);
     $('otpPhoneDisplay').textContent = phone;
     showAuthScreen('otp');
@@ -723,7 +729,7 @@ $('sendOtpBtn').addEventListener('click', async () => {
     console.error('OTP send error:', e.code, e.message);
     const msg = e.code === 'auth/invalid-phone-number' ? 'Invalid phone number format'
               : e.code === 'auth/too-many-requests' ? 'Too many attempts — try again later'
-              : e.code === 'auth/captcha-check-failed' ? 'reCAPTCHA failed — please complete the checkbox'
+              : e.code === 'auth/captcha-check-failed' ? 'Verification failed — try again'
               : `Could not send OTP (${e.code || 'unknown'})`;
     toast(msg);
     if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; }
