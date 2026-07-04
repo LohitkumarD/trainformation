@@ -159,6 +159,14 @@
   .preview-strip .chip{min-width:34px;height:38px;border-radius:5px;}
   .preview-strip .chip-index{font-size:8px;}
   .preview-strip .chip-code{font-size:10px;}
+  .tool-btn{background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:12px;font-family:var(--mono);cursor:pointer;padding:4px 10px;transition:all .12s ease;}
+  .tool-btn:active{background:var(--surface-2);}
+  .chip-edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:80;display:flex;align-items:center;justify-content:center;}
+  .chip-edit-box{background:var(--surface);border:1px solid var(--amber);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;width:260px;max-width:90vw;}
+  .chip-edit-box h3{margin:0;font-size:15px;font-weight:700;}
+  .chip-edit-box input{text-transform:uppercase;font-family:var(--mono);font-size:16px;letter-spacing:.05em;}
+  .preview-strip .chip{cursor:pointer;}
+  .preview-strip .chip:active{opacity:.75;}
   .share-offscreen{
     position:fixed;left:-9999px;top:0;width:340px;
     background:#1E2227;border:2px solid #FF9F1C;border-radius:12px;
@@ -388,7 +396,10 @@
       <p class="hint">Comma-separate. Use count prefix for repeats (2GEN) and dash for ranges (S1-S7). <button class="legend-link" id="legendLink">See standard codes →</button></p>
     </div>
     <div>
-      <label class="field-label">Preview</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <label class="field-label" style="margin:0">Preview <span style="font-size:11px;color:var(--muted)">(tap chip to edit)</span></label>
+        <button type="button" class="tool-btn" id="sReverseBtn">⇅ Reverse</button>
+      </div>
       <div class="strip-wrap"><div class="strip preview-strip" id="sPreview"></div></div>
     </div>
     <button class="btn btn-primary btn-block" id="sSaveBtn">Save</button>
@@ -583,11 +594,12 @@ function classOf(code) {
   return 'unk';
 }
 
-function renderStrip(container, codes) {
+function renderStrip(container, codes, onChipClick) {
   container.innerHTML = '';
   codes.forEach((code, i) => {
     const chip = document.createElement('div');
     chip.className = `chip ${classOf(code)}`;
+    if (onChipClick) chip.style.cursor = 'pointer';
     const idx = document.createElement('div');
     idx.className = 'chip-index';
     idx.textContent = i + 1;
@@ -596,7 +608,54 @@ function renderStrip(container, codes) {
     label.textContent = code;
     chip.appendChild(idx);
     chip.appendChild(label);
+    if (onChipClick) chip.addEventListener('click', () => onChipClick(i, codes));
     container.appendChild(chip);
+  });
+}
+
+function showChipEditDialog(index, codes, onSave) {
+  const currentCode = codes[index];
+  const overlay = document.createElement('div');
+  overlay.className = 'chip-edit-overlay';
+  overlay.innerHTML = `
+    <div class="chip-edit-box">
+      <h3>Coach #${index + 1}</h3>
+      <input id="_chipInput" type="text" value="${currentCode}" maxlength="8" autocomplete="off" spellcheck="false" placeholder="e.g. S1, GEN, A1">
+      <div class="btn-row">
+        <button class="btn btn-danger" id="_chipDel">Remove</button>
+        <button class="btn btn-primary" style="flex:1" id="_chipSave">Save</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector('#_chipInput');
+  input.focus(); input.select();
+
+  const close = () => overlay.remove();
+  overlay.querySelector('#_chipSave').addEventListener('click', () => {
+    const val = input.value.trim().toUpperCase();
+    if (!val) return;
+    const next = [...codes]; next[index] = val;
+    close(); onSave(next);
+  });
+  overlay.querySelector('#_chipDel').addEventListener('click', () => {
+    const next = [...codes]; next.splice(index, 1);
+    close(); onSave(next);
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') overlay.querySelector('#_chipSave').click();
+    if (e.key === 'Escape') close();
+  });
+}
+
+function renderPreview() {
+  const codes = parseCompressed($('sList').value);
+  renderStrip($('sPreview'), codes, (i, allCodes) => {
+    showChipEditDialog(i, allCodes, (newCodes) => {
+      $('sList').value = newCodes.join(',');
+      renderPreview();
+    });
   });
 }
 
@@ -825,7 +884,10 @@ async function renderTrainsList() {
       </div>
       <div class="train-item-body">
         <div class="inline-card">
-          <div class="inline-label">COACH POSITION</div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="inline-label">COACH POSITION</div>
+            <button class="tool-btn" id="flipBtn_${key}">⇅ Flip</button>
+          </div>
           <div class="inline-head">
             <div>
               <div class="inline-tno">${d.trainNo}</div>
@@ -848,7 +910,16 @@ async function renderTrainsList() {
 
     wrap.appendChild(item);
 
-    renderStrip(document.getElementById(`strip_${key}`), d.parsedList || []);
+    let flipped = false;
+    const stripEl = document.getElementById(`strip_${key}`);
+    renderStrip(stripEl, d.parsedList || []);
+
+    document.getElementById(`flipBtn_${key}`).addEventListener('click', () => {
+      flipped = !flipped;
+      const codes = flipped ? [...(d.parsedList || [])].reverse() : (d.parsedList || []);
+      renderStrip(stripEl, codes);
+      document.getElementById(`flipBtn_${key}`).textContent = flipped ? '⇅ Original' : '⇅ Flip';
+    });
 
     if (confirmList.length) {
       const clEl = document.getElementById(`cl_${key}`);
@@ -966,14 +1037,17 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   $('sFromStation').value = fromStation || '';
   $('sToStation').value = toStation || '';
   $('sList').value = rawList || '';
-  renderStrip($('sPreview'), parseCompressed($('sList').value));
+  renderPreview();
   showOverlay('submitOverlay');
 }
 $('fabAdd').addEventListener('click', () => openSubmit());
-$('sList').addEventListener('input', () => {
-  renderStrip($('sPreview'), parseCompressed($('sList').value));
-});
+$('sList').addEventListener('input', renderPreview);
 $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
+$('sReverseBtn').addEventListener('click', () => {
+  const codes = parseCompressed($('sList').value).reverse();
+  $('sList').value = codes.join(',');
+  renderPreview();
+});
 
 $('sSaveBtn').addEventListener('click', async () => {
   if (!requireStaff()) return;
