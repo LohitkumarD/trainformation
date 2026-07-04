@@ -64,11 +64,23 @@
     transition:transform .12s ease;
   }
   .me:active{transform:scale(.96);}
-  main{flex:1;padding:16px;display:flex;flex-direction:column;gap:14px;}
-  .search-card{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:16px;display:flex;flex-direction:column;gap:12px;
+  main{flex:1;padding:0 16px 100px;display:flex;flex-direction:column;gap:8px;}
+  .list-header{padding:12px 16px 8px;display:flex;flex-direction:column;gap:10px;background:var(--bg);position:sticky;top:57px;z-index:15;}
+  .list-search{
+    width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    color:var(--text);font-size:14px;font-family:var(--mono);
+    padding:12px 14px;outline:none;transition:border-color .15s ease;
   }
+  .list-search:focus{border-color:var(--amber);}
+  .tabs-row{display:flex;align-items:center;gap:8px;}
+  .tab{
+    background:transparent;border:2px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:13px;font-weight:600;padding:5px 14px;cursor:pointer;
+    transition:all .15s ease;
+  }
+  .tab.active{border-color:var(--amber);color:var(--amber);}
+  .list-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .trains-empty{text-align:center;color:var(--muted);font-size:13px;padding:40px 0;}
   input,textarea{
     width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
     padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);
@@ -79,26 +91,42 @@
   .field-label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500;}
   .row{display:flex;gap:10px;align-items:flex-start;}
   .train-no{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.08em;}
-  .result-card{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:16px;display:none;flex-direction:column;gap:12px;
-  }
-  .empty-card{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:20px;display:none;flex-direction:column;align-items:center;gap:12px;text-align:center;
-  }
+  /* Train item expandable rows */
+  .train-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .train-item-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none;transition:background .1s;}
+  .train-item-head:active{background:var(--surface-2);}
+  .star-btn{background:transparent;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:0 2px;flex-shrink:0;line-height:1;transition:color .15s;}
+  .star-btn.starred{color:#FFD700;}
+  .tno-badge{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--amber);background:rgba(255,159,28,.15);border-radius:8px;padding:5px 10px;flex-shrink:0;}
+  .train-item-meta{flex:1;min-width:0;}
+  .ti-route{font-size:12px;color:var(--muted);font-family:var(--mono);}
+  .ti-name{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ti-when{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:right;flex-shrink:0;white-space:nowrap;line-height:1.6;}
+  .ti-chev{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .18s ease;}
+  .train-item.open .ti-chev{transform:rotate(180deg);}
+  .train-item-body{max-height:0;overflow:hidden;transition:max-height .32s ease;}
+  .train-item.open .train-item-body{max-height:1400px;}
+  .inline-card{padding:14px;border-top:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column;gap:12px;}
+  .inline-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
+  .inline-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .inline-tno{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--amber);background:rgba(255,159,28,.15);border-radius:8px;padding:4px 10px;display:inline-block;}
+  .inline-date{font-size:12px;color:var(--muted);font-family:var(--mono);}
+  .inline-name{font-size:14px;color:var(--text);}
+  .inline-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);}
+  .inline-route .arr{color:var(--muted);}
+  /* Chip redesign — number inside chip */
   .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
   .tname{font-size:13px;color:var(--muted);margin-top:2px;}
-  .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);text-align:right;}
   .strip-wrap{padding:4px 0;}
   .strip{display:flex;flex-wrap:wrap;gap:6px 8px;padding:2px 0;}
-  .chip-cell{display:flex;flex-direction:column;align-items:center;gap:2px;}
-  .chip-index{font-family:var(--mono);font-size:9px;color:var(--muted);}
   .chip{
-    font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;
-    min-width:36px;text-align:center;white-space:nowrap;
+    font-family:var(--mono);border-radius:8px;
+    min-width:54px;height:60px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;text-align:center;padding:4px;
   }
+  .chip-index{font-family:var(--mono);font-size:9px;opacity:.55;font-weight:400;line-height:1;}
+  .chip-code{font-size:12px;font-weight:700;line-height:1;}
   .chip.eng{background:#3A2000;color:#FF9F1C;}
   .chip.pwr{background:#2A1F00;color:#D4A843;}
   .chip.gen{background:#1E2A1E;color:#5B9B5B;}
@@ -128,49 +156,21 @@
   .btn-row{display:flex;gap:10px;}
   .btn-row .btn{flex:1;}
 
-  .trains-toggle{
-    display:flex;align-items:center;justify-content:space-between;width:100%;
-    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
-    color:var(--text);font-size:13px;font-weight:600;
-    padding:10px 12px;cursor:pointer;margin-top:4px;
+  .preview-strip .chip{min-width:34px;height:38px;border-radius:5px;}
+  .preview-strip .chip-index{font-size:8px;}
+  .preview-strip .chip-code{font-size:10px;}
+  .share-offscreen{
+    position:fixed;left:-9999px;top:0;width:340px;
+    background:#1E2227;border:2px solid #FF9F1C;border-radius:12px;
+    padding:16px;display:flex;flex-direction:column;gap:12px;
   }
-  .trains-toggle:active{opacity:.8;}
-  .trains-toggle .chev{transition:transform .18s ease;font-size:13px;color:var(--muted);}
-  .trains-toggle.open .chev{transform:rotate(180deg);}
-  .trains-toggle.open{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent;}
-  .trains-panel{max-height:0;overflow:hidden;transition:max-height .25s ease;
-    background:var(--surface-2);border:1px solid var(--line);border-top:none;
-    border-radius:0 0 8px 8px;}
-  .trains-panel.open{max-height:360px;overflow-y:auto;padding:0 8px 8px;}
-  .trains-search{
-    width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;
-    color:var(--text);font-size:13px;padding:8px 10px;margin:8px 0 6px;box-sizing:border-box;
-  }
-  .trains-list{display:flex;flex-direction:column;gap:6px;padding-bottom:4px;}
-  .trains-empty{font-size:12px;color:var(--muted);padding:8px 2px;}
-  .train-row{
-    display:flex;align-items:center;justify-content:space-between;gap:8px;
-    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
-    padding:8px 10px;cursor:pointer;transition:transform .12s ease;text-align:left;
-    width:100%;border:1px solid var(--line);
-  }
-  .train-row:active{transform:scale(.97);}
-  .train-row .tr-no{font-family:var(--mono);font-weight:700;color:var(--amber);font-size:13px;}
-  .train-row .tr-name{font-size:11px;color:var(--muted);}
-  .train-row .tr-when{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:right;white-space:nowrap;}
+  .sc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .sc-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
+  .sc-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);margin-top:3px;}
 
-  @keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
-  .result-card.show{display:flex;animation:fadeSlideIn .22s ease;}
-  .share-capture{
-    display:flex;flex-direction:column;gap:14px;
-    background:var(--surface);border:2px solid var(--amber);border-radius:12px;padding:16px;
-  }
-  .result-head .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
-  .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);text-align:right;}
   .confirm-line{font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .confirm-line b{color:var(--text);}
   .share-footer{font-size:10px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.04em;}
-  .empty-card.show{display:flex;animation:fadeSlideIn .22s ease;}
   .overlay{
     position:fixed;inset:0;background:rgba(0,0,0,0);display:none;align-items:flex-end;
     justify-content:center;z-index:50;transition:background .22s ease;
@@ -250,60 +250,17 @@
     <button class="me" id="meBtn">👤 <span id="meLabel">...</span></button>
   </header>
 
+  <div class="list-header">
+    <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
+    <div class="tabs-row">
+      <button class="tab active" id="tabAll">All</button>
+      <button class="tab" id="tabFav">★ Favourites</button>
+      <span class="list-count" id="listCount"></span>
+    </div>
+  </div>
+
   <main>
-    <div class="search-card">
-      <div>
-        <label class="field-label">Train number</label>
-        <input class="train-no" id="trainNoInput" inputmode="numeric" maxlength="5" placeholder="e.g. 17302" autocomplete="off">
-      </div>
-      <div class="row">
-        <div style="flex:1">
-          <label class="field-label">Date</label>
-          <input type="date" id="dateInput">
-        </div>
-        <div style="align-self:flex-end">
-          <button class="btn btn-primary" id="findBtn">Find</button>
-        </div>
-      </div>
-      <button class="trains-toggle" id="trainsToggle" type="button">
-        <span id="trainsToggleLabel">All trains</span>
-        <span class="chev">▾</span>
-      </button>
-      <div class="trains-panel" id="trainsPanel">
-        <input class="trains-search" id="trainsSearch" placeholder="Search by train number or name" autocomplete="off">
-        <div class="trains-list" id="trainsList"></div>
-      </div>
-    </div>
-
-    <div class="result-card" id="resultCard">
-      <div class="share-capture" id="shareCapture">
-        <div class="result-head">
-          <div>
-            <div class="tno" id="rTrainNo"></div>
-            <div class="tname" id="rTrainName"></div>
-          </div>
-          <div class="date" id="rDate"></div>
-        </div>
-        <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
-        <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
-        <div class="confirm-line" id="rConfirmLine"></div>
-        <div class="share-footer" id="shareGenAt" style="display:none"></div>
-        <div class="share-footer" id="shareFooterBrand">Train Coach Position · cptrains.netlify.app</div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-ghost" id="updateBtn">Update</button>
-        <button class="btn btn-secondary" id="confirmBtn">✓ Confirm</button>
-      </div>
-      <button class="btn btn-primary btn-block" id="shareImgBtn">📤 Share as image</button>
-    </div>
-
-    <div class="empty-card" id="emptyCard">
-      <div class="tno" id="eTrainNo"></div>
-      <p>No coach position saved yet for this train and date.</p>
-      <button class="btn btn-primary" id="addBtn">Add coach position</button>
-    </div>
-
-    <button class="legend-link" id="legendLink">Standard coach codes (legend)</button>
+    <div id="trainsList"></div>
   </main>
 
   <div class="fab">
@@ -311,6 +268,24 @@
   </div>
 
   <div class="toast" id="toast"></div>
+</div>
+
+<!-- Off-screen share capture (populated before html2canvas) -->
+<div id="shareCapture" class="share-offscreen">
+  <div class="sc-label">COACH POSITION</div>
+  <div class="sc-head">
+    <div>
+      <div class="tno" id="rTrainNo"></div>
+      <div class="tname" id="rTrainName"></div>
+      <div class="sc-route" id="rRoute"></div>
+    </div>
+    <div class="inline-date" id="rDate"></div>
+  </div>
+  <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
+  <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
+  <div class="confirm-line" id="rConfirmLine"></div>
+  <div class="share-footer" id="shareGenAt" style="display:none"></div>
+  <div class="share-footer" id="shareFooterBrand">Train Coach Position · cptrains.netlify.app</div>
 </div>
 
 <!-- Auth overlay (initial sign-in, shown before anything else) -->
@@ -393,6 +368,16 @@
         <input id="sTrainName" placeholder="e.g. BGM-MYS EXPRESS">
       </div>
     </div>
+    <div class="row">
+      <div style="flex:1">
+        <label class="field-label">From station</label>
+        <input id="sFromStation" placeholder="e.g. SBC" autocomplete="off">
+      </div>
+      <div style="flex:1">
+        <label class="field-label">To station</label>
+        <input id="sToStation" placeholder="e.g. DWR" autocomplete="off">
+      </div>
+    </div>
     <div>
       <label class="field-label">Date</label>
       <input type="date" id="sDate">
@@ -400,7 +385,7 @@
     <div>
       <label class="field-label">Coach list (from engine end)</label>
       <textarea id="sList" rows="2" placeholder="ENG,LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
-      <p class="hint">Comma-separate. Use a count prefix for repeats (2GEN) and a dash for ranges (S1-S7). See legend for standard codes.</p>
+      <p class="hint">Comma-separate. Use count prefix for repeats (2GEN) and dash for ranges (S1-S7). <button class="legend-link" id="legendLink">See standard codes →</button></p>
     </div>
     <div>
       <label class="field-label">Preview</label>
@@ -448,11 +433,11 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-// Enable offline persistence so the app works without internet
 db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
 // ─── App state ────────────────────────────────────────────────────────────────
-let currentUser = null; // null = loading | {role:'guest'} | {uid,name,phone,station,role:'staff'|'admin'}
+let currentUser = null;
+let activeTab = 'all';
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
 async function getTrainRecord(key) {
@@ -526,7 +511,10 @@ async function migrateLocalIfNeeded() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 function showOverlay(id) {
   const ov = $(id);
@@ -594,18 +582,31 @@ function classOf(code) {
 function renderStrip(container, codes) {
   container.innerHTML = '';
   codes.forEach((code, i) => {
-    const cell = document.createElement('div');
-    cell.className = 'chip-cell';
+    const chip = document.createElement('div');
+    chip.className = `chip ${classOf(code)}`;
     const idx = document.createElement('div');
     idx.className = 'chip-index';
     idx.textContent = i + 1;
-    const d = document.createElement('div');
-    d.className = `chip ${classOf(code)}`;
-    d.textContent = code;
-    cell.appendChild(idx);
-    cell.appendChild(d);
-    container.appendChild(cell);
+    const label = document.createElement('div');
+    label.className = 'chip-code';
+    label.textContent = code;
+    chip.appendChild(idx);
+    chip.appendChild(label);
+    container.appendChild(chip);
   });
+}
+
+// ─── Favourites ───────────────────────────────────────────────────────────────
+function getFavourites() {
+  try { return JSON.parse(localStorage.getItem('cp_favs') || '[]'); } catch { return []; }
+}
+function toggleFavourite(trainNo) {
+  let favs = getFavourites();
+  const isFav = favs.includes(trainNo);
+  if (isFav) { favs = favs.filter(f => f !== trainNo); }
+  else { favs.unshift(trainNo); }
+  localStorage.setItem('cp_favs', JSON.stringify(favs));
+  return !isFav;
 }
 
 // ─── Identity / auth helpers ──────────────────────────────────────────────────
@@ -748,70 +749,171 @@ $('emailRegisterBtn').addEventListener('click', async () => {
   setAuthWorking(false);
 });
 
-// ─── All trains list ──────────────────────────────────────────────────────────
+// ─── Share capture helper ─────────────────────────────────────────────────────
+function populateShareCapture(d) {
+  $('rTrainNo').textContent = d.trainNo;
+  $('rTrainName').textContent = d.trainName || '';
+  $('rDate').textContent = formatDateOnly(d.date);
+  const fromTo = (d.fromStation && d.toStation)
+    ? `${d.fromStation} → ${d.toStation}`
+    : d.fromStation || d.toStation || '';
+  $('rRoute').textContent = fromTo;
+  renderStrip($('rStrip'), d.parsedList || []);
+  const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
+  const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
+  $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
+  $('rWhen').textContent = `${formatDateTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
+  const clEl = $('rConfirmLine');
+  const confirmList = d.confirmations || [];
+  if (!confirmList.length) { clEl.style.display = 'none'; clEl.innerHTML = ''; return; }
+  clEl.style.display = 'flex';
+  const latest = confirmList[confirmList.length - 1];
+  const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
+  clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+}
+
+// ─── Trains list ──────────────────────────────────────────────────────────────
 async function renderTrainsList() {
-  const filter = ($('trainsSearch').value || '').trim();
-  const list = await getAllTrains(filter);
-  $('trainsToggleLabel').textContent = `All trains (${list.length})`;
+  const filter = ($('listSearch').value || '').trim();
+  let list = await getAllTrains(filter);
+
+  if (activeTab === 'fav') {
+    const favs = getFavourites();
+    list = list.filter(d => favs.includes(d.trainNo));
+  }
+
+  const favs = getFavourites();
   const wrap = $('trainsList');
+  $('listCount').textContent = `${list.length} train${list.length !== 1 ? 's' : ''}`;
   wrap.innerHTML = '';
+
   if (!list.length) {
-    wrap.innerHTML = `<div class="trains-empty">${filter ? 'No match' : 'No trains saved yet'}</div>`;
+    wrap.innerHTML = `<div class="trains-empty">${
+      filter ? `No match for "${filter}"` :
+      activeTab === 'fav' ? 'No favourites yet — tap ☆ to add' :
+      'No trains saved yet'
+    }</div>`;
     return;
   }
+
   list.forEach(d => {
-    const row = document.createElement('button');
-    row.className = 'train-row';
-    row.type = 'button';
-    row.innerHTML = `
-      <span>
-        <span class="tr-no">${d.trainNo}</span>
-        <span class="tr-name">${d.trainName ? ' · ' + d.trainName : ''}</span>
-      </span>
-      <span class="tr-when">${formatDateOnly(d.date)}<br>${formatDateTime(new Date(d.updatedAt))}</span>
+    const key = `${d.trainNo}_${d.date}`;
+    const isFav = favs.includes(d.trainNo);
+    const fromTo = (d.fromStation && d.toStation)
+      ? `${d.fromStation} → ${d.toStation}`
+      : d.fromStation || d.toStation || '';
+    const timeStr = formatDateTime(new Date(d.updatedAt)).split(' ')[1];
+    const confirmList = d.confirmations || [];
+
+    const item = document.createElement('div');
+    item.className = 'train-item';
+
+    item.innerHTML = `
+      <div class="train-item-head">
+        <button class="star-btn${isFav ? ' starred' : ''}" data-train="${d.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
+        <div class="tno-badge">${d.trainNo}</div>
+        <div class="train-item-meta">
+          ${fromTo ? `<div class="ti-route">${fromTo}</div>` : ''}
+          <div class="ti-name">${d.trainName || '—'}</div>
+        </div>
+        <div class="ti-when">${formatDateOnly(d.date)}<br>${timeStr}</div>
+        <div class="ti-chev">▾</div>
+      </div>
+      <div class="train-item-body">
+        <div class="inline-card">
+          <div class="inline-label">COACH POSITION</div>
+          <div class="inline-head">
+            <div>
+              <div class="inline-tno">${d.trainNo}</div>
+              ${d.trainName ? `<div class="inline-name">${d.trainName}</div>` : ''}
+              ${fromTo ? `<div class="inline-route">${fromTo}</div>` : ''}
+            </div>
+            <div class="inline-date">${formatDateOnly(d.date)}</div>
+          </div>
+          <div class="strip-wrap"><div class="strip" id="strip_${key}"></div></div>
+          <div class="meta-line"><span class="dot"></span> Updated by <b>${d.submittedByName || '—'}</b> · ${formatDateTime(new Date(d.updatedAt))} · #${d.updateCount || 1}</div>
+          <div class="confirm-line" id="cl_${key}" style="${confirmList.length ? 'display:flex' : 'display:none'}"></div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="shareBtn_${key}">⬆ Share</button>
+            <button class="btn btn-ghost" id="confirmBtn_${key}">✓ Confirm</button>
+            <button class="btn btn-secondary" id="updateBtn_${key}">Edit</button>
+          </div>
+        </div>
+      </div>
     `;
-    row.addEventListener('click', () => {
-      $('trainNoInput').value = d.trainNo;
-      $('dateInput').value = d.date;
-      $('trainsPanel').classList.remove('open');
-      $('trainsToggle').classList.remove('open');
-      lookup();
+
+    wrap.appendChild(item);
+
+    renderStrip(document.getElementById(`strip_${key}`), d.parsedList || []);
+
+    if (confirmList.length) {
+      const clEl = document.getElementById(`cl_${key}`);
+      const latest = confirmList[confirmList.length - 1];
+      const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
+      clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+    }
+
+    item.querySelector('.train-item-head').addEventListener('click', (e) => {
+      if (e.target.closest('.star-btn')) return;
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.train-item.open').forEach(el => el.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
     });
-    wrap.appendChild(row);
+
+    item.querySelector('.star-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const trainNo = e.currentTarget.dataset.train;
+      const isNowFav = toggleFavourite(trainNo);
+      e.currentTarget.textContent = isNowFav ? '★' : '☆';
+      e.currentTarget.classList.toggle('starred', isNowFav);
+      e.currentTarget.setAttribute('aria-label', isNowFav ? 'Remove from favourites' : 'Add to favourites');
+      if (activeTab === 'fav' && !isNowFav) renderTrainsList();
+    });
+
+    document.getElementById(`shareBtn_${key}`).addEventListener('click', () => {
+      populateShareCapture(d);
+      shareAsImage(d.trainNo, d.date);
+    });
+
+    document.getElementById(`confirmBtn_${key}`).addEventListener('click', async () => {
+      if (!requireStaff()) return;
+      const identity = getIdentity();
+      if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+      const rec = await getTrainRecord(key);
+      if (!rec) return;
+      const cList = (rec.confirmations || []).filter(c => c.uid !== identity.uid);
+      cList.push({ name: identity.name, phone: identity.phone || '', station: identity.station || '', uid: identity.uid || '', at: Date.now() });
+      rec.confirmations = cList;
+      await saveTrainRecord(key, rec);
+      const clEl = document.getElementById(`cl_${key}`);
+      if (clEl) {
+        const latest = cList[cList.length - 1];
+        const names = cList.length === 1 ? latest.name : `${latest.name} +${cList.length - 1} more`;
+        clEl.style.display = 'flex';
+        clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+      }
+      toast('Marked as confirmed');
+    });
+
+    document.getElementById(`updateBtn_${key}`).addEventListener('click', () => {
+      openSubmit(d.trainNo, d.date, d.trainName, d.rawList, d.fromStation, d.toStation);
+    });
   });
 }
 
-$('trainsToggle').addEventListener('click', () => {
-  const open = $('trainsPanel').classList.toggle('open');
-  $('trainsToggle').classList.toggle('open', open);
-  if (open) renderTrainsList();
+$('tabAll').addEventListener('click', () => {
+  activeTab = 'all';
+  $('tabAll').classList.add('active');
+  $('tabFav').classList.remove('active');
+  renderTrainsList();
 });
-$('trainsSearch').addEventListener('input', renderTrainsList);
-
-// ─── Confirmations ────────────────────────────────────────────────────────────
-function renderConfirmLine(d) {
-  const el = $('rConfirmLine');
-  const list = d.confirmations || [];
-  if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.style.display = 'flex';
-  const latest = list[list.length - 1];
-  const names = list.length === 1 ? latest.name : `${latest.name} +${list.length - 1} more`;
-  el.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
-}
-
-async function confirmRecord(key) {
-  if (!requireStaff()) return;
-  const identity = getIdentity();
-  if (!identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
-  const rec = await getTrainRecord(key);
-  if (!rec) return;
-  const list = (rec.confirmations || []).filter(c => c.phone !== identity.phone);
-  list.push({ name: identity.name, phone: identity.phone, station: identity.station || '', at: Date.now() });
-  rec.confirmations = list;
-  await saveTrainRecord(key, rec);
-  renderConfirmLine(rec);
-  toast('Marked as confirmed');
-}
+$('tabFav').addEventListener('click', () => {
+  activeTab = 'fav';
+  $('tabFav').classList.add('active');
+  $('tabAll').classList.remove('active');
+  renderTrainsList();
+});
+$('listSearch').addEventListener('input', renderTrainsList);
 
 // ─── Share as image ───────────────────────────────────────────────────────────
 async function shareAsImage(trainNo, date) {
@@ -851,44 +953,14 @@ async function shareAsImage(trainNo, date) {
   }
 }
 
-// ─── Lookup ───────────────────────────────────────────────────────────────────
-async function lookup() {
-  const trainNo = $('trainNoInput').value.trim();
-  const date = $('dateInput').value || todayStr();
-  if (!trainNo) { toast('Enter a train number'); return; }
-  $('resultCard').classList.remove('show');
-  $('emptyCard').classList.remove('show');
-
-  const d = await getTrainRecord(`${trainNo}_${date}`);
-
-  if (d) {
-    $('rTrainNo').textContent = d.trainNo;
-    $('rTrainName').textContent = d.trainName || '';
-    $('rDate').textContent = formatDateOnly(d.date);
-    renderStrip($('rStrip'), d.parsedList || []);
-    const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
-    const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
-    $('rBy').textContent = `${d.submittedByName}${idHint ? ' ' + idHint : ''}${stationPart}`;
-    $('rWhen').textContent = `${formatDateTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
-    renderConfirmLine(d);
-    $('resultCard').classList.add('show');
-    $('updateBtn').onclick = () => openSubmit(trainNo, date, d.trainName, d.rawList);
-    $('confirmBtn').onclick = () => confirmRecord(`${trainNo}_${date}`);
-    $('shareImgBtn').onclick = () => shareAsImage(trainNo, date);
-  } else {
-    $('eTrainNo').textContent = trainNo;
-    $('emptyCard').classList.add('show');
-    $('addBtn').onclick = () => openSubmit(trainNo, date, '', '');
-  }
-}
-$('findBtn').addEventListener('click', lookup);
-$('trainNoInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookup(); });
-
-function openSubmit(trainNo, date, trainName, rawList) {
+// ─── Submit sheet ─────────────────────────────────────────────────────────────
+function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   if (!requireStaff()) return;
-  $('sTrainNo').value = trainNo || $('trainNoInput').value || '';
+  $('sTrainNo').value = trainNo || '';
   $('sTrainName').value = trainName || '';
-  $('sDate').value = date || $('dateInput').value || todayStr();
+  $('sDate').value = date || todayStr();
+  $('sFromStation').value = fromStation || '';
+  $('sToStation').value = toStation || '';
   $('sList').value = rawList || '';
   renderStrip($('sPreview'), parseCompressed($('sList').value));
   showOverlay('submitOverlay');
@@ -897,6 +969,7 @@ $('fabAdd').addEventListener('click', () => openSubmit());
 $('sList').addEventListener('input', () => {
   renderStrip($('sPreview'), parseCompressed($('sList').value));
 });
+$('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 
 $('sSaveBtn').addEventListener('click', async () => {
   if (!requireStaff()) return;
@@ -905,6 +978,8 @@ $('sSaveBtn').addEventListener('click', async () => {
   const trainName = $('sTrainName').value.trim();
   const date = $('sDate').value || todayStr();
   const rawList = $('sList').value.trim();
+  const fromStation = $('sFromStation').value.trim().toUpperCase();
+  const toStation = $('sToStation').value.trim().toUpperCase();
   if (!trainNo || !rawList) { toast('Train number and coach list required'); return; }
   const parsedList = parseCompressed(rawList);
   const key = `${trainNo}_${date}`;
@@ -912,6 +987,7 @@ $('sSaveBtn').addEventListener('click', async () => {
 
   await saveTrainRecord(key, {
     trainNo, trainName, date, rawList, parsedList,
+    fromStation, toStation,
     submittedByName: identity.name,
     submittedByEmail: identity.email || '',
     submittedByPhone: identity.phone || '',
@@ -923,13 +999,8 @@ $('sSaveBtn').addEventListener('click', async () => {
   });
   hideOverlay('submitOverlay');
   toast('Saved');
-  $('trainNoInput').value = trainNo;
-  $('dateInput').value = date;
-  await lookup();
   renderTrainsList();
 });
-
-$('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 
 // ─── Firebase Auth state ──────────────────────────────────────────────────────
 auth.onAuthStateChanged(async (firebaseUser) => {
@@ -969,7 +1040,6 @@ auth.onAuthStateChanged(async (firebaseUser) => {
     }
   }
   updateMeLabel();
-  $('dateInput').value = todayStr();
   renderTrainsList();
 });
 

@@ -1,4 +1,4 @@
-const CACHE = 'coach-position-v13';
+const CACHE = 'coach-position-v14';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {
