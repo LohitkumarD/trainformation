@@ -14,6 +14,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+<!-- Firebase SDK v10 (compat — no build step needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <style>
   :root{
     --bg:#14171A;
@@ -48,35 +52,67 @@
   header.bar{
     padding:18px 18px 14px;
     border-bottom:1px solid var(--line);
-    display:flex;align-items:center;justify-content:space-between;
-    position:sticky;top:0;background:var(--bg);z-index:5;
+    display:flex;justify-content:space-between;align-items:center;
+    position:sticky;top:0;background:var(--bg);z-index:20;
   }
-  .brand{display:flex;flex-direction:column;gap:2px;}
-  .brand .title{
-    font-family:var(--mono);font-weight:700;letter-spacing:.06em;
-    color:var(--amber);font-size:15px;
-  }
-  .brand .sub{font-size:12px;color:var(--muted);}
+  .brand .title{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.05em;color:var(--amber);}
+  .brand .sub{font-size:11px;color:var(--muted);margin-top:1px;}
   .me{
-    font-size:12px;color:var(--muted);background:var(--surface);
-    border:1px solid var(--line);border-radius:999px;padding:6px 10px;
-    display:flex;align-items:center;gap:6px;cursor:pointer;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    padding:7px 12px;font-size:13px;cursor:pointer;color:var(--text);
+    white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;
+    transition:transform .12s ease;
   }
-  .me b{color:var(--text);font-weight:600;}
-  main{flex:1;padding:18px;display:flex;flex-direction:column;gap:18px;padding-bottom:90px;}
-
+  .me:active{transform:scale(.96);}
+  main{flex:1;padding:16px;display:flex;flex-direction:column;gap:14px;}
   .search-card{
     background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:14px;display:flex;flex-direction:column;gap:10px;
+    padding:16px;display:flex;flex-direction:column;gap:12px;
   }
-  .row{display:flex;gap:10px;}
-  label.field-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:block;}
-  input,textarea,select{
-    width:100%;background:var(--surface-2);border:1px solid var(--line);
-    color:var(--text);border-radius:8px;padding:11px 12px;font-size:15px;font-family:var(--sans);
+  input,textarea{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);
+    outline:none;transition:border-color .15s ease;
   }
-  input:focus,textarea:focus,select:focus{outline:2px solid var(--amber);outline-offset:1px;}
-  input.train-no{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.04em;}
+  input:focus,textarea:focus{border-color:var(--amber);}
+  input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.6);}
+  .field-label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500;}
+  .row{display:flex;gap:10px;align-items:flex-start;}
+  .train-no{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.08em;}
+  .result-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;display:none;flex-direction:column;gap:12px;
+  }
+  .empty-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;display:none;flex-direction:column;align-items:center;gap:12px;text-align:center;
+  }
+  .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
+  .tname{font-size:13px;color:var(--muted);margin-top:2px;}
+  .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);text-align:right;}
+  .strip-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
+  .strip{display:flex;gap:6px;padding:2px 0;width:max-content;}
+  .chip-cell{display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .chip-index{font-family:var(--mono);font-size:9px;color:var(--muted);}
+  .chip{
+    font-family:var(--mono);font-size:11px;font-weight:700;padding:6px 8px;border-radius:6px;
+    min-width:36px;text-align:center;white-space:nowrap;
+  }
+  .chip.eng{background:#3A2000;color:#FF9F1C;}
+  .chip.pwr{background:#2A1F00;color:#D4A843;}
+  .chip.gen{background:#1E2A1E;color:#5B9B5B;}
+  .chip.d2s{background:#1E2535;color:#5B8FCC;}
+  .chip.cc{background:#2A2535;color:#9B8FCC;}
+  .chip.ac{background:#1A2B2B;color:#3DCCCC;}
+  .chip.pc{background:#2B1A1A;color:#CC5B5B;}
+  .chip.sl{background:#1A2B1A;color:#5BCC5B;}
+  .chip.end{background:#2B2B1A;color:#CCCC5B;}
+  .chip.unk{background:#252B31;color:#8B93A1;}
+  .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
+  .meta-line b{color:var(--text);}
+  .hint{font-size:12px;color:var(--muted);margin:4px 0 0;}
   .btn{
     border:none;border-radius:8px;padding:12px 16px;font-weight:600;font-size:14px;
     cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
@@ -87,9 +123,11 @@
   .btn-primary:active{filter:brightness(.92);}
   .btn-secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--line);}
   .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--line);}
+  .btn-danger{background:transparent;color:var(--red);border:1px solid var(--red);}
   .btn-block{width:100%;}
   .btn-row{display:flex;gap:10px;}
   .btn-row .btn{flex:1;}
+
   .trains-toggle{
     display:flex;align-items:center;justify-content:space-between;width:100%;
     background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;
@@ -97,9 +135,7 @@
   }
   .trains-toggle .chev{transition:transform .18s ease;font-size:11px;}
   .trains-toggle.open .chev{transform:rotate(180deg);}
-  .trains-panel{
-    max-height:0;overflow:hidden;transition:max-height .22s ease;
-  }
+  .trains-panel{max-height:0;overflow:hidden;transition:max-height .22s ease;}
   .trains-panel.open{max-height:340px;overflow-y:auto;}
   .trains-search{
     width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
@@ -111,6 +147,7 @@
     display:flex;align-items:center;justify-content:space-between;gap:8px;
     background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
     padding:8px 10px;cursor:pointer;transition:transform .12s ease;text-align:left;
+    width:100%;border:1px solid var(--line);
   }
   .train-row:active{transform:scale(.97);}
   .train-row .tr-no{font-family:var(--mono);font-weight:700;color:var(--amber);font-size:13px;}
@@ -118,93 +155,83 @@
   .train-row .tr-when{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:right;white-space:nowrap;}
 
   @keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
-  .result-card{
-    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-    padding:16px;display:none;flex-direction:column;gap:14px;
-  }
   .result-card.show{display:flex;animation:fadeSlideIn .22s ease;}
   .share-capture{
     display:flex;flex-direction:column;gap:14px;
     background:var(--surface);border:2px solid var(--amber);border-radius:12px;padding:16px;
   }
-  .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
   .result-head .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
-  .result-head .tname{font-size:13px;color:var(--muted);margin-top:2px;}
   .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);text-align:right;}
   .confirm-line{font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .confirm-line b{color:var(--text);}
   .share-footer{font-size:10px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.04em;}
-
-  .strip-wrap{padding-bottom:6px;}
-  .strip{display:flex;flex-wrap:wrap;gap:10px 8px;}
-  .chip-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
-  .chip-index{font-size:10px;color:var(--muted);font-family:var(--mono);line-height:1;}
-  .chip{
-    flex:0 0 auto;min-width:48px;height:48px;border-radius:6px;
-    display:flex;align-items:center;justify-content:center;
-    font-family:var(--mono);font-weight:700;font-size:12px;
-    border:1px solid rgba(255,255,255,.08);
-  }
-  .chip.eng{background:#3A3F45;color:var(--amber);border:1px solid var(--amber);min-width:40px;}
-  .chip.pwr{background:var(--amber);color:#1A1300;}
-  .chip.gen{background:var(--grey-blue);color:#fff;}
-  .chip.d2s{background:var(--teal);color:#06231F;}
-  .chip.cc{background:var(--violet);color:#1F1033;}
-  .chip.ac{background:var(--blue);color:#08203B;}
-  .chip.pc{background:var(--brown);color:#fff;}
-  .chip.sl{background:var(--green);color:#06230F;}
-  .chip.end{background:var(--red);color:#fff;}
-  .chip.unk{background:transparent;color:var(--muted);border:1px dashed var(--muted);}
-
-  .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .meta-line b{color:var(--text);}
-  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
-
-  .empty-card{
-    background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
-    padding:24px 16px;text-align:center;display:none;flex-direction:column;gap:10px;align-items:center;
-  }
   .empty-card.show{display:flex;animation:fadeSlideIn .22s ease;}
-  .empty-card .tno{font-family:var(--mono);font-weight:700;color:var(--amber);font-size:18px;}
-  .empty-card p{margin:0;color:var(--muted);font-size:13px;}
-
-  .legend-link{font-size:12px;color:var(--muted);text-align:center;text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;}
-
-  /* Modal */
   .overlay{
-    position:fixed;inset:0;background:rgba(0,0,0,0);display:none;
-    align-items:flex-end;justify-content:center;z-index:50;
-    transition:background .22s ease;
+    position:fixed;inset:0;background:rgba(0,0,0,0);display:none;align-items:flex-end;
+    justify-content:center;z-index:50;transition:background .22s ease;
   }
   .overlay.show{display:flex;}
   .overlay.open{background:rgba(0,0,0,.6);}
   .sheet{
-    background:var(--surface);border-top:1px solid var(--line);
-    border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:520px;
-    max-height:88vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;
+    background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;
+    border:1px solid var(--line);border-bottom:none;
+    padding:24px 20px 32px;width:100%;max-width:520px;
+    display:flex;flex-direction:column;gap:14px;
     transform:translateY(100%);transition:transform .22s ease;
+    max-height:90vh;overflow-y:auto;
   }
   .overlay.open .sheet{transform:translateY(0);}
-  .sheet h3{margin:0;font-size:16px;}
-  .sheet .close{align-self:flex-end;background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;}
-  .preview-strip{min-height:54px;}
-  .hint{font-size:12px;color:var(--muted);line-height:1.5;}
-  .legend-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;}
-  .legend-grid .code{font-family:var(--mono);color:var(--amber);font-weight:700;}
-
-  .fab{
-    position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:center;z-index:10;
+  .close{
+    position:absolute;top:16px;right:16px;background:transparent;border:none;
+    color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;
   }
+  .sheet{position:relative;}
+  .sheet h3{font-size:17px;font-weight:700;padding-right:32px;}
+  .legend-link{
+    background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;
+    text-decoration:underline;text-align:center;padding:8px;
+  }
+  .legend-grid{
+    display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;
+    align-items:center;
+  }
+  .legend-grid .code{
+    font-family:var(--mono);font-size:11px;background:var(--surface-2);
+    border-radius:4px;padding:2px 6px;color:var(--amber);white-space:nowrap;
+  }
+  .preview-strip .chip{font-size:10px;padding:4px 6px;}
+  .fab{position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:center;z-index:10;}
   .fab .btn{box-shadow:0 6px 20px rgba(0,0,0,.4);}
-
   .toast{
     position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
     background:var(--green);color:#06230F;padding:10px 18px;border-radius:999px;
     font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:all .25s ease;z-index:60;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-
   .section-title{font-size:13px;color:var(--muted);font-weight:600;}
+
+  /* auth overlay screens */
+  .auth-screen{display:none;flex-direction:column;gap:14px;}
+  .auth-screen.active{display:flex;}
+  .auth-logo{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber);letter-spacing:.05em;}
+  .auth-tagline{font-size:13px;color:var(--muted);}
+  .auth-divider{text-align:center;font-size:12px;color:var(--muted);margin:2px 0;}
+  .auth-back{
+    background:transparent;border:none;color:var(--muted);font-size:13px;cursor:pointer;
+    padding:4px 0;text-align:left;display:flex;align-items:center;gap:6px;
+  }
+  .verified-phone-label{
+    font-family:var(--mono);font-size:13px;color:var(--muted);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;
+  }
+  .sign-out-row{display:flex;align-items:center;justify-content:space-between;padding-top:4px;}
+  .sign-out-row span{font-size:12px;color:var(--muted);}
+  #otpSending{display:none;font-size:13px;color:var(--muted);text-align:center;}
+  .guest-badge{
+    font-size:11px;background:var(--surface-2);border:1px solid var(--line);
+    color:var(--muted);border-radius:6px;padding:2px 8px;font-family:var(--mono);
+  }
 </style>
 </head>
 <body>
@@ -215,7 +242,7 @@
       <div class="title">COACH POSITION</div>
       <div class="sub">SWR · Davangere Division</div>
     </div>
-    <button class="me" id="meBtn">👤 <span id="meLabel">Set name</span></button>
+    <button class="me" id="meBtn">👤 <span id="meLabel">...</span></button>
   </header>
 
   <main>
@@ -281,25 +308,73 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<!-- Identity sheet -->
+<!-- Auth overlay (initial sign-in, shown before anything else) -->
+<div class="overlay" id="authOverlay">
+  <div class="sheet">
+
+    <!-- Screen 1: choice -->
+    <div class="auth-screen active" id="authScreenChoice">
+      <div class="auth-logo">COACH POSITION</div>
+      <p class="auth-tagline">SWR Davangere Division — real-time coach positions for railway staff and passengers.</p>
+      <button class="btn btn-primary btn-block" id="staffLoginBtn">I'm railway staff →</button>
+      <div class="auth-divider">or</div>
+      <button class="btn btn-secondary btn-block" id="guestBtn">Just looking up (no login)</button>
+      <p class="hint" style="text-align:center">Staff login uses your phone number + OTP. No password needed.</p>
+    </div>
+
+    <!-- Screen 2: phone number -->
+    <div class="auth-screen" id="authScreenPhone">
+      <button class="auth-back" id="backToChoiceBtn">← Back</button>
+      <h3>Enter your mobile number</h3>
+      <p class="hint">We'll send a one-time OTP to verify it's you.</p>
+      <div>
+        <label class="field-label">Mobile number (India, 10 digits)</label>
+        <input id="authPhoneInput" inputmode="numeric" maxlength="10" placeholder="e.g. 9876543210" autocomplete="tel">
+      </div>
+      <div id="recaptcha-container"></div>
+      <button class="btn btn-primary btn-block" id="sendOtpBtn">Send OTP</button>
+      <p id="otpSending">Sending OTP…</p>
+    </div>
+
+    <!-- Screen 3: OTP entry -->
+    <div class="auth-screen" id="authScreenOtp">
+      <button class="auth-back" id="backToPhoneBtn">← Back</button>
+      <h3>Enter OTP</h3>
+      <p class="hint">OTP sent to +91 <span id="otpPhoneDisplay"></span></p>
+      <div>
+        <label class="field-label">6-digit OTP</label>
+        <input id="authOtpInput" inputmode="numeric" maxlength="6" placeholder="______" autocomplete="one-time-code">
+      </div>
+      <button class="btn btn-primary btn-block" id="verifyOtpBtn">Verify</button>
+      <button class="btn btn-ghost btn-block" id="resendOtpBtn">Resend OTP</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Profile sheet (shown after login for new users OR for editing) -->
 <div class="overlay" id="identityOverlay">
   <div class="sheet">
     <button class="close" data-close="identityOverlay">✕</button>
-    <h3>Who's submitting?</h3>
-    <p class="hint">Your name and number get stamped on entries you submit, so others know who to check with. No OTP — just type it once.</p>
+    <h3 id="idTitle">Your profile</h3>
+    <p class="hint" id="idHint">Your name and station are stamped on entries you submit.</p>
+    <div>
+      <label class="field-label">Signed in as</label>
+      <div class="verified-phone-label" id="verifiedPhoneLabel">—</div>
+    </div>
     <div>
       <label class="field-label">Name</label>
       <input id="idName" placeholder="e.g. Ramesh Kumar">
     </div>
     <div>
-      <label class="field-label">Phone number</label>
-      <input id="idPhone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number">
-    </div>
-    <div>
       <label class="field-label">Station (optional)</label>
       <input id="idStation" placeholder="e.g. BGM, DVG, Anantapur">
     </div>
-    <button class="btn btn-primary btn-block" id="idSaveBtn">Save and continue</button>
+    <button class="btn btn-primary btn-block" id="idSaveBtn">Save</button>
+    <div class="sign-out-row">
+      <span>Switch account or sign out?</span>
+      <button class="btn btn-danger" id="signOutBtn">Sign out</button>
+    </div>
   </div>
 </div>
 
@@ -360,73 +435,142 @@
 </div>
 
 <script>
-// ---------- train data store (localStorage, per-device — cloud sync planned later) ----------
-function getTrainsStore(){
+// ─── Firebase init ───────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyBncalmdFaWM2dB7uT8fxWFddICkDgqtY8",
+  authDomain: "coachposition.firebaseapp.com",
+  projectId: "coachposition",
+  storageBucket: "coachposition.firebasestorage.app",
+  messagingSenderId: "981014228335",
+  appId: "1:981014228335:web:c638a306bc8e9ef64a8c9a"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+// Enable offline persistence so the app works without internet
+db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+// ─── App state ────────────────────────────────────────────────────────────────
+let currentUser = null; // null = loading | {role:'guest'} | {uid,name,phone,station,role:'staff'|'admin'}
+
+// ─── Firestore storage ────────────────────────────────────────────────────────
+async function getTrainRecord(key) {
+  try {
+    const snap = await db.collection('trains').doc(key).get();
+    return snap.exists ? snap.data() : null;
+  } catch (e) {
+    // Fallback: local cache
+    const raw = localStorage.getItem('cp_trains');
+    const store = raw ? JSON.parse(raw) : {};
+    return store[key] || null;
+  }
+}
+
+async function saveTrainRecord(key, data) {
+  await db.collection('trains').doc(key).set(data);
+  // Keep a local cache for offline lookups
   const raw = localStorage.getItem('cp_trains');
-  return raw ? JSON.parse(raw) : {};
-}
-function getTrainRecord(key){
-  return getTrainsStore()[key] || null;
-}
-function saveTrainRecord(key, data){
-  const store = getTrainsStore();
+  const store = raw ? JSON.parse(raw) : {};
   store[key] = data;
   localStorage.setItem('cp_trains', JSON.stringify(store));
 }
 
-// ---------- helpers ----------
-const $ = (id) => document.getElementById(id);
-const todayStr = () => new Date().toISOString().slice(0,10);
+async function getAllTrains(filterStr) {
+  try {
+    const snap = await db.collection('trains')
+      .orderBy('updatedAt', 'desc')
+      .limit(200)
+      .get();
+    const all = snap.docs.map(d => d.data());
+    if (!filterStr) return all;
+    const f = filterStr.toLowerCase();
+    return all.filter(d =>
+      d.trainNo.toLowerCase().includes(f) || (d.trainName || '').toLowerCase().includes(f)
+    );
+  } catch (e) {
+    // Fallback to local cache
+    const raw = localStorage.getItem('cp_trains');
+    const store = raw ? JSON.parse(raw) : {};
+    const all = Object.values(store).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (!filterStr) return all;
+    const f = filterStr.toLowerCase();
+    return all.filter(d =>
+      d.trainNo.toLowerCase().includes(f) || (d.trainName || '').toLowerCase().includes(f)
+    );
+  }
+}
 
-function showOverlay(id){
+// Migrate existing localStorage data to Firestore (one-time, on first login)
+async function migrateLocalIfNeeded() {
+  const migrated = localStorage.getItem('cp_migrated');
+  if (migrated) return;
+  const raw = localStorage.getItem('cp_trains');
+  if (!raw) { localStorage.setItem('cp_migrated', '1'); return; }
+  const store = JSON.parse(raw);
+  const keys = Object.keys(store);
+  if (keys.length === 0) { localStorage.setItem('cp_migrated', '1'); return; }
+  toast(`Syncing ${keys.length} local record${keys.length > 1 ? 's' : ''} to cloud…`);
+  try {
+    const batch = db.batch();
+    keys.forEach(key => {
+      batch.set(db.collection('trains').doc(key), store[key], { merge: true });
+    });
+    await batch.commit();
+    localStorage.setItem('cp_migrated', '1');
+    toast('Local data synced to cloud');
+  } catch (e) {
+    // Silent fail — will retry next login
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+function showOverlay(id) {
   const ov = $(id);
   ov.classList.add('show');
-  requestAnimationFrame(()=> requestAnimationFrame(()=> ov.classList.add('open')));
+  requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add('open')));
 }
-function hideOverlay(id){
+function hideOverlay(id) {
   const ov = $(id);
   ov.classList.remove('open');
-  setTimeout(()=> ov.classList.remove('show'), 220);
+  setTimeout(() => ov.classList.remove('show'), 220);
 }
-document.querySelectorAll('[data-close]').forEach(b=>{
-  b.addEventListener('click', ()=>hideOverlay(b.dataset.close));
+document.querySelectorAll('[data-close]').forEach(b => {
+  b.addEventListener('click', () => hideOverlay(b.dataset.close));
 });
 
-function toast(msg){
+function toast(msg) {
   const t = $('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 1800);
+  setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-function pad2(n){ return String(n).padStart(2,'0'); }
-
-// All dates/times in this app are shown as dd-mm-yyyy hh:mm (24-hour), regardless of device locale.
-function formatDateOnly(iso){
-  const [y,m,dd] = iso.split('-');
+function pad2(n) { return String(n).padStart(2, '0'); }
+function formatDateOnly(iso) {
+  const [y, m, dd] = iso.split('-');
   return `${dd}-${m}-${y}`;
 }
-function formatDateTime(date){
-  return `${pad2(date.getDate())}-${pad2(date.getMonth()+1)}-${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+function formatDateTime(date) {
+  return `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-// ---------- parsing ----------
-function parseCompressed(input){
-  const tokens = (input||'').split(',').map(t=>t.trim().toUpperCase()).filter(Boolean);
+// ─── Coach parser + renderer ─────────────────────────────────────────────────
+function parseCompressed(input) {
+  const tokens = (input || '').split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
   const out = [];
-  for (const tok of tokens){
-    let m = tok.match(/^(\d+)([A-Z]+\d*)$/); // e.g. 2GEN, 3PC
-    if (m){
-      const count = parseInt(m[1],10);
-      for(let i=0;i<count;i++) out.push(m[2]);
-      continue;
-    }
-    m = tok.match(/^([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)$/); // e.g. S1-S7, B1-4, D1-D4
-    if (m){
+  for (const tok of tokens) {
+    let m = tok.match(/^(\d+)([A-Z]+\d*)$/);
+    if (m) { for (let i = 0; i < parseInt(m[1], 10); i++) out.push(m[2]); continue; }
+    m = tok.match(/^([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)$/);
+    if (m) {
       const prefix = m[1];
-      let start = parseInt(m[2],10), end = parseInt(m[3],10);
-      if (start <= end){ for(let i=start;i<=end;i++) out.push(prefix+i); }
-      else { for(let i=start;i>=end;i--) out.push(prefix+i); }
+      let s = parseInt(m[2], 10), e = parseInt(m[3], 10);
+      if (s <= e) { for (let i = s; i <= e; i++) out.push(prefix + i); }
+      else { for (let i = s; i >= e; i--) out.push(prefix + i); }
       continue;
     }
     out.push(tok);
@@ -434,9 +578,9 @@ function parseCompressed(input){
   return out;
 }
 
-function classOf(code){
+function classOf(code) {
   if (code === 'ENG') return 'eng';
-  if (['LPR','VP','PWR'].includes(code)) return 'pwr';
+  if (['LPR', 'VP', 'PWR'].includes(code)) return 'pwr';
   if (/^(GEN|GS|UR)$/.test(code)) return 'gen';
   if (/^D\d*$/.test(code)) return 'd2s';
   if (/^C\d*$/.test(code)) return 'cc';
@@ -447,9 +591,9 @@ function classOf(code){
   return 'unk';
 }
 
-function renderStrip(container, codes){
+function renderStrip(container, codes) {
   container.innerHTML = '';
-  codes.forEach((code, i)=>{
+  codes.forEach((code, i) => {
     const cell = document.createElement('div');
     cell.className = 'chip-cell';
     const idx = document.createElement('div');
@@ -464,51 +608,153 @@ function renderStrip(container, codes){
   });
 }
 
-// ---------- identity ----------
-function getIdentity(){
-  const raw = localStorage.getItem('cp_identity');
-  return raw ? JSON.parse(raw) : null;
+// ─── Identity / auth helpers ──────────────────────────────────────────────────
+function getIdentity() {
+  if (!currentUser || currentUser.role === 'guest') return null;
+  return { name: currentUser.name, phone: currentUser.phone, station: currentUser.station || '', uid: currentUser.uid };
 }
-function setIdentity(obj){
-  localStorage.setItem('cp_identity', JSON.stringify(obj));
-  updateMeLabel();
+
+function requireStaff() {
+  if (!currentUser || currentUser.role === 'guest') {
+    toast('Sign in as railway staff to contribute');
+    showOverlay('authOverlay');
+    return false;
+  }
+  return true;
 }
-function updateMeLabel(){
-  const id = getIdentity();
-  $('meLabel').textContent = id ? id.name.split(' ')[0] : 'Set name';
+
+function updateMeLabel() {
+  if (!currentUser) {
+    $('meLabel').textContent = '…';
+  } else if (currentUser.role === 'guest') {
+    $('meLabel').textContent = 'Guest';
+  } else {
+    $('meLabel').textContent = currentUser.name ? currentUser.name.split(' ')[0] : 'Set name';
+  }
 }
-$('meBtn').addEventListener('click', ()=>{
-  const id = getIdentity();
-  if (id){ $('idName').value=id.name; $('idPhone').value=id.phone; $('idStation').value=id.station||''; }
-  showOverlay('identityOverlay');
+
+$('meBtn').addEventListener('click', () => {
+  if (!currentUser || currentUser.role === 'guest') {
+    showAuthScreen('choice');
+    showOverlay('authOverlay');
+  } else {
+    $('idTitle').textContent = 'Your profile';
+    $('idHint').textContent = 'Your name and station are stamped on entries you submit.';
+    $('verifiedPhoneLabel').textContent = currentUser.phone ? '+91 ' + currentUser.phone : '—';
+    $('idName').value = currentUser.name || '';
+    $('idStation').value = currentUser.station || '';
+    showOverlay('identityOverlay');
+  }
 });
-$('idSaveBtn').addEventListener('click', ()=>{
+
+// ─── Profile save (identity overlay) ─────────────────────────────────────────
+$('idSaveBtn').addEventListener('click', async () => {
   const name = $('idName').value.trim();
-  const phone = $('idPhone').value.trim();
   const station = $('idStation').value.trim();
-  if (!name || phone.length < 10){ toast('Enter name and 10-digit number'); return; }
-  setIdentity({name, phone, station});
-  hideOverlay('identityOverlay');
-  toast('Saved');
+  if (!name) { toast('Please enter your name'); return; }
+  const uid = auth.currentUser ? auth.currentUser.uid : null;
+  if (!uid) { toast('Not signed in'); return; }
+  const profile = {
+    uid,
+    name,
+    station,
+    phone: currentUser.phone || (auth.currentUser.phoneNumber || '').replace('+91', '').replace('+', ''),
+    role: currentUser.role || 'staff',
+    updatedAt: Date.now()
+  };
+  try {
+    await db.collection('users').doc(uid).set(profile, { merge: true });
+    currentUser = { ...currentUser, ...profile };
+    updateMeLabel();
+    hideOverlay('identityOverlay');
+    toast('Profile saved');
+  } catch (e) {
+    toast('Could not save profile — try again');
+  }
 });
 
-// ---------- all trains list ----------
-function getAllTrains(){
-  const store = getTrainsStore();
-  return Object.values(store).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-}
-function renderTrainsList(){
-  const all = getAllTrains();
-  $('trainsToggleLabel').textContent = `All trains (${all.length})`;
-  const filter = ($('trainsSearch').value || '').trim().toLowerCase();
-  const list = filter
-    ? all.filter(d => d.trainNo.toLowerCase().includes(filter) || (d.trainName || '').toLowerCase().includes(filter))
-    : all;
+$('signOutBtn').addEventListener('click', async () => {
+  await auth.signOut();
+  currentUser = null;
+  localStorage.removeItem('cp_guest');
+  updateMeLabel();
+  hideOverlay('identityOverlay');
+  showAuthScreen('choice');
+  showOverlay('authOverlay');
+});
 
+// ─── OTP / phone auth ─────────────────────────────────────────────────────────
+function showAuthScreen(name) {
+  document.querySelectorAll('.auth-screen').forEach(el => el.classList.remove('active'));
+  $('authScreen' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+function initRecaptcha() {
+  if (!window.recaptchaVerifier) {
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
+  }
+}
+
+$('staffLoginBtn').addEventListener('click', () => showAuthScreen('phone'));
+$('backToChoiceBtn').addEventListener('click', () => showAuthScreen('choice'));
+$('backToPhoneBtn').addEventListener('click', () => showAuthScreen('phone'));
+
+$('guestBtn').addEventListener('click', () => {
+  localStorage.setItem('cp_guest', '1');
+  currentUser = { role: 'guest' };
+  updateMeLabel();
+  hideOverlay('authOverlay');
+  renderTrainsList();
+});
+
+$('sendOtpBtn').addEventListener('click', async () => {
+  const raw = $('authPhoneInput').value.trim().replace(/\D/g, '');
+  const phone = raw.length === 10 ? raw : (raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : null);
+  if (!phone) { toast('Enter a valid 10-digit mobile number'); return; }
+  $('sendOtpBtn').disabled = true;
+  $('otpSending').style.display = 'block';
+  try {
+    initRecaptcha();
+    window.confirmationResult = await auth.signInWithPhoneNumber('+91' + phone, window.recaptchaVerifier);
+    $('otpPhoneDisplay').textContent = phone;
+    showAuthScreen('otp');
+  } catch (e) {
+    toast('Could not send OTP — check the number or try again');
+    if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; }
+  }
+  $('sendOtpBtn').disabled = false;
+  $('otpSending').style.display = 'none';
+});
+
+$('verifyOtpBtn').addEventListener('click', async () => {
+  const code = $('authOtpInput').value.trim();
+  if (code.length < 4) { toast('Enter the OTP'); return; }
+  $('verifyOtpBtn').disabled = true;
+  try {
+    await window.confirmationResult.confirm(code);
+    // onAuthStateChanged handles the rest
+    hideOverlay('authOverlay');
+  } catch (e) {
+    toast('Wrong OTP — try again');
+    $('authOtpInput').value = '';
+  }
+  $('verifyOtpBtn').disabled = false;
+});
+
+$('resendOtpBtn').addEventListener('click', async () => {
+  if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; }
+  showAuthScreen('phone');
+});
+
+// ─── All trains list ──────────────────────────────────────────────────────────
+async function renderTrainsList() {
+  const filter = ($('trainsSearch').value || '').trim();
+  const list = await getAllTrains(filter);
+  $('trainsToggleLabel').textContent = `All trains (${list.length})`;
   const wrap = $('trainsList');
   wrap.innerHTML = '';
-  if (!list.length){
-    wrap.innerHTML = `<div class="trains-empty">${all.length ? 'No match' : 'No trains saved yet'}</div>`;
+  if (!list.length) {
+    wrap.innerHTML = `<div class="trains-empty">${filter ? 'No match' : 'No trains saved yet'}</div>`;
     return;
   }
   list.forEach(d => {
@@ -522,7 +768,7 @@ function renderTrainsList(){
       </span>
       <span class="tr-when">${formatDateOnly(d.date)}<br>${formatDateTime(new Date(d.updatedAt))}</span>
     `;
-    row.addEventListener('click', ()=>{
+    row.addEventListener('click', () => {
       $('trainNoInput').value = d.trainNo;
       $('dateInput').value = d.date;
       $('trainsPanel').classList.remove('open');
@@ -532,53 +778,55 @@ function renderTrainsList(){
     wrap.appendChild(row);
   });
 }
-$('trainsToggle').addEventListener('click', ()=>{
+
+$('trainsToggle').addEventListener('click', () => {
   const open = $('trainsPanel').classList.toggle('open');
   $('trainsToggle').classList.toggle('open', open);
-  if (open){ renderTrainsList(); }
+  if (open) renderTrainsList();
 });
 $('trainsSearch').addEventListener('input', renderTrainsList);
 
-// ---------- confirmations ----------
-function renderConfirmLine(d){
+// ─── Confirmations ────────────────────────────────────────────────────────────
+function renderConfirmLine(d) {
   const el = $('rConfirmLine');
   const list = d.confirmations || [];
-  if (!list.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (!list.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'flex';
   const latest = list[list.length - 1];
   const names = list.length === 1 ? latest.name : `${latest.name} +${list.length - 1} more`;
   el.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
 }
 
-function confirmRecord(key){
+async function confirmRecord(key) {
+  if (!requireStaff()) return;
   const identity = getIdentity();
-  if (!identity){ showOverlay('identityOverlay'); toast('Add your name first'); return; }
-  const rec = getTrainRecord(key);
+  if (!identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+  const rec = await getTrainRecord(key);
   if (!rec) return;
   const list = (rec.confirmations || []).filter(c => c.phone !== identity.phone);
   list.push({ name: identity.name, phone: identity.phone, station: identity.station || '', at: Date.now() });
   rec.confirmations = list;
-  saveTrainRecord(key, rec);
+  await saveTrainRecord(key, rec);
   renderConfirmLine(rec);
   toast('Marked as confirmed');
 }
 
-// ---------- share as image ----------
-async function shareAsImage(trainNo, date){
-  if (typeof html2canvas !== 'function'){ toast('Image tool still loading — try again in a moment'); return; }
+// ─── Share as image ───────────────────────────────────────────────────────────
+async function shareAsImage(trainNo, date) {
+  if (typeof html2canvas !== 'function') { toast('Image tool still loading — try again in a moment'); return; }
   const node = $('shareCapture');
   const genEl = $('shareGenAt');
   genEl.textContent = `Image generated ${formatDateTime(new Date())}`;
   genEl.style.display = 'block';
-  try{
+  try {
     const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
     genEl.style.display = 'none';
     canvas.toBlob((blob) => {
       if (!blob) return;
       const fileName = `train-${trainNo}-${date}.png`;
       const file = new File([blob], fileName, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })){
-        navigator.share({ files: [file], title: `Train ${trainNo} coach position` }).catch(()=>{});
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: `Train ${trainNo} coach position` }).catch(() => {});
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -587,46 +835,46 @@ async function shareAsImage(trainNo, date){
       URL.revokeObjectURL(url);
       toast('Image saved — share it from your gallery');
     });
-  }catch(e){
+  } catch (e) {
     genEl.style.display = 'none';
     toast("Couldn't create image");
   }
 }
 
-// ---------- lookup / save ----------
-function lookup(){
+// ─── Lookup ───────────────────────────────────────────────────────────────────
+async function lookup() {
   const trainNo = $('trainNoInput').value.trim();
   const date = $('dateInput').value || todayStr();
-  if (!trainNo){ toast('Enter a train number'); return; }
+  if (!trainNo) { toast('Enter a train number'); return; }
   $('resultCard').classList.remove('show');
   $('emptyCard').classList.remove('show');
 
-  const d = getTrainRecord(`${trainNo}_${date}`);
+  const d = await getTrainRecord(`${trainNo}_${date}`);
 
-  if (d){
+  if (d) {
     $('rTrainNo').textContent = d.trainNo;
     $('rTrainName').textContent = d.trainName || '';
     $('rDate').textContent = formatDateOnly(d.date);
     renderStrip($('rStrip'), d.parsedList || []);
     const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
-    $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone||'').slice(-4)})${stationPart}`;
+    $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone || '').slice(-4)})${stationPart}`;
     $('rWhen').textContent = `${formatDateTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
     renderConfirmLine(d);
     $('resultCard').classList.add('show');
-    $('updateBtn').onclick = ()=> openSubmit(trainNo, date, d.trainName, d.rawList);
-    $('confirmBtn').onclick = ()=> confirmRecord(`${trainNo}_${date}`);
-    $('shareImgBtn').onclick = ()=> shareAsImage(trainNo, date);
+    $('updateBtn').onclick = () => openSubmit(trainNo, date, d.trainName, d.rawList);
+    $('confirmBtn').onclick = () => confirmRecord(`${trainNo}_${date}`);
+    $('shareImgBtn').onclick = () => shareAsImage(trainNo, date);
   } else {
     $('eTrainNo').textContent = trainNo;
     $('emptyCard').classList.add('show');
-    $('addBtn').onclick = ()=> openSubmit(trainNo, date, '', '');
+    $('addBtn').onclick = () => openSubmit(trainNo, date, '', '');
   }
 }
 $('findBtn').addEventListener('click', lookup);
-$('trainNoInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') lookup(); });
+$('trainNoInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') lookup(); });
 
-function openSubmit(trainNo, date, trainName, rawList){
-  if (!getIdentity()){ showOverlay('identityOverlay'); toast('Add your name first'); return; }
+function openSubmit(trainNo, date, trainName, rawList) {
+  if (!requireStaff()) return;
   $('sTrainNo').value = trainNo || $('trainNoInput').value || '';
   $('sTrainName').value = trainName || '';
   $('sDate').value = date || $('dateInput').value || todayStr();
@@ -634,50 +882,86 @@ function openSubmit(trainNo, date, trainName, rawList){
   renderStrip($('sPreview'), parseCompressed($('sList').value));
   showOverlay('submitOverlay');
 }
-$('fabAdd').addEventListener('click', ()=> openSubmit());
-$('sList').addEventListener('input', ()=>{
+$('fabAdd').addEventListener('click', () => openSubmit());
+$('sList').addEventListener('input', () => {
   renderStrip($('sPreview'), parseCompressed($('sList').value));
 });
 
-$('sSaveBtn').addEventListener('click', ()=>{
+$('sSaveBtn').addEventListener('click', async () => {
+  if (!requireStaff()) return;
   const identity = getIdentity();
-  if (!identity){ showOverlay('identityOverlay'); return; }
   const trainNo = $('sTrainNo').value.trim();
   const trainName = $('sTrainName').value.trim();
   const date = $('sDate').value || todayStr();
   const rawList = $('sList').value.trim();
-  if (!trainNo || !rawList){ toast('Train number and coach list required'); return; }
+  if (!trainNo || !rawList) { toast('Train number and coach list required'); return; }
   const parsedList = parseCompressed(rawList);
   const key = `${trainNo}_${date}`;
-  const existing = getTrainRecord(key);
+  const existing = await getTrainRecord(key);
 
-  saveTrainRecord(key, {
+  await saveTrainRecord(key, {
     trainNo, trainName, date, rawList, parsedList,
     submittedByName: identity.name,
     submittedByPhone: identity.phone,
     submittedByStation: identity.station || '',
+    submittedByUID: identity.uid || '',
     updatedAt: Date.now(),
-    updateCount: (existing?.updateCount || 0) + 1,
+    updateCount: (existing && existing.updateCount ? existing.updateCount : 0) + 1,
     confirmations: []
   });
   hideOverlay('submitOverlay');
   toast('Saved');
   $('trainNoInput').value = trainNo;
   $('dateInput').value = date;
-  lookup();
+  await lookup();
   renderTrainsList();
 });
 
-$('legendLink').addEventListener('click', ()=> showOverlay('legendOverlay'));
+$('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 
-// ---------- init ----------
-$('dateInput').value = todayStr();
-updateMeLabel();
-renderTrainsList();
-if (!getIdentity()) showOverlay('identityOverlay');
+// ─── Firebase Auth state ──────────────────────────────────────────────────────
+auth.onAuthStateChanged(async (firebaseUser) => {
+  if (firebaseUser) {
+    // Signed in — load profile
+    const phone = (firebaseUser.phoneNumber || '').replace('+91', '').replace(/^\+/, '');
+    try {
+      const profileSnap = await db.collection('users').doc(firebaseUser.uid).get();
+      if (profileSnap.exists) {
+        currentUser = profileSnap.data();
+      } else {
+        // New user — save a skeleton profile + show profile setup
+        currentUser = { uid: firebaseUser.uid, phone, role: 'staff', name: '', station: '' };
+        $('idTitle').textContent = 'Almost done — set your name';
+        $('idHint').textContent = 'Your name is stamped on every entry you submit. Add your station too.';
+        $('verifiedPhoneLabel').textContent = '+91 ' + phone;
+        $('idName').value = '';
+        $('idStation').value = '';
+        showOverlay('identityOverlay');
+      }
+    } catch (e) {
+      currentUser = { uid: firebaseUser.uid, phone, role: 'staff', name: '', station: '' };
+    }
+    // Migrate old localStorage data for this staff member
+    migrateLocalIfNeeded();
+  } else {
+    // Not signed in
+    if (localStorage.getItem('cp_guest')) {
+      currentUser = { role: 'guest' };
+    } else {
+      // Show auth overlay — but only if it's not already open
+      if (!$('authOverlay').classList.contains('open')) {
+        showAuthScreen('choice');
+        showOverlay('authOverlay');
+      }
+    }
+  }
+  updateMeLabel();
+  $('dateInput').value = todayStr();
+  renderTrainsList();
+});
 
-if ('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 </script>
 </body>
