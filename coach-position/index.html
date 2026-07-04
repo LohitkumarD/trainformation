@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#14171A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Coach Position — SWR DVG</title>
+<title>Train Coach Position</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -91,8 +91,8 @@
   .tname{font-size:13px;color:var(--muted);margin-top:2px;}
   .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .result-head .date{font-size:12px;color:var(--muted);font-family:var(--mono);text-align:right;}
-  .strip-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;}
-  .strip{display:flex;gap:6px;padding:2px 0;width:max-content;}
+  .strip-wrap{padding:4px 0;}
+  .strip{display:flex;flex-wrap:wrap;gap:6px 8px;padding:2px 0;}
   .chip-cell{display:flex;flex-direction:column;align-items:center;gap:2px;}
   .chip-index{font-family:var(--mono);font-size:9px;color:var(--muted);}
   .chip{
@@ -130,16 +130,21 @@
 
   .trains-toggle{
     display:flex;align-items:center;justify-content:space-between;width:100%;
-    background:transparent;border:none;color:var(--muted);font-size:13px;font-weight:600;
-    padding:4px 0;cursor:pointer;
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    color:var(--text);font-size:13px;font-weight:600;
+    padding:10px 12px;cursor:pointer;margin-top:4px;
   }
-  .trains-toggle .chev{transition:transform .18s ease;font-size:11px;}
+  .trains-toggle:active{opacity:.8;}
+  .trains-toggle .chev{transition:transform .18s ease;font-size:13px;color:var(--muted);}
   .trains-toggle.open .chev{transform:rotate(180deg);}
-  .trains-panel{max-height:0;overflow:hidden;transition:max-height .22s ease;}
-  .trains-panel.open{max-height:340px;overflow-y:auto;}
+  .trains-toggle.open{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent;}
+  .trains-panel{max-height:0;overflow:hidden;transition:max-height .25s ease;
+    background:var(--surface-2);border:1px solid var(--line);border-top:none;
+    border-radius:0 0 8px 8px;}
+  .trains-panel.open{max-height:360px;overflow-y:auto;padding:0 8px 8px;}
   .trains-search{
-    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
-    color:var(--text);font-size:13px;padding:8px 10px;margin:8px 0;box-sizing:border-box;
+    width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;
+    color:var(--text);font-size:13px;padding:8px 10px;margin:8px 0 6px;box-sizing:border-box;
   }
   .trains-list{display:flex;flex-direction:column;gap:6px;padding-bottom:4px;}
   .trains-empty{font-size:12px;color:var(--muted);padding:8px 2px;}
@@ -240,7 +245,7 @@
   <header class="bar">
     <div class="brand">
       <div class="title">COACH POSITION</div>
-      <div class="sub">SWR · Davangere Division</div>
+      <div class="sub">Train Coach Position</div>
     </div>
     <button class="me" id="meBtn">👤 <span id="meLabel">...</span></button>
   </header>
@@ -283,7 +288,7 @@
         <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
         <div class="confirm-line" id="rConfirmLine"></div>
         <div class="share-footer" id="shareGenAt" style="display:none"></div>
-        <div class="share-footer">via Coach Position · SWR Davangere Division</div>
+        <div class="share-footer" id="shareFooterBrand">Train Coach Position · cptrains.netlify.app</div>
       </div>
       <div class="btn-row">
         <button class="btn btn-ghost" id="updateBtn">Update</button>
@@ -315,7 +320,7 @@
     <!-- Screen 1: choice -->
     <div class="auth-screen active" id="authScreenChoice">
       <div class="auth-logo">COACH POSITION</div>
-      <p class="auth-tagline">SWR Davangere Division — real-time coach positions for railway staff and passengers.</p>
+      <p class="auth-tagline">Real-time train coach positions for railway staff and passengers.</p>
       <button class="btn btn-primary btn-block" id="staffLoginBtn">I'm railway staff →</button>
       <div class="auth-divider">or</div>
       <button class="btn btn-secondary btn-block" id="guestBtn">Just looking up (no login)</button>
@@ -813,11 +818,14 @@ async function shareAsImage(trainNo, date) {
   if (typeof html2canvas !== 'function') { toast('Image tool still loading — try again in a moment'); return; }
   const node = $('shareCapture');
   const genEl = $('shareGenAt');
-  genEl.textContent = `Image generated ${formatDateTime(new Date())}`;
+  const brandEl = $('shareFooterBrand');
+  genEl.textContent = `Generated ${formatDateTime(new Date())}`;
   genEl.style.display = 'block';
+  brandEl.textContent = `Train ${trainNo} · cptrains.netlify.app`;
   try {
     const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
     genEl.style.display = 'none';
+    brandEl.textContent = `Train Coach Position · cptrains.netlify.app`;
     canvas.toBlob((blob) => {
       if (!blob) return;
       const fileName = `train-${trainNo}-${date}.png`;
@@ -834,6 +842,7 @@ async function shareAsImage(trainNo, date) {
     });
   } catch (e) {
     genEl.style.display = 'none';
+    brandEl.textContent = `Train Coach Position · cptrains.netlify.app`;
     toast("Couldn't create image");
   }
 }
@@ -854,7 +863,8 @@ async function lookup() {
     $('rDate').textContent = formatDateOnly(d.date);
     renderStrip($('rStrip'), d.parsedList || []);
     const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
-    $('rBy').textContent = `${d.submittedByName} (${(d.submittedByPhone || '').slice(-4)})${stationPart}`;
+    const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
+    $('rBy').textContent = `${d.submittedByName}${idHint ? ' ' + idHint : ''}${stationPart}`;
     $('rWhen').textContent = `${formatDateTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
     renderConfirmLine(d);
     $('resultCard').classList.add('show');
