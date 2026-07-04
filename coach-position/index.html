@@ -125,18 +125,18 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:3px;text-align:center;padding:4px;
   }
-  .chip-index{font-family:var(--mono);font-size:9px;opacity:.55;font-weight:400;line-height:1;}
+  .chip-index{font-family:var(--mono);font-size:9px;opacity:.75;font-weight:400;line-height:1;}
   .chip-code{font-size:12px;font-weight:700;line-height:1;}
-  .chip.eng{background:#3A2000;color:#FF9F1C;}
-  .chip.pwr{background:#2A1F00;color:#D4A843;}
-  .chip.gen{background:#1E2A1E;color:#5B9B5B;}
-  .chip.d2s{background:#1E2535;color:#5B8FCC;}
-  .chip.cc{background:#2A2535;color:#9B8FCC;}
-  .chip.ac{background:#1A2B2B;color:#3DCCCC;}
-  .chip.pc{background:#2B1A1A;color:#CC5B5B;}
-  .chip.sl{background:#1A2B1A;color:#5BCC5B;}
-  .chip.end{background:#2B2B1A;color:#CCCC5B;}
-  .chip.unk{background:#252B31;color:#8B93A1;}
+  .chip.eng{background:#3D2200;color:#FFA830;}
+  .chip.pwr{background:#2E2200;color:#F0C040;}
+  .chip.gen{background:#182E1A;color:#62D870;}
+  .chip.d2s{background:#162038;color:#72B8FF;}
+  .chip.cc{background:#231D38;color:#BC98FF;}
+  .chip.ac{background:#112828;color:#3ED8D8;}
+  .chip.pc{background:#2E1616;color:#F07070;}
+  .chip.sl{background:#142814;color:#6ED06E;}
+  .chip.end{background:#262618;color:#DCDC50;}
+  .chip.unk{background:#222830;color:#96A8BC;}
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
   .meta-line b{color:var(--text);}
@@ -538,12 +538,13 @@ function toast(msg) {
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function formatDateOnly(iso) {
   const [y, m, dd] = iso.split('-');
-  return `${dd}-${m}-${y}`;
+  return `${parseInt(dd,10)} ${MONTHS[parseInt(m,10)-1]} ${y}`;
 }
 function formatDateTime(date) {
-  return `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  return `${parseInt(date.getDate(),10)} ${MONTHS[date.getMonth()]} ${date.getFullYear()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 // ─── Coach parser + renderer ─────────────────────────────────────────────────
