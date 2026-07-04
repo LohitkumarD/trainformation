@@ -619,21 +619,31 @@ function showChipEditDialog(index, codes, onSave) {
   overlay.className = 'chip-edit-overlay';
   overlay.innerHTML = `
     <div class="chip-edit-box">
-      <h3>Coach #${index + 1}</h3>
+      <h3>Coach #${index + 1} — ${currentCode}</h3>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);font-weight:600">EDIT THIS COACH</div>
       <input id="_chipInput" type="text" value="${currentCode}" maxlength="8" autocomplete="off" spellcheck="false" placeholder="e.g. S1, GEN, A1">
       <div class="btn-row">
         <button class="btn btn-danger" id="_chipDel">Remove</button>
         <button class="btn btn-primary" style="flex:1" id="_chipSave">Save</button>
       </div>
+      <div style="border-top:1px solid var(--line);padding-top:4px;margin-top:2px"></div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);font-weight:600">INSERT NEW COACH</div>
+      <input id="_chipInsert" type="text" maxlength="8" autocomplete="off" spellcheck="false" placeholder="e.g. GEN, S1, A1">
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="_chipInsBefore">↑ Before #${index + 1}</button>
+        <button class="btn btn-secondary" id="_chipInsAfter">↓ After #${index + 1}</button>
+      </div>
     </div>
   `;
   document.body.appendChild(overlay);
-  const input = overlay.querySelector('#_chipInput');
-  input.focus(); input.select();
+  const editInput = overlay.querySelector('#_chipInput');
+  const insInput = overlay.querySelector('#_chipInsert');
+  editInput.focus(); editInput.select();
 
   const close = () => overlay.remove();
+
   overlay.querySelector('#_chipSave').addEventListener('click', () => {
-    const val = input.value.trim().toUpperCase();
+    const val = editInput.value.trim().toUpperCase();
     if (!val) return;
     const next = [...codes]; next[index] = val;
     close(); onSave(next);
@@ -642,9 +652,24 @@ function showChipEditDialog(index, codes, onSave) {
     const next = [...codes]; next.splice(index, 1);
     close(); onSave(next);
   });
+  overlay.querySelector('#_chipInsBefore').addEventListener('click', () => {
+    const val = insInput.value.trim().toUpperCase();
+    if (!val) { insInput.focus(); return; }
+    const next = [...codes]; next.splice(index, 0, val);
+    close(); onSave(next);
+  });
+  overlay.querySelector('#_chipInsAfter').addEventListener('click', () => {
+    const val = insInput.value.trim().toUpperCase();
+    if (!val) { insInput.focus(); return; }
+    const next = [...codes]; next.splice(index + 1, 0, val);
+    close(); onSave(next);
+  });
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-  input.addEventListener('keydown', e => {
+  editInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') overlay.querySelector('#_chipSave').click();
+    if (e.key === 'Escape') close();
+  });
+  insInput.addEventListener('keydown', e => {
     if (e.key === 'Escape') close();
   });
 }
