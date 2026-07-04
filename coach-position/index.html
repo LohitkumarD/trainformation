@@ -311,10 +311,10 @@
     <div class="auth-screen active" id="authScreenChoice">
       <div class="auth-logo">COACH POSITION</div>
       <p class="auth-tagline">Real-time train coach positions for railway staff and passengers.</p>
-      <button class="btn btn-primary btn-block" id="staffLoginBtn">I'm railway staff →</button>
+      <button class="btn btn-primary btn-block" id="staffLoginBtn">Sign in as railway staff →</button>
       <div class="auth-divider">or</div>
-      <button class="btn btn-secondary btn-block" id="guestBtn">Just looking up (no login)</button>
-      <p class="hint" style="text-align:center">Staff login requires a work email and password.</p>
+      <button class="btn btn-secondary btn-block" id="guestBtn">← Continue browsing</button>
+      <p class="hint" style="text-align:center">Staff login requires a work email and password set up by your admin.</p>
     </div>
 
     <!-- Screen 2: email + password -->
@@ -745,7 +745,7 @@ function updateMeLabel() {
   if (!currentUser) {
     $('meLabel').textContent = '…';
   } else if (currentUser.role === 'guest') {
-    $('meLabel').textContent = 'Guest';
+    $('meLabel').textContent = 'Staff Login';
   } else if (currentUser.role === 'pending') {
     $('meLabel').textContent = '⏳ Pending';
   } else {
@@ -805,12 +805,11 @@ $('idSaveBtn').addEventListener('click', async () => {
 
 $('signOutBtn').addEventListener('click', async () => {
   await auth.signOut();
-  currentUser = null;
-  localStorage.removeItem('cp_guest');
+  currentUser = { role: 'guest' };
   updateMeLabel();
+  updateFabVisibility();
   hideOverlay('identityOverlay');
-  showAuthScreen('choice');
-  showOverlay('authOverlay');
+  renderTrainsList();
 });
 
 // ─── Admin panel ─────────────────────────────────────────────────────────────
@@ -1216,16 +1215,8 @@ auth.onAuthStateChanged(async (firebaseUser) => {
     }
     migrateLocalIfNeeded();
   } else {
-    // Not signed in
-    if (localStorage.getItem('cp_guest')) {
-      currentUser = { role: 'guest' };
-    } else {
-      // Show auth overlay — but only if it's not already open
-      if (!$('authOverlay').classList.contains('open')) {
-        showAuthScreen('choice');
-        showOverlay('authOverlay');
-      }
-    }
+    // Default to guest — user can tap "Staff Login" in the header to sign in
+    currentUser = { role: 'guest' };
   }
   updateMeLabel();
   updateFabVisibility();
