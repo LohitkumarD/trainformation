@@ -227,7 +227,7 @@
   }
   .sign-out-row{display:flex;align-items:center;justify-content:space-between;padding-top:4px;}
   .sign-out-row span{font-size:12px;color:var(--muted);}
-  #otpSending{display:none;font-size:13px;color:var(--muted);text-align:center;}
+  #authWorking{display:none;font-size:13px;color:var(--muted);text-align:center;}
   .guest-badge{
     font-size:11px;background:var(--surface-2);border:1px solid var(--line);
     color:var(--muted);border-radius:6px;padding:2px 8px;font-family:var(--mono);
@@ -319,34 +319,25 @@
       <button class="btn btn-primary btn-block" id="staffLoginBtn">I'm railway staff →</button>
       <div class="auth-divider">or</div>
       <button class="btn btn-secondary btn-block" id="guestBtn">Just looking up (no login)</button>
-      <p class="hint" style="text-align:center">Staff login uses your phone number + OTP. No password needed.</p>
+      <p class="hint" style="text-align:center">Staff login requires a work email and password.</p>
     </div>
 
-    <!-- Screen 2: phone number -->
-    <div class="auth-screen" id="authScreenPhone">
+    <!-- Screen 2: email + password -->
+    <div class="auth-screen" id="authScreenEmail">
       <button class="auth-back" id="backToChoiceBtn">← Back</button>
-      <h3>Enter your mobile number</h3>
-      <p class="hint">We'll send a one-time OTP to verify it's you.</p>
+      <h3 id="emailAuthTitle">Staff sign in</h3>
       <div>
-        <label class="field-label">Mobile number (India, 10 digits)</label>
-        <input id="authPhoneInput" inputmode="numeric" maxlength="10" placeholder="e.g. 9876543210" autocomplete="tel">
+        <label class="field-label">Work email</label>
+        <input id="authEmailInput" type="email" inputmode="email" placeholder="you@railways.gov.in" autocomplete="email">
       </div>
-      <div id="recaptcha-anchor"></div>
-      <button class="btn btn-primary btn-block" id="sendOtpBtn">Send OTP</button>
-      <p id="otpSending">Sending OTP…</p>
-    </div>
-
-    <!-- Screen 3: OTP entry -->
-    <div class="auth-screen" id="authScreenOtp">
-      <button class="auth-back" id="backToPhoneBtn">← Back</button>
-      <h3>Enter OTP</h3>
-      <p class="hint">OTP sent to +91 <span id="otpPhoneDisplay"></span></p>
       <div>
-        <label class="field-label">6-digit OTP</label>
-        <input id="authOtpInput" inputmode="numeric" maxlength="6" placeholder="______" autocomplete="one-time-code">
+        <label class="field-label">Password</label>
+        <input id="authPasswordInput" type="password" placeholder="••••••••" autocomplete="current-password">
       </div>
-      <button class="btn btn-primary btn-block" id="verifyOtpBtn">Verify</button>
-      <button class="btn btn-ghost btn-block" id="resendOtpBtn">Resend OTP</button>
+      <button class="btn btn-primary btn-block" id="emailSignInBtn">Sign in</button>
+      <div class="auth-divider">don't have an account?</div>
+      <button class="btn btn-secondary btn-block" id="emailRegisterBtn">Create account</button>
+      <p id="authWorking" style="display:none;font-size:13px;color:var(--muted);text-align:center">Working…</p>
     </div>
 
   </div>
@@ -360,7 +351,7 @@
     <p class="hint" id="idHint">Your name and station are stamped on entries you submit.</p>
     <div>
       <label class="field-label">Signed in as</label>
-      <div class="verified-phone-label" id="verifiedPhoneLabel">—</div>
+      <div class="verified-phone-label" id="verifiedEmailLabel">—</div>
     </div>
     <div>
       <label class="field-label">Name</label>
@@ -369,6 +360,10 @@
     <div>
       <label class="field-label">Station (optional)</label>
       <input id="idStation" placeholder="e.g. BGM, DVG, Anantapur">
+    </div>
+    <div>
+      <label class="field-label">Mobile (optional)</label>
+      <input id="idPhone" inputmode="numeric" placeholder="e.g. 9876543210">
     </div>
     <button class="btn btn-primary btn-block" id="idSaveBtn">Save</button>
     <div class="sign-out-row">
@@ -611,7 +606,7 @@ function renderStrip(container, codes) {
 // ─── Identity / auth helpers ──────────────────────────────────────────────────
 function getIdentity() {
   if (!currentUser || currentUser.role === 'guest') return null;
-  return { name: currentUser.name, phone: currentUser.phone, station: currentUser.station || '', uid: currentUser.uid };
+  return { name: currentUser.name, email: currentUser.email, phone: currentUser.phone, station: currentUser.station || '', uid: currentUser.uid };
 }
 
 function requireStaff() {
@@ -640,9 +635,10 @@ $('meBtn').addEventListener('click', () => {
   } else {
     $('idTitle').textContent = 'Your profile';
     $('idHint').textContent = 'Your name and station are stamped on entries you submit.';
-    $('verifiedPhoneLabel').textContent = currentUser.phone ? '+91 ' + currentUser.phone : '—';
+    $('verifiedEmailLabel').textContent = currentUser.email || (auth.currentUser && auth.currentUser.email) || '—';
     $('idName').value = currentUser.name || '';
     $('idStation').value = currentUser.station || '';
+    $('idPhone').value = currentUser.phone || '';
     showOverlay('identityOverlay');
   }
 });
@@ -658,7 +654,8 @@ $('idSaveBtn').addEventListener('click', async () => {
     uid,
     name,
     station,
-    phone: currentUser.phone || (auth.currentUser.phoneNumber || '').replace('+91', '').replace('+', ''),
+    phone: $('idPhone').value.trim().replace(/\D/g, '').slice(-10),
+    email: currentUser.email || (auth.currentUser && auth.currentUser.email) || '',
     role: currentUser.role || 'staff',
     updatedAt: Date.now()
   };
@@ -683,27 +680,20 @@ $('signOutBtn').addEventListener('click', async () => {
   showOverlay('authOverlay');
 });
 
-// ─── OTP / phone auth ─────────────────────────────────────────────────────────
+// ─── Email / password auth ────────────────────────────────────────────────────
 function showAuthScreen(name) {
   document.querySelectorAll('.auth-screen').forEach(el => el.classList.remove('active'));
   $('authScreen' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
 }
 
-function initRecaptcha() {
-  if (!window.recaptchaVerifier) {
-    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-      size: 'invisible',
-      callback: () => {}
-    });
-  }
+function setAuthWorking(on) {
+  $('authWorking').style.display = on ? 'block' : 'none';
+  $('emailSignInBtn').disabled = on;
+  $('emailRegisterBtn').disabled = on;
 }
 
-$('staffLoginBtn').addEventListener('click', () => {
-  showAuthScreen('phone');
-  initRecaptcha(); // pre-render while user types phone number
-});
+$('staffLoginBtn').addEventListener('click', () => showAuthScreen('email'));
 $('backToChoiceBtn').addEventListener('click', () => showAuthScreen('choice'));
-$('backToPhoneBtn').addEventListener('click', () => showAuthScreen('phone'));
 
 $('guestBtn').addEventListener('click', () => {
   localStorage.setItem('cp_guest', '1');
@@ -713,48 +703,44 @@ $('guestBtn').addEventListener('click', () => {
   renderTrainsList();
 });
 
-$('sendOtpBtn').addEventListener('click', async () => {
-  const raw = $('authPhoneInput').value.trim().replace(/\D/g, '');
-  const phone = raw.length === 10 ? raw : (raw.length === 12 && raw.startsWith('91') ? raw.slice(2) : null);
-  if (!phone) { toast('Enter a valid 10-digit mobile number'); return; }
-  $('sendOtpBtn').disabled = true;
-  $('otpSending').style.display = 'block';
+$('emailSignInBtn').addEventListener('click', async () => {
+  const email = $('authEmailInput').value.trim();
+  const password = $('authPasswordInput').value;
+  if (!email || !password) { toast('Enter email and password'); return; }
+  setAuthWorking(true);
   try {
-    initRecaptcha();
-    window.confirmationResult = await auth.signInWithPhoneNumber('+91' + phone, window.recaptchaVerifier);
-    $('otpPhoneDisplay').textContent = phone;
-    showAuthScreen('otp');
-  } catch (e) {
-    console.error('OTP send error:', e.code, e.message);
-    const msg = e.code === 'auth/invalid-phone-number' ? 'Invalid phone number format'
-              : e.code === 'auth/too-many-requests' ? 'Too many attempts — try again later'
-              : e.code === 'auth/captcha-check-failed' ? 'Verification failed — try again'
-              : `Could not send OTP (${e.code || 'unknown'})`;
-    toast(msg);
-    if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; }
-  }
-  $('sendOtpBtn').disabled = false;
-  $('otpSending').style.display = 'none';
-});
-
-$('verifyOtpBtn').addEventListener('click', async () => {
-  const code = $('authOtpInput').value.trim();
-  if (code.length < 4) { toast('Enter the OTP'); return; }
-  $('verifyOtpBtn').disabled = true;
-  try {
-    await window.confirmationResult.confirm(code);
-    // onAuthStateChanged handles the rest
+    await auth.signInWithEmailAndPassword(email, password);
     hideOverlay('authOverlay');
   } catch (e) {
-    toast('Wrong OTP — try again');
-    $('authOtpInput').value = '';
+    console.error('Sign in error:', e.code, e.message);
+    const msg = e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'
+              ? 'Wrong email or password'
+              : e.code === 'auth/too-many-requests' ? 'Too many attempts — try later'
+              : e.code === 'auth/invalid-email' ? 'Invalid email address'
+              : `Sign in failed (${e.code || 'unknown'})`;
+    toast(msg);
   }
-  $('verifyOtpBtn').disabled = false;
+  setAuthWorking(false);
 });
 
-$('resendOtpBtn').addEventListener('click', async () => {
-  if (window.recaptchaVerifier) { window.recaptchaVerifier.clear(); window.recaptchaVerifier = null; }
-  showAuthScreen('phone');
+$('emailRegisterBtn').addEventListener('click', async () => {
+  const email = $('authEmailInput').value.trim();
+  const password = $('authPasswordInput').value;
+  if (!email || !password) { toast('Enter email and password'); return; }
+  if (password.length < 6) { toast('Password must be at least 6 characters'); return; }
+  setAuthWorking(true);
+  try {
+    await auth.createUserWithEmailAndPassword(email, password);
+    hideOverlay('authOverlay');
+  } catch (e) {
+    console.error('Register error:', e.code, e.message);
+    const msg = e.code === 'auth/email-already-in-use' ? 'An account with this email already exists — sign in instead'
+              : e.code === 'auth/weak-password' ? 'Password too weak — use at least 6 characters'
+              : e.code === 'auth/invalid-email' ? 'Invalid email address'
+              : `Could not create account (${e.code || 'unknown'})`;
+    toast(msg);
+  }
+  setAuthWorking(false);
 });
 
 // ─── All trains list ──────────────────────────────────────────────────────────
@@ -913,7 +899,8 @@ $('sSaveBtn').addEventListener('click', async () => {
   await saveTrainRecord(key, {
     trainNo, trainName, date, rawList, parsedList,
     submittedByName: identity.name,
-    submittedByPhone: identity.phone,
+    submittedByEmail: identity.email || '',
+    submittedByPhone: identity.phone || '',
     submittedByStation: identity.station || '',
     submittedByUID: identity.uid || '',
     updatedAt: Date.now(),
@@ -934,23 +921,24 @@ $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 auth.onAuthStateChanged(async (firebaseUser) => {
   if (firebaseUser) {
     // Signed in — load profile
-    const phone = (firebaseUser.phoneNumber || '').replace('+91', '').replace(/^\+/, '');
+    const email = firebaseUser.email || '';
     try {
       const profileSnap = await db.collection('users').doc(firebaseUser.uid).get();
       if (profileSnap.exists) {
         currentUser = profileSnap.data();
       } else {
         // New user — save a skeleton profile + show profile setup
-        currentUser = { uid: firebaseUser.uid, phone, role: 'staff', name: '', station: '' };
+        currentUser = { uid: firebaseUser.uid, email, role: 'staff', name: '', station: '', phone: '' };
         $('idTitle').textContent = 'Almost done — set your name';
         $('idHint').textContent = 'Your name is stamped on every entry you submit. Add your station too.';
-        $('verifiedPhoneLabel').textContent = '+91 ' + phone;
+        $('verifiedEmailLabel').textContent = email;
         $('idName').value = '';
         $('idStation').value = '';
+        $('idPhone').value = '';
         showOverlay('identityOverlay');
       }
     } catch (e) {
-      currentUser = { uid: firebaseUser.uid, phone, role: 'staff', name: '', station: '' };
+      currentUser = { uid: firebaseUser.uid, email, role: 'staff', name: '', station: '', phone: '' };
     }
     // Migrate old localStorage data for this staff member
     migrateLocalIfNeeded();
@@ -975,7 +963,5 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 </script>
-<!-- reCAPTCHA container must be at body level, outside all overlays/transforms -->
-<div id="recaptcha-container" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:200;"></div>
 </body>
 </html>
