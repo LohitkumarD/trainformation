@@ -245,6 +245,13 @@
     font-size:11px;background:var(--surface-2);border:1px solid var(--line);
     color:var(--muted);border-radius:6px;padding:2px 8px;font-family:var(--mono);
   }
+  .pending-notice{
+    background:rgba(255,159,28,.1);border:1px solid var(--amber);border-radius:8px;
+    padding:10px 12px;font-size:13px;color:var(--amber);line-height:1.5;
+  }
+  .user-card{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px;}
+  .user-card .u-name{font-weight:600;font-size:14px;}
+  .user-card .u-meta{font-size:12px;color:var(--muted);margin-top:2px;}
 </style>
 </head>
 <body>
@@ -354,6 +361,10 @@
       <input id="idPhone" inputmode="numeric" placeholder="e.g. 9876543210">
     </div>
     <button class="btn btn-primary btn-block" id="idSaveBtn">Save</button>
+    <div id="pendingNotice" class="pending-notice" style="display:none">
+      ⏳ Your account is pending admin approval. You can view coach positions but cannot add or edit until an admin approves you.
+    </div>
+    <button class="btn btn-secondary btn-block" id="adminPanelBtn" style="display:none">⚙ Manage user approvals</button>
     <div class="sign-out-row">
       <span>Switch account or sign out?</span>
       <button class="btn btn-danger" id="signOutBtn">Sign out</button>
@@ -427,6 +438,16 @@
       <div class="code">SLRD / LSLRD</div><div>Guard cum Divyangjan coach</div>
     </div>
     <p class="hint">Type in this order, from the engine end, the same way your station already writes it down — just keep the codes standard so everyone reads the same shorthand.</p>
+  </div>
+</div>
+
+<!-- Admin overlay -->
+<div class="overlay" id="adminOverlay">
+  <div class="sheet">
+    <button class="close" data-close="adminOverlay">✕</button>
+    <h3>User approvals</h3>
+    <p class="hint">Approve or reject pending railway staff accounts. Only approved staff can add or edit coach positions.</p>
+    <div id="adminUsersList"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
   </div>
 </div>
 
@@ -703,10 +724,18 @@ function getIdentity() {
   return { name: currentUser.name, email: currentUser.email, phone: currentUser.phone, station: currentUser.station || '', uid: currentUser.uid };
 }
 
+function canEdit() {
+  return currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin');
+}
+
 function requireStaff() {
   if (!currentUser || currentUser.role === 'guest') {
     toast('Sign in as railway staff to contribute');
     showOverlay('authOverlay');
+    return false;
+  }
+  if (currentUser.role === 'pending') {
+    toast('Your account is pending admin approval');
     return false;
   }
   return true;
@@ -717,9 +746,15 @@ function updateMeLabel() {
     $('meLabel').textContent = '…';
   } else if (currentUser.role === 'guest') {
     $('meLabel').textContent = 'Guest';
+  } else if (currentUser.role === 'pending') {
+    $('meLabel').textContent = '⏳ Pending';
   } else {
     $('meLabel').textContent = currentUser.name ? currentUser.name.split(' ')[0] : 'Set name';
   }
+}
+
+function updateFabVisibility() {
+  $('fabAdd').style.display = canEdit() ? 'flex' : 'none';
 }
 
 $('meBtn').addEventListener('click', () => {
@@ -728,11 +763,15 @@ $('meBtn').addEventListener('click', () => {
     showOverlay('authOverlay');
   } else {
     $('idTitle').textContent = 'Your profile';
-    $('idHint').textContent = 'Your name and station are stamped on entries you submit.';
+    $('idHint').textContent = currentUser.role === 'pending'
+      ? 'Complete your profile. An admin will approve your account.'
+      : 'Your name and station are stamped on entries you submit.';
     $('verifiedEmailLabel').textContent = currentUser.email || (auth.currentUser && auth.currentUser.email) || '—';
     $('idName').value = currentUser.name || '';
     $('idStation').value = currentUser.station || '';
     $('idPhone').value = currentUser.phone || '';
+    $('pendingNotice').style.display = currentUser.role === 'pending' ? 'block' : 'none';
+    $('adminPanelBtn').style.display = currentUser.role === 'admin' ? 'flex' : 'none';
     showOverlay('identityOverlay');
   }
 });
@@ -772,6 +811,52 @@ $('signOutBtn').addEventListener('click', async () => {
   hideOverlay('identityOverlay');
   showAuthScreen('choice');
   showOverlay('authOverlay');
+});
+
+// ─── Admin panel ─────────────────────────────────────────────────────────────
+async function loadAdminPanel() {
+  const listEl = $('adminUsersList');
+  listEl.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  try {
+    const snap = await db.collection('users').where('role', '==', 'pending').get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">No pending approvals ✓</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.docs.forEach(doc => {
+      const u = doc.data();
+      const card = document.createElement('div');
+      card.className = 'user-card';
+      card.innerHTML = `
+        <div class="u-name">${u.name || '(no name set)'}</div>
+        <div class="u-meta">${u.email || '—'} · Station: ${u.station || '—'}</div>
+        ${u.phone ? `<div class="u-meta">📱 ${u.phone}</div>` : ''}
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn-danger" data-uid="${u.uid}" data-action="reject">Reject</button>
+          <button class="btn btn-primary" style="flex:1" data-uid="${u.uid}" data-action="approve">✓ Approve</button>
+        </div>
+      `;
+      card.querySelectorAll('button[data-uid]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const newRole = btn.dataset.action === 'approve' ? 'staff' : 'rejected';
+          await db.collection('users').doc(btn.dataset.uid).update({ role: newRole });
+          toast(btn.dataset.action === 'approve' ? 'User approved ✓' : 'User rejected');
+          loadAdminPanel();
+        });
+      });
+      listEl.appendChild(card);
+    });
+  } catch (e) {
+    listEl.innerHTML = '<div style="color:var(--red);font-size:13px">Failed to load — check Firestore rules</div>';
+  }
+}
+
+$('adminPanelBtn').addEventListener('click', () => {
+  hideOverlay('identityOverlay');
+  showOverlay('adminOverlay');
+  loadAdminPanel();
 });
 
 // ─── Email / password auth ────────────────────────────────────────────────────
@@ -926,8 +1011,8 @@ async function renderTrainsList() {
           <div class="confirm-line" id="cl_${key}" style="${confirmList.length ? 'display:flex' : 'display:none'}"></div>
           <div class="btn-row">
             <button class="btn btn-secondary" id="shareBtn_${key}">⬆ Share</button>
-            <button class="btn btn-ghost" id="confirmBtn_${key}">✓ Confirm</button>
-            <button class="btn btn-secondary" id="updateBtn_${key}">Edit</button>
+            ${canEdit() ? `<button class="btn btn-ghost" id="confirmBtn_${key}">✓ Confirm</button>
+            <button class="btn btn-secondary" id="updateBtn_${key}">Edit</button>` : ''}
           </div>
         </div>
       </div>
@@ -975,29 +1060,30 @@ async function renderTrainsList() {
       shareAsImage(d.trainNo, d.date);
     });
 
-    document.getElementById(`confirmBtn_${key}`).addEventListener('click', async () => {
-      if (!requireStaff()) return;
-      const identity = getIdentity();
-      if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
-      const rec = await getTrainRecord(key);
-      if (!rec) return;
-      const cList = (rec.confirmations || []).filter(c => c.uid !== identity.uid);
-      cList.push({ name: identity.name, phone: identity.phone || '', station: identity.station || '', uid: identity.uid || '', at: Date.now() });
-      rec.confirmations = cList;
-      await saveTrainRecord(key, rec);
-      const clEl = document.getElementById(`cl_${key}`);
-      if (clEl) {
-        const latest = cList[cList.length - 1];
-        const names = cList.length === 1 ? latest.name : `${latest.name} +${cList.length - 1} more`;
-        clEl.style.display = 'flex';
-        clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
-      }
-      toast('Marked as confirmed');
-    });
+    if (canEdit()) {
+      document.getElementById(`confirmBtn_${key}`).addEventListener('click', async () => {
+        const identity = getIdentity();
+        if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+        const rec = await getTrainRecord(key);
+        if (!rec) return;
+        const cList = (rec.confirmations || []).filter(c => c.uid !== identity.uid);
+        cList.push({ name: identity.name, phone: identity.phone || '', station: identity.station || '', uid: identity.uid || '', at: Date.now() });
+        rec.confirmations = cList;
+        await saveTrainRecord(key, rec);
+        const clEl = document.getElementById(`cl_${key}`);
+        if (clEl) {
+          const latest = cList[cList.length - 1];
+          const names = cList.length === 1 ? latest.name : `${latest.name} +${cList.length - 1} more`;
+          clEl.style.display = 'flex';
+          clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+        }
+        toast('Marked as confirmed');
+      });
 
-    document.getElementById(`updateBtn_${key}`).addEventListener('click', () => {
-      openSubmit(d.trainNo, d.date, d.trainName, d.rawList, d.fromStation, d.toStation);
-    });
+      document.getElementById(`updateBtn_${key}`).addEventListener('click', () => {
+        openSubmit(d.trainNo, d.date, d.trainName, d.rawList, d.fromStation, d.toStation);
+      });
+    }
   });
 }
 
@@ -1116,9 +1202,9 @@ auth.onAuthStateChanged(async (firebaseUser) => {
         currentUser = profileSnap.data();
       } else {
         // New user — save a skeleton profile + show profile setup
-        currentUser = { uid: firebaseUser.uid, email, role: 'staff', name: '', station: '', phone: '' };
+        currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
         $('idTitle').textContent = 'Almost done — set your name';
-        $('idHint').textContent = 'Your name is stamped on every entry you submit. Add your station too.';
+        $('idHint').textContent = 'Fill in your details. An admin will approve your account before you can add or edit positions.';
         $('verifiedEmailLabel').textContent = email;
         $('idName').value = '';
         $('idStation').value = '';
@@ -1126,9 +1212,8 @@ auth.onAuthStateChanged(async (firebaseUser) => {
         showOverlay('identityOverlay');
       }
     } catch (e) {
-      currentUser = { uid: firebaseUser.uid, email, role: 'staff', name: '', station: '', phone: '' };
+      currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
     }
-    // Migrate old localStorage data for this staff member
     migrateLocalIfNeeded();
   } else {
     // Not signed in
@@ -1143,6 +1228,7 @@ auth.onAuthStateChanged(async (firebaseUser) => {
     }
   }
   updateMeLabel();
+  updateFabVisibility();
   renderTrainsList();
 });
 
