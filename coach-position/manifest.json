@@ -1,7 +1,7 @@
 {
-  "name": "Coach Position - SWR Davangere",
+  "name": "Coach Position",
   "short_name": "CoachPos",
-  "description": "Standardized coach position lookup for SWR Davangere Division staff",
+  "description": "Train coach position lookup for railway staff",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
