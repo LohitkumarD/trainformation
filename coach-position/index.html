@@ -327,7 +327,7 @@
   <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
   <div class="confirm-line" id="rConfirmLine"></div>
   <div class="share-footer" id="shareGenAt" style="display:none"></div>
-  <div class="share-footer" id="shareFooterBrand">Train Coach Position · cptrains.netlify.app</div>
+  <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
 </div>
 
 <!-- Auth overlay (initial sign-in, shown before anything else) -->
@@ -1283,11 +1283,11 @@ async function shareAsImage(trainNo, date) {
   const brandEl = $('shareFooterBrand');
   genEl.textContent = `Generated ${formatDateTime(new Date())}`;
   genEl.style.display = 'block';
-  brandEl.textContent = `Train ${trainNo} · cptrains.netlify.app`;
+  brandEl.textContent = `Train ${trainNo} · coachformation.netlify.app`;
   try {
     const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
     genEl.style.display = 'none';
-    brandEl.textContent = `Train Coach Position · cptrains.netlify.app`;
+    brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
     canvas.toBlob((blob) => {
       if (!blob) return;
       const fileName = `train-${trainNo}-${date}.png`;
@@ -1296,7 +1296,7 @@ async function shareAsImage(trainNo, date) {
         navigator.share({
           files: [file],
           title: `Train ${trainNo} coach position`,
-          text: `Train ${trainNo} coach position — check more trains:\nhttps://cptrains.netlify.app`
+          text: `Train ${trainNo} coach position — check more trains:\nhttps://coachformation.netlify.app`
         }).catch(() => {});
         return;
       }
@@ -1308,7 +1308,7 @@ async function shareAsImage(trainNo, date) {
     });
   } catch (e) {
     genEl.style.display = 'none';
-    brandEl.textContent = `Train Coach Position · cptrains.netlify.app`;
+    brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
     toast("Couldn't create image");
   }
 }
