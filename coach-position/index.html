@@ -1082,8 +1082,9 @@ function staleBadge(isoDate) {
   const today = todayStr();
   if (isoDate >= today) return '';
   const days = Math.round((new Date(today) - new Date(isoDate)) / 86400000);
-  const cls = days <= 2 ? 'mild' : 'old';
-  const label = days === 1 ? '1 day old' : `${days} days old`;
+  if (days < 2) return '';
+  const cls = days <= 3 ? 'mild' : 'old';
+  const label = `${days} days old`;
   return `<span class="stale-badge ${cls}">⚠ ${label}</span>`;
 }
 
