@@ -278,9 +278,32 @@
   .copy-box{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;display:none;flex-direction:column;gap:6px;}
   .copy-box.show{display:flex;}
   .copy-box-label{font-size:11px;color:var(--muted);font-weight:600;font-family:var(--mono);}
+
+  /* disclaimer */
+  .disclaimer-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
+  .disclaimer-box{background:var(--surface-2);border:1px solid #FFAA0055;border-radius:12px;padding:22px 20px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:14px;}
+  .disclaimer-box h2{font-size:14px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.08em;margin:0;}
+  .disclaimer-box p{font-size:13px;color:var(--text);line-height:1.6;margin:0;}
+  .disclaimer-box .disc-note{font-size:11px;color:var(--muted);line-height:1.5;}
+  .app-disclaimer{font-size:10px;color:var(--muted);text-align:center;padding:8px 16px 80px;line-height:1.5;letter-spacing:.01em;}
+  .card-disclaimer{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;padding:0 2px;}
+  .share-disclaimer{font-size:9px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.03em;margin-top:2px;}
 </style>
 </head>
 <body>
+<!-- Disclaimer modal — shown once per session -->
+<div id="disclaimerModal" class="disclaimer-modal" style="display:none">
+  <div class="disclaimer-box">
+    <h2>⚠ DISCLAIMER</h2>
+    <p>Coach positions shown are based on last reported data and <strong>may change without prior notice.</strong></p>
+    <p class="disc-note">
+      <b>Office Staff:</b> Please verify actual formation before announcement.<br>
+      <b>Passengers:</b> Confirm coach position at the station before boarding.
+    </p>
+    <button class="btn btn-primary" id="disclaimerOk" style="width:100%">I Understand</button>
+  </div>
+</div>
+
 <div id="offlineBanner" class="offline-banner">⚡ Offline — changes will sync when reconnected</div>
 <div class="app">
 
@@ -310,6 +333,7 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <div class="app-disclaimer">⚠ Coach positions are indicative only and may change without prior notice.<br>Staff: verify before announcement · Passengers: confirm at station before boarding.</div>
 </div>
 
 <!-- Off-screen share capture (populated before html2canvas) -->
@@ -328,6 +352,7 @@
   <div class="confirm-line" id="rConfirmLine"></div>
   <div class="share-footer" id="shareGenAt" style="display:none"></div>
   <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
+  <div class="share-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
 </div>
 
 <!-- Auth overlay (initial sign-in, shown before anything else) -->
@@ -1147,6 +1172,7 @@ async function renderTrainsList() {
             <div class="inline-date i-date">${formatDateOnly(cur.date)}</div>
           </div>
           <div class="strip-wrap"><div class="strip i-strip"></div></div>
+          <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
           <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
           <div class="confirm-line i-cl"></div>
           <div class="btn-row">
@@ -1455,6 +1481,18 @@ updateOfflineBanner();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// Show disclaimer once per session
+(function() {
+  if (!sessionStorage.getItem('disc_ok')) {
+    const modal = $('disclaimerModal');
+    modal.style.display = 'flex';
+    $('disclaimerOk').addEventListener('click', () => {
+      modal.style.display = 'none';
+      sessionStorage.setItem('disc_ok', '1');
+    });
+  }
+})();
 </script>
 </body>
 </html>
