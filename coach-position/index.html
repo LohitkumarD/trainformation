@@ -257,9 +257,30 @@
   .user-card{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px;}
   .user-card .u-name{font-weight:600;font-size:14px;}
   .user-card .u-meta{font-size:12px;color:var(--muted);margin-top:2px;}
+
+  /* stale badge */
+  .stale-badge{font-size:10px;font-weight:700;padding:1px 5px;border-radius:8px;white-space:nowrap;display:inline-block;margin-top:2px;}
+  .stale-badge.mild{background:#2D1A00;color:#FFAA00;}
+  .stale-badge.old{background:#2D0808;color:#FF6666;}
+
+  /* date history tabs */
+  .date-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:0 0 8px;overflow-x:auto;}
+  .date-tab{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);color:var(--muted);cursor:pointer;background:transparent;white-space:nowrap;flex-shrink:0;font-family:var(--mono);}
+  .date-tab.active{background:var(--amber);color:#000;border-color:var(--amber);font-weight:700;}
+  .date-tab:hover:not(.active){border-color:var(--text);color:var(--text);}
+
+  /* offline banner */
+  .offline-banner{background:#2D1A00;color:#FFAA00;font-size:12px;text-align:center;padding:5px 12px;font-weight:600;letter-spacing:.02em;display:none;}
+  .offline-banner.show{display:block;}
+
+  /* copy-from-previous box in submit form */
+  .copy-box{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;display:none;flex-direction:column;gap:6px;}
+  .copy-box.show{display:flex;}
+  .copy-box-label{font-size:11px;color:var(--muted);font-weight:600;font-family:var(--mono);}
 </style>
 </head>
 <body>
+<div id="offlineBanner" class="offline-banner">⚡ Offline — changes will sync when reconnected</div>
 <div class="app">
 
   <header class="bar">
@@ -406,6 +427,13 @@
       <label class="field-label">Date</label>
       <input type="date" id="sDate">
     </div>
+    <!-- Copy from previous formation hint -->
+    <div class="copy-box" id="sCopyBox">
+      <div class="copy-box-label">📋 PREVIOUS FORMATION FOUND — <span id="sCopyDate"></span></div>
+      <div class="strip-wrap"><div class="strip" id="sCopyStrip" style="min-height:44px"></div></div>
+      <button type="button" class="btn btn-ghost btn-block" id="sCopyBtn">Copy this formation into form</button>
+    </div>
+
     <div>
       <label class="field-label">Coach list (from engine end)</label>
       <textarea id="sList" rows="2" placeholder="ENG,LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
@@ -502,12 +530,20 @@ async function getAllTrains(filterStr) {
   try {
     const snap = await db.collection('trains')
       .orderBy('updatedAt', 'desc')
-      .limit(200)
+      .limit(400)
       .get();
     const all = snap.docs.map(d => d.data());
-    if (!filterStr) return all;
+
+    // Deduplicate: one entry per trainNo — prefer today's, else most recent
+    const today = todayStr();
+    const seen = new Set();
+    const deduped = [];
+    all.forEach(d => { if (d.date === today && !seen.has(d.trainNo)) { seen.add(d.trainNo); deduped.push(d); } });
+    all.forEach(d => { if (!seen.has(d.trainNo)) { seen.add(d.trainNo); deduped.push(d); } });
+
+    if (!filterStr) return deduped;
     const f = filterStr.toLowerCase();
-    return all.filter(d =>
+    return deduped.filter(d =>
       d.trainNo.toLowerCase().includes(f) || (d.trainName || '').toLowerCase().includes(f)
     );
   } catch (e) {
@@ -965,6 +1001,40 @@ function populateShareCapture(d) {
   clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
 }
 
+// ─── Stale badge ──────────────────────────────────────────────────────────────
+function staleBadge(isoDate) {
+  const today = todayStr();
+  if (isoDate >= today) return '';
+  const days = Math.round((new Date(today) - new Date(isoDate)) / 86400000);
+  const cls = days <= 2 ? 'mild' : 'old';
+  const label = days === 1 ? '1 day old' : `${days} days old`;
+  return `<span class="stale-badge ${cls}">⚠ ${label}</span>`;
+}
+
+// ─── Train history (last N days) ─────────────────────────────────────────────
+async function getTrainHistory(trainNo, days = 7) {
+  const dates = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+  const records = await Promise.all(dates.map(dt => getTrainRecord(`${trainNo}_${dt}`).catch(() => null)));
+  return records.filter(Boolean); // newest first
+}
+
+// ─── Get most recent past formation (for copy hint) ──────────────────────────
+async function getMostRecentFormation(trainNo) {
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dt = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const rec = await getTrainRecord(`${trainNo}_${dt}`).catch(() => null);
+    if (rec) return rec;
+  }
+  return null;
+}
+
 // ─── Trains list ──────────────────────────────────────────────────────────────
 async function renderTrainsList() {
   const filter = ($('listSearch').value || '').trim();
@@ -989,108 +1059,152 @@ async function renderTrainsList() {
     return;
   }
 
-  list.forEach(d => {
-    const key = `${d.trainNo}_${d.date}`;
-    const isFav = favs.includes(d.trainNo);
-    const fromTo = (d.fromStation && d.toStation)
-      ? `${d.fromStation} → ${d.toStation}`
-      : d.fromStation || d.toStation || '';
-    const timeStr = formatTime(new Date(d.updatedAt));
-    const confirmList = d.confirmations || [];
+  list.forEach(initialData => {
+    let cur = initialData; // closure: tracks currently displayed date's data
+    const isFav = favs.includes(cur.trainNo);
+    const fromTo = (cur.fromStation && cur.toStation)
+      ? `${cur.fromStation} → ${cur.toStation}`
+      : cur.fromStation || cur.toStation || '';
 
     const item = document.createElement('div');
     item.className = 'train-item';
-
     item.innerHTML = `
       <div class="train-item-head">
-        <button class="star-btn${isFav ? ' starred' : ''}" data-train="${d.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
-        <div class="tno-badge">${d.trainNo}</div>
+        <button class="star-btn${isFav ? ' starred' : ''}" data-train="${cur.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
+        <div class="tno-badge">${cur.trainNo}</div>
         <div class="train-item-meta">
           ${fromTo ? `<div class="ti-route">${fromTo}</div>` : ''}
-          <div class="ti-name">${d.trainName || '—'}</div>
+          <div class="ti-name">${cur.trainName || '—'}</div>
         </div>
-        <div class="ti-when">${formatDateOnly(d.date)}<br>${timeStr}</div>
+        <div class="ti-when">
+          <span class="ti-date">${formatDateOnly(cur.date)}</span><br>
+          <span class="ti-time">${formatTime(new Date(cur.updatedAt))}</span>
+          <span class="ti-stale">${staleBadge(cur.date)}</span>
+        </div>
         <div class="ti-chev">▾</div>
       </div>
       <div class="train-item-body">
+        <div class="date-tabs i-date-tabs"></div>
         <div class="inline-card">
           <div class="inline-label">COACH POSITION</div>
           <div class="inline-head">
             <div>
-              <div class="inline-tno">${d.trainNo}</div>
-              ${d.trainName ? `<div class="inline-name">${d.trainName}</div>` : ''}
+              <div class="inline-tno">${cur.trainNo}</div>
+              ${cur.trainName ? `<div class="inline-name">${cur.trainName}</div>` : ''}
               ${fromTo ? `<div class="inline-route">${fromTo}</div>` : ''}
             </div>
-            <div class="inline-date">${formatDateOnly(d.date)}</div>
+            <div class="inline-date i-date">${formatDateOnly(cur.date)}</div>
           </div>
-          <div class="strip-wrap"><div class="strip" id="strip_${key}"></div></div>
-          <div class="meta-line"><span class="dot"></span> Updated by <b>${d.submittedByName || '—'}</b> · ${formatDateTime(new Date(d.updatedAt))} · #${d.updateCount || 1}</div>
-          <div class="confirm-line" id="cl_${key}" style="${confirmList.length ? 'display:flex' : 'display:none'}"></div>
+          <div class="strip-wrap"><div class="strip i-strip"></div></div>
+          <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
+          <div class="confirm-line i-cl"></div>
           <div class="btn-row">
-            <button class="btn btn-secondary" id="shareBtn_${key}">⬆ Share</button>
-            ${canEdit() ? `<button class="btn btn-ghost" id="confirmBtn_${key}">✓ Confirm</button>
-            <button class="btn btn-secondary" id="updateBtn_${key}">Edit</button>` : ''}
+            <button class="btn btn-secondary i-share">⬆ Share</button>
+            ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
+            <button class="btn btn-secondary i-edit">Edit</button>` : ''}
           </div>
         </div>
       </div>
     `;
-
     wrap.appendChild(item);
 
-    const stripEl = document.getElementById(`strip_${key}`);
-    renderStrip(stripEl, d.parsedList || []);
+    // Helper: refresh the card body elements from a data record
+    function applyData(rec) {
+      cur = rec;
+      const confirmList = rec.confirmations || [];
+      const stationPart = rec.submittedByStation ? ` · ${rec.submittedByStation}` : '';
+      const idHint = rec.submittedByPhone
+        ? `(${rec.submittedByPhone.slice(-4)})`
+        : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
-    if (confirmList.length) {
-      const clEl = document.getElementById(`cl_${key}`);
-      const latest = confirmList[confirmList.length - 1];
-      const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
-      clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+      renderStrip(item.querySelector('.i-strip'), rec.parsedList || []);
+      item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
+      item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
+      item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
+      item.querySelector('.ti-date').textContent = formatDateOnly(rec.date);
+      item.querySelector('.ti-time').textContent = formatTime(new Date(rec.updatedAt));
+      item.querySelector('.ti-stale').innerHTML = staleBadge(rec.date);
+
+      const clEl = item.querySelector('.i-cl');
+      if (confirmList.length) {
+        const latest = confirmList[confirmList.length - 1];
+        const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
+        clEl.style.display = 'flex';
+        clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+      } else {
+        clEl.style.display = 'none';
+        clEl.innerHTML = '';
+      }
     }
 
-    item.querySelector('.train-item-head').addEventListener('click', (e) => {
-      if (e.target.closest('.star-btn')) return;
-      const wasOpen = item.classList.contains('open');
-      document.querySelectorAll('.train-item.open').forEach(el => el.classList.remove('open'));
-      if (!wasOpen) item.classList.add('open');
-    });
+    // Initial render
+    applyData(cur);
 
+    // Date tabs builder (called once on first expand)
+    async function loadDateTabs() {
+      const history = await getTrainHistory(cur.trainNo, 7);
+      if (history.length <= 1) return;
+      const tabsEl = item.querySelector('.i-date-tabs');
+      tabsEl.innerHTML = '';
+      history.forEach(rec => {
+        const btn = document.createElement('button');
+        btn.className = 'date-tab' + (rec.date === cur.date ? ' active' : '');
+        btn.textContent = formatDateOnly(rec.date) + (rec.date === todayStr() ? ' ●' : '');
+        btn.addEventListener('click', () => {
+          tabsEl.querySelectorAll('.date-tab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          applyData(rec);
+        });
+        tabsEl.appendChild(btn);
+      });
+    }
+
+    // Star button
     item.querySelector('.star-btn').addEventListener('click', (e) => {
       e.stopPropagation();
-      const trainNo = e.currentTarget.dataset.train;
-      const isNowFav = toggleFavourite(trainNo);
+      const isNowFav = toggleFavourite(cur.trainNo);
       e.currentTarget.textContent = isNowFav ? '★' : '☆';
       e.currentTarget.classList.toggle('starred', isNowFav);
       e.currentTarget.setAttribute('aria-label', isNowFav ? 'Remove from favourites' : 'Add to favourites');
       if (activeTab === 'fav' && !isNowFav) renderTrainsList();
     });
 
-    document.getElementById(`shareBtn_${key}`).addEventListener('click', () => {
-      populateShareCapture(d);
-      shareAsImage(d.trainNo, d.date);
+    // Expand / collapse
+    item.querySelector('.train-item-head').addEventListener('click', (e) => {
+      if (e.target.closest('.star-btn')) return;
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.train-item.open').forEach(el => el.classList.remove('open'));
+      if (!wasOpen) {
+        item.classList.add('open');
+        if (!item.dataset.histLoaded) { item.dataset.histLoaded = '1'; loadDateTabs(); }
+      }
+    });
+
+    // Share
+    item.querySelector('.i-share').addEventListener('click', () => {
+      populateShareCapture(cur);
+      shareAsImage(cur.trainNo, cur.date);
     });
 
     if (canEdit()) {
-      document.getElementById(`confirmBtn_${key}`).addEventListener('click', async () => {
+      // Confirm
+      item.querySelector('.i-confirm').addEventListener('click', async () => {
         const identity = getIdentity();
         if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+        const key = `${cur.trainNo}_${cur.date}`;
         const rec = await getTrainRecord(key);
         if (!rec) return;
         const cList = (rec.confirmations || []).filter(c => c.uid !== identity.uid);
-        cList.push({ name: identity.name, phone: identity.phone || '', station: identity.station || '', uid: identity.uid || '', at: Date.now() });
+        cList.push({ name: identity.name, uid: identity.uid || '', station: identity.station || '', at: Date.now() });
         rec.confirmations = cList;
         await saveTrainRecord(key, rec);
-        const clEl = document.getElementById(`cl_${key}`);
-        if (clEl) {
-          const latest = cList[cList.length - 1];
-          const names = cList.length === 1 ? latest.name : `${latest.name} +${cList.length - 1} more`;
-          clEl.style.display = 'flex';
-          clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
-        }
+        applyData(rec);
         toast('Marked as confirmed');
       });
 
-      document.getElementById(`updateBtn_${key}`).addEventListener('click', () => {
-        openSubmit(d.trainNo, d.date, d.trainName, d.rawList, d.fromStation, d.toStation);
+      // Edit
+      item.querySelector('.i-edit').addEventListener('click', () => {
+        openSubmit(cur.trainNo, cur.date, cur.trainName, cur.rawList, cur.fromStation, cur.toStation);
       });
     }
   });
@@ -1162,6 +1276,35 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
 }
 $('fabAdd').addEventListener('click', () => openSubmit());
 $('sList').addEventListener('input', renderPreview);
+
+// Copy-from-previous: auto-lookup when train number is typed
+let _copyLookupTimer;
+$('sTrainNo').addEventListener('input', () => {
+  clearTimeout(_copyLookupTimer);
+  const copyBox = $('sCopyBox');
+  copyBox.classList.remove('show');
+  _copyLookupTimer = setTimeout(async () => {
+    const trainNo = $('sTrainNo').value.trim();
+    if (trainNo.length < 4) return;
+    // Only show copy hint when coach list is at default (new entry, not edit)
+    const listVal = $('sList').value.trim();
+    if (listVal && listVal !== 'ENG') return;
+    const rec = await getMostRecentFormation(trainNo);
+    if (!rec) return;
+    $('sCopyDate').textContent = formatDateOnly(rec.date);
+    renderStrip($('sCopyStrip'), rec.parsedList || []);
+    copyBox.classList.add('show');
+    $('sCopyBtn').onclick = () => {
+      if (!$('sTrainName').value) $('sTrainName').value = rec.trainName || '';
+      if (!$('sFromStation').value) $('sFromStation').value = rec.fromStation || '';
+      if (!$('sToStation').value) $('sToStation').value = rec.toStation || '';
+      $('sList').value = rec.rawList;
+      renderPreview();
+      copyBox.classList.remove('show');
+      toast('Formation copied — update as needed');
+    };
+  }, 600);
+});
 $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 $('sReverseBtn').addEventListener('click', () => {
   const codes = parseCompressed($('sList').value);
@@ -1237,6 +1380,14 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   updateFabVisibility();
   renderTrainsList();
 });
+
+// ─── Offline indicator ────────────────────────────────────────────────────────
+function updateOfflineBanner() {
+  $('offlineBanner').classList.toggle('show', !navigator.onLine);
+}
+window.addEventListener('online', updateOfflineBanner);
+window.addEventListener('offline', updateOfflineBanner);
+updateOfflineBanner();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
