@@ -127,17 +127,19 @@
   }
   .chip-index{font-family:var(--mono);font-size:10px;opacity:.85;font-weight:400;line-height:1;}
   .chip-code{font-size:14px;font-weight:700;line-height:1;}
-  .chip.eng{background:#3D0808;color:#FF5555;}
-  .chip.eng-ghost{opacity:.45;border:1px dashed #FF5555;}
-  .chip.pwr{background:#2A1A00;color:#FFB030;}  /* gold  – LPR/VP/PWR */
-  .chip.gen{background:#0C2200;color:#44EE44;}  /* green – GEN/GS/UR */
-  .chip.d2s{background:#001830;color:#4DA6FF;}  /* blue  – D1-D8 3AC */
-  .chip.cc{background:#1A0830;color:#CC77FF;}   /* violet– CC chair car */
-  .chip.ac{background:#002A1A;color:#22EEA0;}   /* teal  – A/B/HA/M AC */
-  .chip.pc{background:#2D0025;color:#FF5599;}   /* pink  – PC pantry */
-  .chip.sl{background:#2D1400;color:#FF9933;}   /* amber – S1-S12 sleeper */
-  .chip.end{background:#1E1E06;color:#E8E84A;}  /* yellow– SLR/SLRD guard */
-  .chip.unk{background:#1A1E26;color:#8899BB;}  /* gray  – unknown */
+  .chip.eng {background:#3D0808;color:#FF4444;}  /* red    – Engine */
+  .chip.eng-ghost{opacity:.45;border:1px dashed #FF4444;}
+  .chip.sl  {background:#2D1200;color:#FF8C1A;}  /* orange – S1-S12 Sleeper */
+  .chip.pwr {background:#2A1800;color:#FFB020;}  /* gold   – LPR/VP/PWR */
+  .chip.end {background:#1E1E00;color:#DDDD33;}  /* yellow – SLR/SLRD guard */
+  .chip.gen {background:#0A2000;color:#44EE44;}  /* green  – GEN/GS/UR */
+  .chip.ac2 {background:#002820;color:#22DDA0;}  /* teal   – A1-A4 (2AC) */
+  .chip.d2s {background:#002228;color:#22CCEE;}  /* cyan   – D1-D9 (3AC D-class) */
+  .chip.ac3 {background:#001430;color:#4499FF;}  /* blue   – B1-B12 (3AC) */
+  .chip.ac1 {background:#100830;color:#9966FF;}  /* indigo – HA/M (1AC/FC) */
+  .chip.cc  {background:#1A0830;color:#CC55FF;}  /* violet – CC Chair Car */
+  .chip.pc  {background:#2D001A;color:#FF44AA;}  /* pink   – PC Pantry */
+  .chip.unk {background:#1A1E26;color:#8899BB;}  /* gray   – unknown */
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
   .meta-line b{color:var(--text);}
@@ -424,19 +426,17 @@
     <button class="close" data-close="legendOverlay">✕</button>
     <h3>Standard coach codes</h3>
     <div class="legend-grid">
-      <div class="code">ENG</div><div>Engine</div>
-      <div class="code">LPR / VP</div><div>Luggage / pilot van</div>
-      <div class="code">PWR</div><div>Power car</div>
-      <div class="code">GEN</div><div>General / unreserved</div>
-      <div class="code">D1–D4</div><div>Second seating (2S)</div>
-      <div class="code">C1–C14</div><div>Chair car (CC)</div>
-      <div class="code">HA1</div><div>Composite 1A+2A</div>
-      <div class="code">A1, A2…</div><div>AC 2-tier</div>
-      <div class="code">B1–B5…</div><div>AC 3-tier</div>
-      <div class="code">M1, M2</div><div>AC 3-tier economy</div>
-      <div class="code">PC</div><div>Pantry car</div>
-      <div class="code">S1–S10…</div><div>Sleeper</div>
-      <div class="code">SLRD / LSLRD</div><div>Guard cum Divyangjan coach</div>
+      <div class="chip eng" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">ENG</div><div>Engine</div>
+      <div class="chip sl" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">S1–S12</div><div>Sleeper (SL)</div>
+      <div class="chip gen" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">GEN/GS</div><div>General / unreserved</div>
+      <div class="chip ac3" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">B1–B5</div><div>AC 3-tier (3A)</div>
+      <div class="chip ac2" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">A1, A2</div><div>AC 2-tier (2A)</div>
+      <div class="chip ac1" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">HA1 / M1</div><div>First AC / FC (1A)</div>
+      <div class="chip d2s" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">D1–D9</div><div>3AC D-class / 2S seating</div>
+      <div class="chip cc" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">C1–C14</div><div>Chair car (CC)</div>
+      <div class="chip pc" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">PC</div><div>Pantry car</div>
+      <div class="chip pwr" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">LPR/VP</div><div>Luggage / pilot van</div>
+      <div class="chip end" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">SLRD</div><div>Guard cum Divyangjan</div>
     </div>
     <p class="hint">Type in this order, from the engine end, the same way your station already writes it down — just keep the codes standard so everyone reads the same shorthand.</p>
   </div>
@@ -609,7 +609,9 @@ function classOf(code) {
   if (/^(GEN|GS|UR)$/.test(code)) return 'gen';
   if (/^D\d*$/.test(code)) return 'd2s';
   if (/^C\d*$/.test(code)) return 'cc';
-  if (/^(HA\d*|A\d+|B\d+|M\d+)$/.test(code)) return 'ac';
+  if (/^B\d*$/.test(code)) return 'ac3';
+  if (/^A\d*$/.test(code)) return 'ac2';
+  if (/^(HA\d*|M\d*)$/.test(code)) return 'ac1';
   if (code === 'PC') return 'pc';
   if (/^S\d+$/.test(code)) return 'sl';
   if (/^(SLR|SLRD|LSLR|LSLRD)\d*$/.test(code)) return 'end';
