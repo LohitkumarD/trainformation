@@ -127,19 +127,21 @@
   }
   .chip-index{font-family:var(--mono);font-size:10px;opacity:.85;font-weight:400;line-height:1;}
   .chip-code{font-size:14px;font-weight:700;line-height:1;}
-  .chip.eng {background:#3D0808;color:#FF4444;}  /* red    – Engine */
+  .chip.eng  {background:#3D0808;color:#FF4444;}  /* red     0° – Engine */
   .chip.eng-ghost{opacity:.45;border:1px dashed #FF4444;}
-  .chip.sl  {background:#2D1200;color:#FF8C1A;}  /* orange – S1-S12 Sleeper */
-  .chip.pwr {background:#2A1800;color:#FFB020;}  /* gold   – LPR/VP/PWR */
-  .chip.end {background:#1E1E00;color:#DDDD33;}  /* yellow – SLR/SLRD guard */
-  .chip.gen {background:#0A2000;color:#44EE44;}  /* green  – GEN/GS/UR */
-  .chip.ac2 {background:#002820;color:#22DDA0;}  /* teal   – A1-A4 (2AC) */
-  .chip.d2s {background:#002228;color:#22CCEE;}  /* cyan   – D1-D9 (3AC D-class) */
-  .chip.ac3 {background:#001430;color:#4499FF;}  /* blue   – B1-B12 (3AC) */
-  .chip.ac1 {background:#100830;color:#9966FF;}  /* indigo – HA/M (1AC/FC) */
-  .chip.cc  {background:#1A0830;color:#CC55FF;}  /* violet – CC Chair Car */
-  .chip.pc  {background:#2D001A;color:#FF44AA;}  /* pink   – PC Pantry */
-  .chip.unk {background:#1A1E26;color:#8899BB;}  /* gray   – unknown */
+  .chip.sl   {background:#2D1200;color:#FF7700;}  /* orange 30° – Sleeper S1-S12 */
+  .chip.pwr  {background:#2A1800;color:#FFAA00;}  /* amber  45° – LPR/VP/EOG */
+  .chip.end  {background:#1E1E00;color:#DDDD22;}  /* yellow 60° – SLR/SLRD guard */
+  .chip.gen  {background:#0A2000;color:#44EE44;}  /* green 120° – GEN/GS/UR */
+  .chip.ac2  {background:#002820;color:#22DDAA;}  /* teal  165° – A1-A4 (2AC) */
+  .chip.ac3e {background:#001E28;color:#00CCDD;}  /* cyan  185° – BE/3E (3AC Economy) */
+  .chip.d2s  {background:#001A30;color:#22AAFF;}  /* sky   205° – D1-D9 (2S seating) */
+  .chip.ac3  {background:#001030;color:#4477FF;}  /* blue  225° – B1-B12 (3AC) */
+  .chip.ac1  {background:#0C0030;color:#9955FF;}  /* indigo250° – H/HA/1AC (1AC) */
+  .chip.cc   {background:#1A0030;color:#CC44FF;}  /* violet270° – C1-C14 (CC) */
+  .chip.ec   {background:#2D0030;color:#FF44DD;}  /* magenta300°– E1/E2 (EC Exec) */
+  .chip.pc   {background:#2D0018;color:#FF4488;}  /* pink  335° – PC Pantry */
+  .chip.unk  {background:#1A1E26;color:#8899BB;}  /* gray      – unknown */
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
   .meta-line b{color:var(--text);}
@@ -426,17 +428,19 @@
     <button class="close" data-close="legendOverlay">✕</button>
     <h3>Standard coach codes</h3>
     <div class="legend-grid">
-      <div class="chip eng" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">ENG</div><div>Engine</div>
-      <div class="chip sl" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">S1–S12</div><div>Sleeper (SL)</div>
-      <div class="chip gen" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">GEN/GS</div><div>General / unreserved</div>
-      <div class="chip ac3" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">B1–B5</div><div>AC 3-tier (3A)</div>
-      <div class="chip ac2" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">A1, A2</div><div>AC 2-tier (2A)</div>
-      <div class="chip ac1" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">HA1 / M1</div><div>First AC / FC (1A)</div>
-      <div class="chip d2s" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">D1–D9</div><div>3AC D-class / 2S seating</div>
-      <div class="chip cc" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">C1–C14</div><div>Chair car (CC)</div>
-      <div class="chip pc" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">PC</div><div>Pantry car</div>
-      <div class="chip pwr" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">LPR/VP</div><div>Luggage / pilot van</div>
-      <div class="chip end" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">SLRD</div><div>Guard cum Divyangjan</div>
+      <div class="chip eng"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">ENG</div>   <div>Engine / locomotive</div>
+      <div class="chip sl"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">S1–S12</div> <div>Sleeper Class (SL)</div>
+      <div class="chip gen"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">GEN/GS</div> <div>General / Unreserved (UR)</div>
+      <div class="chip ac3"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">B1–B12</div> <div>AC 3-Tier Sleeper (3A)</div>
+      <div class="chip ac3e" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">BE1</div>    <div>AC 3-Tier Economy (3E)</div>
+      <div class="chip ac2"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">A1–A4</div>  <div>AC 2-Tier Sleeper (2A)</div>
+      <div class="chip ac1"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">H1/HA1</div> <div>First AC / Composite (1A)</div>
+      <div class="chip cc"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">C1–C14</div> <div>AC Chair Car (CC)</div>
+      <div class="chip ec"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">E1/E2</div>  <div>Executive Chair Car (EC)</div>
+      <div class="chip d2s"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">D1–D9</div>  <div>Second Sitting Non-AC (2S)</div>
+      <div class="chip pc"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">PC</div>     <div>Pantry Car</div>
+      <div class="chip pwr"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">LPR/EOG</div><div>Luggage / Power Van</div>
+      <div class="chip end"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">SLRD</div>   <div>Guard cum Divyangjan (SLRD)</div>
     </div>
     <p class="hint">Type in this order, from the engine end, the same way your station already writes it down — just keep the codes standard so everyone reads the same shorthand.</p>
   </div>
@@ -605,15 +609,18 @@ function parseCompressed(input) {
 
 function classOf(code) {
   if (code === 'ENG') return 'eng';
-  if (['LPR', 'VP', 'PWR'].includes(code)) return 'pwr';
+  if (['LPR', 'VP', 'PWR', 'EOG', 'HOG'].includes(code)) return 'pwr';
   if (/^(GEN|GS|UR)$/.test(code)) return 'gen';
-  if (/^D\d*$/.test(code)) return 'd2s';
-  if (/^C\d*$/.test(code)) return 'cc';
-  if (/^B\d*$/.test(code)) return 'ac3';
-  if (/^A\d*$/.test(code)) return 'ac2';
-  if (/^(HA\d*|M\d*)$/.test(code)) return 'ac1';
+  // AC classes — order matters (most specific first)
+  if (/^(BE\d*|3E)$/.test(code)) return 'ac3e';        // 3AC Economy
+  if (/^(B\d*|3A)$/.test(code)) return 'ac3';           // 3AC sleeper
+  if (/^(A\d*|2A)$/.test(code)) return 'ac2';           // 2AC sleeper
+  if (/^(H\d+|HA\d*|1A|M\d*)$/.test(code)) return 'ac1'; // 1AC / composite
+  if (/^(E\d*|EC)$/.test(code)) return 'ec';            // Executive Chair Car
+  if (/^(C\d*|CC)$/.test(code)) return 'cc';            // AC Chair Car
+  if (/^(D\d*|2S)$/.test(code)) return 'd2s';           // 2nd Sitting / D-class
   if (code === 'PC') return 'pc';
-  if (/^S\d+$/.test(code)) return 'sl';
+  if (/^(S\d+|SL)$/.test(code)) return 'sl';            // Sleeper
   if (/^(SLR|SLRD|LSLR|LSLRD)\d*$/.test(code)) return 'end';
   return 'unk';
 }
