@@ -18,6 +18,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <style>
   :root{
     --bg:#14171A;
@@ -498,6 +499,15 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+// FCM messaging (graceful fallback when unsupported or blocked)
+let messaging = null;
+try {
+  if (firebase.messaging.isSupported()) messaging = firebase.messaging();
+} catch (_) {}
+
+// VAPID key — get from Firebase Console → Project Settings → Cloud Messaging → Web push certificates
+const VAPID_KEY = 'YOUR_VAPID_KEY_HERE';
+
 db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
 // ─── App state ────────────────────────────────────────────────────────────────
@@ -896,9 +906,14 @@ async function loadAdminPanel() {
       card.querySelectorAll('button[data-uid]').forEach(btn => {
         btn.addEventListener('click', async () => {
           btn.disabled = true;
-          const newRole = btn.dataset.action === 'approve' ? 'staff' : 'rejected';
+          const isApprove = btn.dataset.action === 'approve';
+          const newRole = isApprove ? 'staff' : 'rejected';
           await db.collection('users').doc(btn.dataset.uid).update({ role: newRole });
-          toast(btn.dataset.action === 'approve' ? 'User approved ✓' : 'User rejected');
+          toast(isApprove ? 'User approved ✓' : 'User rejected');
+          // Send push notification to approved user if they have an FCM token
+          if (isApprove && u.fcmToken) {
+            sendPush(u.fcmToken, '✅ Account Approved', 'You can now add and edit coach positions. Welcome!');
+          }
           loadAdminPanel();
         });
       });
@@ -999,6 +1014,42 @@ function populateShareCapture(d) {
   const latest = confirmList[confirmList.length - 1];
   const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
   clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+}
+
+// ─── Push notifications ───────────────────────────────────────────────────────
+async function initPushNotifications() {
+  if (!messaging || !currentUser || !currentUser.uid) return;
+  if (currentUser.role !== 'staff' && currentUser.role !== 'admin') return;
+  if (!('Notification' in window)) return;
+
+  // Don't re-prompt if already denied
+  if (Notification.permission === 'denied') return;
+
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') return;
+
+  try {
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+    if (token) {
+      await db.collection('users').doc(currentUser.uid).update({ fcmToken: token });
+    }
+  } catch (e) {
+    // Token fetch can fail on localhost or when VAPID_KEY is a placeholder — silent
+  }
+}
+
+// Called after approval/formation events; calls the Netlify Function
+async function sendPush(token, title, body) {
+  if (!token || token === '') return;
+  try {
+    await fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, title, body }),
+    });
+  } catch (_) {} // non-critical — never block the UI
 }
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
@@ -1379,7 +1430,19 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   updateMeLabel();
   updateFabVisibility();
   renderTrainsList();
+  // Request push permission once user is confirmed staff/admin
+  if (currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin')) {
+    setTimeout(initPushNotifications, 2000); // slight delay so UI settles first
+  }
 });
+
+// Foreground push messages (app is open — show as toast)
+if (messaging) {
+  messaging.onMessage((payload) => {
+    const notif = payload.notification || {};
+    toast(`${notif.title || ''}${notif.body ? ' — ' + notif.body : ''}`);
+  });
+}
 
 // ─── Offline indicator ────────────────────────────────────────────────────────
 function updateOfflineBanner() {
