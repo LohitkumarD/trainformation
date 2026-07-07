@@ -10,6 +10,13 @@ service cloud.firestore {
            in ['staff', 'admin'];
     }
 
+    // Train timetable — public read; only GitHub Actions / admin can write
+    match /timetable/{trainNo} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // User profiles — own doc + admin
     match /users/{userId} {
       allow read: if request.auth != null

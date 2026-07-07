@@ -68,8 +68,8 @@ const HEADERS = {
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function getTrainsAtStation(stationCode) {
-  // getLiveStation with hours=240 (~10 days) discovers all trains at this station
-  const url = `https://${RAPIDAPI_HOST}/api/v3/getLiveStation?stationCode=${stationCode}&hours=240`;
+  // getLiveStation with hours=24 discovers trains passing this station in the next 24 h
+  const url = `https://${RAPIDAPI_HOST}/api/v3/getLiveStation?stationCode=${stationCode}&hours=24`;
   const res = await fetch(url, { headers: HEADERS });
   const json = await res.json();
   if (!json.status) { console.warn(`  ⚠ No data for station ${stationCode}:`, json.message || ''); return []; }

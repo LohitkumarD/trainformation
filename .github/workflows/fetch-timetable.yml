@@ -1,7 +1,13 @@
 name: Fetch Train Timetable → Firestore
 
 on:
-  workflow_dispatch:   # manual trigger only — run once from GitHub Actions UI
+  workflow_dispatch:   # manual trigger from GitHub Actions UI
+  schedule:
+    # Run 4× per day (every 6 h) so trains at all departure times are captured
+    - cron: '0 0 * * *'   # 00:00 UTC  = 05:30 IST
+    - cron: '0 6 * * *'   # 06:00 UTC  = 11:30 IST
+    - cron: '0 12 * * *'  # 12:00 UTC  = 17:30 IST
+    - cron: '0 18 * * *'  # 18:00 UTC  = 23:30 IST
 
 jobs:
   fetch:
