@@ -1,0 +1,19 @@
+{
+  "name": "Coach Position",
+  "short_name": "CoachPos",
+  "description": "Train coach position lookup for railway staff",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F0F2F7",
+  "theme_color": "#FFFFFF",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

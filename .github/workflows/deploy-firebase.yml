@@ -1,0 +1,37 @@
+name: Deploy Firestore Rules & Indexes
+
+on:
+  workflow_dispatch:   # trigger manually from GitHub Actions UI
+  push:
+    branches: [main]
+    paths:
+      - 'coach-position/firestore.rules'
+      - 'coach-position/firestore.indexes.json'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install firebase-admin
+        working-directory: scripts
+
+      - name: Write service account file
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccount.json
+
+      - name: Deploy Firestore rules
+        env:
+          FIREBASE_SA: ./scripts/serviceAccount.json
+        run: node scripts/deploy-rules.js coach-position/firestore.rules
+
+      - name: Cleanup
+        if: always()
+        run: rm -f scripts/serviceAccount.json

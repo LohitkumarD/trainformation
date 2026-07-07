@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Train Coach Position</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+<!-- Firebase SDK v10 (compat — no build step needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+<style>
+  :root{
+    --bg:#F0F2F7;
+    --surface:#FFFFFF;
+    --surface-2:#E8EBF4;
+    --line:#D3D7E6;
+    --text:#111827;
+    --muted:#5C6475;
+    --amber:#D97706;
+    --green:#16A34A;
+    --red:#DC2626;
+    --blue:#2563EB;
+    --teal:#0E7490;
+    --brown:#92400E;
+    --violet:#7C3AED;
+    --grey-blue:#475569;
+    --radius:10px;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --sans:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;}
+  html,body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-tap-highlight-color:transparent;
+  }
+  button{font-family:inherit;}
+  .app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
+  header.bar{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+    position:sticky;top:0;background:var(--surface);z-index:20;
+    box-shadow:0 1px 6px rgba(0,0,0,.07);
+  }
+  .brand .title{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.05em;color:var(--amber);}
+  .brand .sub{font-size:11px;color:var(--muted);margin-top:1px;}
+  .me{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    padding:7px 12px;font-size:13px;cursor:pointer;color:var(--text);
+    white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;
+    transition:transform .12s ease;
+  }
+  .me:active{transform:scale(.96);}
+  main{flex:1;padding:0 16px 100px;display:flex;flex-direction:column;gap:8px;}
+  .list-header{padding:12px 16px 8px;display:flex;flex-direction:column;gap:10px;background:var(--bg);position:sticky;top:57px;z-index:15;}
+  .list-search{
+    width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;
+    color:var(--text);font-size:14px;font-family:var(--mono);
+    padding:12px 14px;outline:none;transition:border-color .15s ease, box-shadow .15s ease;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  .list-search:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
+  .tabs-row{display:flex;align-items:center;gap:8px;}
+  .tab{
+    background:transparent;border:2px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:13px;font-weight:600;padding:5px 14px;cursor:pointer;
+    transition:all .15s ease;
+  }
+  .tab.active{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
+  .list-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  /* Station search tab */
+  .station-bar{display:none;gap:8px;align-items:center;padding:0 0 4px;}
+  .station-bar.visible{display:flex;}
+  .station-input{
+    flex:1;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;
+    color:var(--text);font-size:14px;font-family:var(--mono);padding:10px 12px;
+    outline:none;text-transform:uppercase;transition:border-color .15s,box-shadow .15s;
+  }
+  .station-input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,116,144,.12);}
+  .station-search-btn{
+    background:var(--teal);color:#fff;border:none;border-radius:10px;
+    padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;
+    transition:opacity .15s;
+  }
+  .station-search-btn:active{opacity:.8;}
+  /* Station results */
+  .st-train{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:4px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .st-train-no{font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:.06em;}
+  .st-train-name{font-size:12px;color:var(--muted);margin-top:1px;}
+  .st-days{font-size:11px;color:var(--muted);margin-top:4px;}
+  .st-timing{text-align:right;}
+  .st-dep{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--green);}
+  .st-arr{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  .st-label{font-size:10px;color:var(--muted);text-align:right;}
+  .trains-empty{text-align:center;color:var(--muted);font-size:13px;padding:40px 0;}
+  input,textarea{
+    width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);
+    outline:none;transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
+  .field-label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500;}
+  .row{display:flex;gap:10px;align-items:flex-start;}
+  .train-no{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.08em;}
+  /* Train item expandable rows */
+  .train-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+  .train-item-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none;transition:background .1s;}
+  .train-item-head:active{background:var(--surface-2);}
+  .star-btn{background:transparent;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:0 2px;flex-shrink:0;line-height:1;transition:color .15s;}
+  .star-btn.starred{color:#D97706;}
+  .tno-badge{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--amber);background:rgba(217,119,6,.1);border-radius:8px;padding:5px 10px;flex-shrink:0;border:1px solid rgba(217,119,6,.2);}
+  .train-item-meta{flex:1;min-width:0;}
+  .ti-route{font-size:12px;color:var(--muted);font-family:var(--mono);}
+  .ti-name{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ti-when{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:right;flex-shrink:0;white-space:nowrap;line-height:1.6;}
+  .ti-chev{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .18s ease;}
+  .train-item.open .ti-chev{transform:rotate(180deg);}
+  .train-item-body{max-height:0;overflow:hidden;transition:max-height .32s ease;}
+  .train-item.open .train-item-body{max-height:1400px;}
+  .inline-card{padding:14px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;gap:12px;}
+  .inline-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
+  .inline-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .inline-tno{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--amber);background:rgba(217,119,6,.1);border-radius:8px;padding:4px 10px;display:inline-block;border:1px solid rgba(217,119,6,.2);}
+  .inline-date{font-size:12px;color:var(--muted);font-family:var(--mono);}
+  .inline-name{font-size:14px;color:var(--text);}
+  .inline-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);}
+  .inline-route .arr{color:var(--muted);}
+  /* Chip redesign — number inside chip */
+  .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
+  .tname{font-size:13px;color:var(--muted);margin-top:2px;}
+  .strip-wrap{padding:4px 0;}
+  .strip{display:flex;flex-wrap:wrap;gap:6px 8px;padding:2px 0;}
+  .chip{
+    font-family:var(--mono);border-radius:8px;
+    min-width:54px;height:60px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;text-align:center;padding:4px;
+  }
+  .chip-index{font-family:var(--mono);font-size:10px;opacity:.85;font-weight:400;line-height:1;}
+  .chip-code{font-size:14px;font-weight:700;line-height:1;}
+  .chip.eng  {background:#EF4444;color:#FFFFFF;}
+  .chip.eng-ghost{opacity:.45;border:2px dashed #EF4444;background:rgba(239,68,68,.08);color:#EF4444;}
+  .chip.sl   {background:#F97316;color:#FFFFFF;}
+  .chip.pwr  {background:#D97706;color:#FFFFFF;}
+  .chip.end  {background:#65A30D;color:#FFFFFF;}
+  .chip.gen  {background:#16A34A;color:#FFFFFF;}
+  .chip.ac2  {background:#0D9488;color:#FFFFFF;}
+  .chip.ac3e {background:#0891B2;color:#FFFFFF;}
+  .chip.d2s  {background:#0284C7;color:#FFFFFF;}
+  .chip.ac3  {background:#2563EB;color:#FFFFFF;}
+  .chip.ac1  {background:#4F46E5;color:#FFFFFF;}
+  .chip.cc   {background:#7C3AED;color:#FFFFFF;}
+  .chip.ec   {background:#C026D3;color:#FFFFFF;}
+  .chip.pc   {background:#E11D48;color:#FFFFFF;}
+  .chip.unk  {background:#64748B;color:#FFFFFF;}
+  .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
+  .meta-line b{color:var(--text);}
+  .hint{font-size:12px;color:var(--muted);margin:4px 0 0;}
+  .btn{
+    border:none;border-radius:8px;padding:12px 16px;font-weight:600;font-size:14px;
+    cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--amber);color:#FFFFFF;}
+  .btn-primary:active{filter:brightness(.92);}
+  .btn-secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--line);}
+  .btn-ghost{background:transparent;color:var(--text);border:1.5px solid var(--line);}
+  .btn-danger{background:transparent;color:var(--red);border:1px solid var(--red);}
+  .btn-block{width:100%;}
+  .btn-row{display:flex;gap:10px;}
+  .btn-row .btn{flex:1;}
+
+  .preview-strip .chip{min-width:34px;height:38px;border-radius:5px;}
+  .preview-strip .chip-index{font-size:8px;}
+  .preview-strip .chip-code{font-size:10px;}
+  .tool-btn{background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:12px;font-family:var(--mono);cursor:pointer;padding:4px 10px;transition:all .12s ease;}
+  .tool-btn:active{background:var(--surface-2);}
+  .chip-edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;display:flex;align-items:center;justify-content:center;}
+  .chip-edit-box{background:var(--surface);border:1.5px solid var(--amber);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.14);}
+  .chip-edit-box h3{margin:0;font-size:15px;font-weight:700;}
+  .chip-edit-box input{text-transform:uppercase;font-family:var(--mono);font-size:16px;letter-spacing:.05em;}
+  .preview-strip .chip{cursor:pointer;}
+  .preview-strip .chip:active{opacity:.75;}
+  .share-offscreen{
+    position:fixed;left:-9999px;top:0;width:340px;
+    background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
+    padding:16px;display:flex;flex-direction:column;gap:12px;
+  }
+  .sc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .sc-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
+  .sc-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);margin-top:3px;}
+
+  .confirm-line{font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .confirm-line b{color:var(--text);}
+  .share-footer{font-size:10px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.04em;}
+  .overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0);display:none;align-items:flex-end;
+    justify-content:center;z-index:50;transition:background .22s ease;
+  }
+  .overlay.show{display:flex;}
+  .overlay.open{background:rgba(0,0,0,.45);}
+  .sheet{
+    background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;
+    border:1px solid var(--line);border-bottom:none;
+    padding:24px 20px 32px;width:100%;max-width:520px;
+    display:flex;flex-direction:column;gap:14px;
+    transform:translateY(100%);transition:transform .22s ease;
+    max-height:90vh;overflow-y:auto;
+    box-shadow:0 -4px 24px rgba(0,0,0,.1);
+  }
+  .overlay.open .sheet{transform:translateY(0);}
+  .close{
+    position:absolute;top:16px;right:16px;background:var(--surface-2);border:1px solid var(--line);
+    color:var(--muted);font-size:16px;cursor:pointer;padding:2px 8px;border-radius:6px;
+  }
+  .sheet{position:relative;}
+  .sheet h3{font-size:17px;font-weight:700;padding-right:32px;}
+  .legend-link{
+    background:transparent;border:none;color:var(--amber);font-size:12px;cursor:pointer;
+    text-decoration:underline;text-align:center;padding:8px;
+  }
+  .legend-grid{
+    display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;
+    align-items:center;
+  }
+  .legend-grid .code{
+    font-family:var(--mono);font-size:11px;background:var(--surface-2);
+    border-radius:4px;padding:2px 6px;color:var(--amber);white-space:nowrap;
+    border:1px solid var(--line);
+  }
+  .preview-strip .chip{font-size:10px;padding:4px 6px;}
+  .fab{position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:center;z-index:10;}
+  .fab .btn{box-shadow:0 4px 18px rgba(217,119,6,.4);}
+  .toast{
+    position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--green);color:#FFFFFF;padding:10px 18px;border-radius:999px;
+    font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:all .25s ease;z-index:60;
+    box-shadow:0 4px 12px rgba(22,163,74,.3);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .section-title{font-size:13px;color:var(--muted);font-weight:600;}
+
+  /* auth overlay screens */
+  .auth-screen{display:none;flex-direction:column;gap:14px;}
+  .auth-screen.active{display:flex;}
+  .auth-logo{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber);letter-spacing:.05em;}
+  .auth-tagline{font-size:13px;color:var(--muted);}
+  .auth-divider{text-align:center;font-size:12px;color:var(--muted);margin:2px 0;}
+  .auth-back{
+    background:transparent;border:none;color:var(--muted);font-size:13px;cursor:pointer;
+    padding:4px 0;text-align:left;display:flex;align-items:center;gap:6px;
+  }
+  .verified-phone-label{
+    font-family:var(--mono);font-size:13px;color:var(--muted);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;
+  }
+  .sign-out-row{display:flex;align-items:center;justify-content:space-between;padding-top:4px;}
+  .sign-out-row span{font-size:12px;color:var(--muted);}
+  #authWorking{display:none;font-size:13px;color:var(--muted);text-align:center;}
+  .guest-badge{
+    font-size:11px;background:var(--surface-2);border:1px solid var(--line);
+    color:var(--muted);border-radius:6px;padding:2px 8px;font-family:var(--mono);
+  }
+  .pending-notice{
+    background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.35);border-radius:8px;
+    padding:10px 12px;font-size:13px;color:var(--brown);line-height:1.5;
+  }
+  .user-card{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px;}
+  .user-card .u-name{font-weight:600;font-size:14px;}
+  .user-card .u-meta{font-size:12px;color:var(--muted);margin-top:2px;}
+
+  /* stale badge */
+  .stale-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;display:inline-block;margin-top:2px;}
+  .stale-badge.mild{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;}
+  .stale-badge.old{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;}
+
+  /* date history tabs */
+  .date-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:0 0 8px;overflow-x:auto;}
+  .date-tab{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);color:var(--muted);cursor:pointer;background:transparent;white-space:nowrap;flex-shrink:0;font-family:var(--mono);}
+  .date-tab.active{background:var(--amber);color:#FFFFFF;border-color:var(--amber);font-weight:700;}
+  .date-tab:hover:not(.active){border-color:var(--amber);color:var(--amber);}
+
+  /* offline banner */
+  .offline-banner{background:#FFFBEB;color:#92400E;border-bottom:1px solid #FDE68A;font-size:12px;text-align:center;padding:5px 12px;font-weight:600;letter-spacing:.02em;display:none;}
+  .offline-banner.show{display:block;}
+
+  /* copy-from-previous box in submit form */
+  .copy-box{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;display:none;flex-direction:column;gap:6px;}
+  .copy-box.show{display:flex;}
+  .copy-box-label{font-size:11px;color:var(--muted);font-weight:600;font-family:var(--mono);}
+
+  /* disclaimer */
+  .disclaimer-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
+  .disclaimer-box{background:var(--surface);border:1.5px solid rgba(217,119,6,.4);border-radius:12px;padding:22px 20px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.14);}
+  .disclaimer-box h2{font-size:14px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.08em;margin:0;}
+  .disclaimer-box p{font-size:13px;color:var(--text);line-height:1.6;margin:0;}
+  .disclaimer-box .disc-note{font-size:11px;color:var(--muted);line-height:1.5;background:var(--surface-2);border-radius:6px;padding:8px 10px;}
+  .app-disclaimer{font-size:10px;color:var(--muted);text-align:center;padding:8px 16px 80px;line-height:1.5;letter-spacing:.01em;}
+  .card-disclaimer{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;padding:0 2px;}
+  .share-disclaimer{font-size:9px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.03em;margin-top:2px;}
+
+</style>
+</head>
+<body>
+<!-- Disclaimer modal — shown once per session -->
+<div id="disclaimerModal" class="disclaimer-modal" style="display:none">
+  <div class="disclaimer-box">
+    <h2>⚠ DISCLAIMER</h2>
+    <p>Coach positions shown are based on last reported data and <strong>may change without prior notice.</strong></p>
+    <p class="disc-note">
+      <b>Office Staff:</b> Please verify actual formation before announcement.<br>
+      <b>Passengers:</b> Confirm coach position at the station before boarding.
+    </p>
+    <button class="btn btn-primary" id="disclaimerOk" style="width:100%">I Understand</button>
+  </div>
+</div>
+
+<div id="offlineBanner" class="offline-banner">⚡ Offline — changes will sync when reconnected</div>
+<div class="app">
+
+  <header class="bar">
+    <div class="brand">
+      <div class="title">COACH POSITION</div>
+      <div class="sub">Train Coach Position</div>
+    </div>
+    <button class="me" id="meBtn">👤 <span id="meLabel">...</span></button>
+  </header>
+
+  <div class="list-header">
+    <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
+    <div class="tabs-row">
+      <button class="tab active" id="tabAll">All</button>
+      <button class="tab" id="tabFav">★ Favourites</button>
+      <button class="tab" id="tabStation">🚉 Station</button>
+      <span class="list-count" id="listCount"></span>
+    </div>
+    <div class="station-bar" id="stationBar">
+      <input class="station-input" id="stationCodeInput" placeholder="Station code e.g. DVG" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button class="station-search-btn" id="stationSearchBtn">Search</button>
+    </div>
+  </div>
+
+  <main>
+    <div id="trainsList"></div>
+  </main>
+
+  <div class="fab">
+    <button class="btn btn-primary" id="fabAdd">+ Add / Update a train</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="app-disclaimer">⚠ Coach positions are indicative only and may change without prior notice.<br>Staff: verify before announcement · Passengers: confirm at station before boarding.</div>
+</div>
+
+<!-- Off-screen share capture (populated before html2canvas) -->
+<div id="shareCapture" class="share-offscreen">
+  <div class="sc-label">COACH POSITION</div>
+  <div class="sc-head">
+    <div>
+      <div class="tno" id="rTrainNo"></div>
+      <div class="tname" id="rTrainName"></div>
+      <div class="sc-route" id="rRoute"></div>
+    </div>
+    <div class="inline-date" id="rDate"></div>
+  </div>
+  <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
+  <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
+  <div class="confirm-line" id="rConfirmLine"></div>
+  <div class="share-footer" id="shareGenAt" style="display:none"></div>
+  <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
+  <div class="share-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
+</div>
+
+<!-- Auth overlay (initial sign-in, shown before anything else) -->
+<div class="overlay" id="authOverlay">
+  <div class="sheet">
+
+    <!-- Screen 1: choice -->
+    <div class="auth-screen active" id="authScreenChoice">
+      <div class="auth-logo">COACH POSITION</div>
+      <p class="auth-tagline">Real-time train coach positions for railway staff and passengers.</p>
+      <button class="btn btn-primary btn-block" id="staffLoginBtn">Sign in as railway staff →</button>
+      <div class="auth-divider">or</div>
+      <button class="btn btn-secondary btn-block" id="guestBtn">← Continue browsing</button>
+      <p class="hint" style="text-align:center">Staff login requires a work email and password set up by your admin.</p>
+    </div>
+
+    <!-- Screen 2: email + password -->
+    <div class="auth-screen" id="authScreenEmail">
+      <button class="auth-back" id="backToChoiceBtn">← Back</button>
+      <h3 id="emailAuthTitle">Staff sign in</h3>
+      <div>
+        <label class="field-label">Work email</label>
+        <input id="authEmailInput" type="email" inputmode="email" placeholder="you@railways.gov.in" autocomplete="email">
+      </div>
+      <div>
+        <label class="field-label">Password</label>
+        <input id="authPasswordInput" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary btn-block" id="emailSignInBtn">Sign in</button>
+      <div class="auth-divider">don't have an account?</div>
+      <button class="btn btn-secondary btn-block" id="emailRegisterBtn">Create account</button>
+      <p id="authWorking" style="display:none;font-size:13px;color:var(--muted);text-align:center">Working…</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- Profile sheet (shown after login for new users OR for editing) -->
+<div class="overlay" id="identityOverlay">
+  <div class="sheet">
+    <button class="close" data-close="identityOverlay">✕</button>
+    <h3 id="idTitle">Your profile</h3>
+    <p class="hint" id="idHint">Your name and station are stamped on entries you submit.</p>
+    <div>
+      <label class="field-label">Signed in as</label>
+      <div class="verified-phone-label" id="verifiedEmailLabel">—</div>
+    </div>
+    <div>
+      <label class="field-label">Name</label>
+      <input id="idName" placeholder="e.g. Ramesh Kumar">
+    </div>
+    <div>
+      <label class="field-label">Station (optional)</label>
+      <input id="idStation" placeholder="e.g. BGM, DVG, Anantapur">
+    </div>
+    <div>
+      <label class="field-label">Mobile (optional)</label>
+      <input id="idPhone" inputmode="numeric" placeholder="e.g. 9876543210">
+    </div>
+    <button class="btn btn-primary btn-block" id="idSaveBtn">Save</button>
+    <div id="pendingNotice" class="pending-notice" style="display:none">
+      ⏳ Your account is pending admin approval. You can view coach positions but cannot add or edit until an admin approves you.
+    </div>
+    <button class="btn btn-secondary btn-block" id="adminPanelBtn" style="display:none">⚙ Manage user approvals</button>
+    <div class="sign-out-row">
+      <span>Switch account or sign out?</span>
+      <button class="btn btn-danger" id="signOutBtn">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<!-- Submit sheet -->
+<div class="overlay" id="submitOverlay">
+  <div class="sheet">
+    <button class="close" data-close="submitOverlay">✕</button>
+    <h3>Add / update coach position</h3>
+    <div>
+      <label class="field-label">Train number</label>
+      <input class="train-no" id="sTrainNo" inputmode="numeric" maxlength="5">
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label class="field-label">Train name (optional)</label>
+        <input id="sTrainName" placeholder="e.g. BGM-MYS EXPRESS">
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:1">
+        <label class="field-label">From station</label>
+        <input id="sFromStation" placeholder="e.g. SBC" autocomplete="off">
+      </div>
+      <div style="flex:1">
+        <label class="field-label">To station</label>
+        <input id="sToStation" placeholder="e.g. DWR" autocomplete="off">
+      </div>
+    </div>
+    <div>
+      <label class="field-label">Date</label>
+      <input type="date" id="sDate">
+    </div>
+    <!-- Copy from previous formation hint -->
+    <div class="copy-box" id="sCopyBox">
+      <div class="copy-box-label">📋 PREVIOUS FORMATION FOUND — <span id="sCopyDate"></span></div>
+      <div class="strip-wrap"><div class="strip" id="sCopyStrip" style="min-height:44px"></div></div>
+      <button type="button" class="btn btn-ghost btn-block" id="sCopyBtn">Copy this formation into form</button>
+    </div>
+
+    <div>
+      <label class="field-label">Coach list (from engine end)</label>
+      <textarea id="sList" rows="2" placeholder="ENG,LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
+      <p class="hint">Comma-separate. Use count prefix for repeats (2GEN) and dash for ranges (S1-S7). <button class="legend-link" id="legendLink">See standard codes →</button></p>
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+        <label class="field-label" style="margin:0">Preview <span style="font-size:11px;color:var(--muted)">(tap chip to edit)</span></label>
+        <button type="button" class="tool-btn" id="sReverseBtn">⇅ Reverse</button>
+      </div>
+      <div class="strip-wrap"><div class="strip preview-strip" id="sPreview"></div></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="sSaveBtn">Save</button>
+  </div>
+</div>
+
+<!-- Legend sheet -->
+<div class="overlay" id="legendOverlay">
+  <div class="sheet">
+    <button class="close" data-close="legendOverlay">✕</button>
+    <h3>Standard coach codes</h3>
+    <div class="legend-grid">
+      <div class="chip eng"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">ENG</div>   <div>Engine / locomotive</div>
+      <div class="chip sl"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">S1–S12</div> <div>Sleeper Class (SL)</div>
+      <div class="chip gen"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">GEN/GS</div> <div>General / Unreserved (UR)</div>
+      <div class="chip ac3"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">B1–B12</div> <div>AC 3-Tier Sleeper (3A)</div>
+      <div class="chip ac3e" style="font-size:11px;padding:2px 8px;width:auto;min-width:0">BE1</div>    <div>AC 3-Tier Economy (3E)</div>
+      <div class="chip ac2"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">A1–A4</div>  <div>AC 2-Tier Sleeper (2A)</div>
+      <div class="chip ac1"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">H1/HA1</div> <div>First AC / Composite (1A)</div>
+      <div class="chip cc"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">C1–C14</div> <div>AC Chair Car (CC)</div>
+      <div class="chip ec"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">E1/E2</div>  <div>Executive Chair Car (EC)</div>
+      <div class="chip d2s"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">D1–D9</div>  <div>Second Sitting Non-AC (2S)</div>
+      <div class="chip pc"   style="font-size:11px;padding:2px 8px;width:auto;min-width:0">PC</div>     <div>Pantry Car</div>
+      <div class="chip pwr"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">LPR/EOG</div><div>Luggage / Power Van</div>
+      <div class="chip end"  style="font-size:11px;padding:2px 8px;width:auto;min-width:0">SLRD</div>   <div>Guard cum Divyangjan (SLRD)</div>
+    </div>
+    <p class="hint">Type in this order, from the engine end, the same way your station already writes it down — just keep the codes standard so everyone reads the same shorthand.</p>
+  </div>
+</div>
+
+<!-- Admin overlay -->
+<div class="overlay" id="adminOverlay">
+  <div class="sheet">
+    <button class="close" data-close="adminOverlay">✕</button>
+    <h3>User approvals</h3>
+    <p class="hint">Approve or reject pending railway staff accounts. Only approved staff can add or edit coach positions.</p>
+    <div id="adminUsersList"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+// ─── Firebase init ───────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyBncalmdFaWM2dB7uT8fxWFddICkDgqtY8",
+  authDomain: "coachposition.firebaseapp.com",
+  projectId: "coachposition",
+  storageBucket: "coachposition.firebasestorage.app",
+  messagingSenderId: "981014228335",
+  appId: "1:981014228335:web:c638a306bc8e9ef64a8c9a"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+// FCM messaging (graceful fallback when unsupported or blocked)
+let messaging = null;
+try {
+  if (firebase.messaging.isSupported()) messaging = firebase.messaging();
+} catch (_) {}
+
+// VAPID key — get from Firebase Console → Project Settings → Cloud Messaging → Web push certificates
+const VAPID_KEY = '_7G4M7pdJr4jKCjR5w4MayzptitOquLy7oTG1hhm4bU';
+
+db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+// ─── App state ────────────────────────────────────────────────────────────────
+let currentUser = null;
+let activeTab = 'all';
+
+
+// ─── Firestore storage ────────────────────────────────────────────────────────
+async function getTrainRecord(key) {
+  try {
+    const snap = await db.collection('trains').doc(key).get();
+    return snap.exists ? snap.data() : null;
+  } catch (e) {
+    // Fallback: local cache
+    const raw = localStorage.getItem('cp_trains');
+    const store = raw ? JSON.parse(raw) : {};
+    return store[key] || null;
+  }
+}
+
+async function saveTrainRecord(key, data) {
+  await db.collection('trains').doc(key).set(data);
+  // Keep a local cache for offline lookups
+  const raw = localStorage.getItem('cp_trains');
+  const store = raw ? JSON.parse(raw) : {};
+  store[key] = data;
+  localStorage.setItem('cp_trains', JSON.stringify(store));
+}
+
+async function getAllTrains(filterStr) {
+  try {
+    const snap = await db.collection('trains')
+      .orderBy('updatedAt', 'desc')
+      .limit(400)
+      .get();
+    const all = snap.docs.map(d => d.data());
+
+    // Deduplicate: one entry per trainNo — prefer today's, else most recent
+    const today = todayStr();
+    const seen = new Set();
+    const deduped = [];
+    all.forEach(d => { if (d.date === today && !seen.has(d.trainNo)) { seen.add(d.trainNo); deduped.push(d); } });
+    all.forEach(d => { if (!seen.has(d.trainNo)) { seen.add(d.trainNo); deduped.push(d); } });
+
+    if (!filterStr) return deduped;
+    const f = filterStr.toLowerCase();
+    return deduped.filter(d =>
+      d.trainNo.toLowerCase().includes(f) || (d.trainName || '').toLowerCase().includes(f)
+    );
+  } catch (e) {
+    // Fallback to local cache
+    const raw = localStorage.getItem('cp_trains');
+    const store = raw ? JSON.parse(raw) : {};
+    const all = Object.values(store).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    if (!filterStr) return all;
+    const f = filterStr.toLowerCase();
+    return all.filter(d =>
+      d.trainNo.toLowerCase().includes(f) || (d.trainName || '').toLowerCase().includes(f)
+    );
+  }
+}
+
+// Migrate existing localStorage data to Firestore (one-time, on first login)
+async function migrateLocalIfNeeded() {
+  const migrated = localStorage.getItem('cp_migrated');
+  if (migrated) return;
+  const raw = localStorage.getItem('cp_trains');
+  if (!raw) { localStorage.setItem('cp_migrated', '1'); return; }
+  const store = JSON.parse(raw);
+  const keys = Object.keys(store);
+  if (keys.length === 0) { localStorage.setItem('cp_migrated', '1'); return; }
+  toast(`Syncing ${keys.length} local record${keys.length > 1 ? 's' : ''} to cloud…`);
+  try {
+    const batch = db.batch();
+    keys.forEach(key => {
+      batch.set(db.collection('trains').doc(key), store[key], { merge: true });
+    });
+    await batch.commit();
+    localStorage.setItem('cp_migrated', '1');
+    toast('Local data synced to cloud');
+  } catch (e) {
+    // Silent fail — will retry next login
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+
+function showOverlay(id) {
+  const ov = $(id);
+  ov.classList.add('show');
+  requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add('open')));
+}
+function hideOverlay(id) {
+  const ov = $(id);
+  ov.classList.remove('open');
+  setTimeout(() => ov.classList.remove('show'), 220);
+}
+document.querySelectorAll('[data-close]').forEach(b => {
+  b.addEventListener('click', () => hideOverlay(b.dataset.close));
+});
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatDateOnly(iso) {
+  const [y, m, dd] = iso.split('-');
+  return `${parseInt(dd,10)} ${MONTHS[parseInt(m,10)-1]} ${y}`;
+}
+function formatTime(date) {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+function formatDateTime(date) {
+  return `${parseInt(date.getDate(),10)} ${MONTHS[date.getMonth()]} ${date.getFullYear()} ${formatTime(date)}`;
+}
+
+// ─── Coach parser + renderer ─────────────────────────────────────────────────
+function parseCompressed(input) {
+  const tokens = (input || '').split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  const out = [];
+  for (const tok of tokens) {
+    let m = tok.match(/^(\d+)([A-Z]+\d*)$/);
+    if (m) { for (let i = 0; i < parseInt(m[1], 10); i++) out.push(m[2]); continue; }
+    m = tok.match(/^([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)$/);
+    if (m) {
+      const prefix = m[1];
+      let s = parseInt(m[2], 10), e = parseInt(m[3], 10);
+      if (s <= e) { for (let i = s; i <= e; i++) out.push(prefix + i); }
+      else { for (let i = s; i >= e; i--) out.push(prefix + i); }
+      continue;
+    }
+    out.push(tok);
+  }
+  return out;
+}
+
+function classOf(code) {
+  if (code === 'ENG') return 'eng';
+  if (['LPR', 'VP', 'PWR', 'EOG', 'HOG'].includes(code)) return 'pwr';
+  if (/^(GEN|GS|UR)$/.test(code)) return 'gen';
+  // AC classes — order matters (most specific first)
+  if (/^(BE\d*|3E)$/.test(code)) return 'ac3e';        // 3AC Economy
+  if (/^(B\d*|3A)$/.test(code)) return 'ac3';           // 3AC sleeper
+  if (/^(A\d*|2A)$/.test(code)) return 'ac2';           // 2AC sleeper
+  if (/^(H\d+|HA\d*|1A|M\d*)$/.test(code)) return 'ac1'; // 1AC / composite
+  if (/^(E\d*|EC)$/.test(code)) return 'ec';            // Executive Chair Car
+  if (/^(C\d*|CC)$/.test(code)) return 'cc';            // AC Chair Car
+  if (/^(D\d*|2S)$/.test(code)) return 'd2s';           // 2nd Sitting / D-class
+  if (code === 'PC') return 'pc';
+  if (/^(S\d+|SL)$/.test(code)) return 'sl';            // Sleeper
+  if (/^(SLR|SLRD|LSLR|LSLRD)\d*$/.test(code)) return 'end';
+  return 'unk';
+}
+
+function renderStrip(container, codes, onChipClick) {
+  container.innerHTML = '';
+  // If formation doesn't start with ENG, show a ghost ENG chip indicating engine direction
+  if (codes.length && codes[0].toUpperCase() !== 'ENG') {
+    const ghost = document.createElement('div');
+    ghost.className = 'chip eng eng-ghost';
+    ghost.title = 'Engine end';
+    const ghostLabel = document.createElement('div');
+    ghostLabel.className = 'chip-code';
+    ghostLabel.textContent = 'ENG';
+    ghost.appendChild(ghostLabel);
+    container.appendChild(ghost);
+  }
+  codes.forEach((code, i) => {
+    const chip = document.createElement('div');
+    chip.className = `chip ${classOf(code)}`;
+    if (onChipClick) chip.style.cursor = 'pointer';
+    const idx = document.createElement('div');
+    idx.className = 'chip-index';
+    idx.textContent = i + 1;
+    const label = document.createElement('div');
+    label.className = 'chip-code';
+    label.textContent = code;
+    chip.appendChild(idx);
+    chip.appendChild(label);
+    if (onChipClick) chip.addEventListener('click', () => onChipClick(i, codes));
+    container.appendChild(chip);
+  });
+}
+
+function showChipEditDialog(index, codes, onSave) {
+  const currentCode = codes[index];
+  const overlay = document.createElement('div');
+  overlay.className = 'chip-edit-overlay';
+  overlay.innerHTML = `
+    <div class="chip-edit-box">
+      <h3>Coach #${index + 1} — ${currentCode}</h3>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);font-weight:600">EDIT THIS COACH</div>
+      <input id="_chipInput" type="text" value="${currentCode}" maxlength="8" autocomplete="off" spellcheck="false" placeholder="e.g. S1, GEN, A1">
+      <div class="btn-row">
+        <button class="btn btn-danger" id="_chipDel">Remove</button>
+        <button class="btn btn-primary" style="flex:1" id="_chipSave">Save</button>
+      </div>
+      <div style="border-top:1px solid var(--line);padding-top:4px;margin-top:2px"></div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);font-weight:600">INSERT NEW COACH</div>
+      <input id="_chipInsert" type="text" maxlength="8" autocomplete="off" spellcheck="false" placeholder="e.g. GEN, S1, A1">
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="_chipInsBefore">↑ Before #${index + 1}</button>
+        <button class="btn btn-secondary" id="_chipInsAfter">↓ After #${index + 1}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const editInput = overlay.querySelector('#_chipInput');
+  const insInput = overlay.querySelector('#_chipInsert');
+  editInput.focus(); editInput.select();
+
+  const close = () => overlay.remove();
+
+  overlay.querySelector('#_chipSave').addEventListener('click', () => {
+    const val = editInput.value.trim().toUpperCase();
+    if (!val) return;
+    const next = [...codes]; next[index] = val;
+    close(); onSave(next);
+  });
+  overlay.querySelector('#_chipDel').addEventListener('click', () => {
+    const next = [...codes]; next.splice(index, 1);
+    close(); onSave(next);
+  });
+  overlay.querySelector('#_chipInsBefore').addEventListener('click', () => {
+    const val = insInput.value.trim().toUpperCase();
+    if (!val) { insInput.focus(); return; }
+    const next = [...codes]; next.splice(index, 0, val);
+    close(); onSave(next);
+  });
+  overlay.querySelector('#_chipInsAfter').addEventListener('click', () => {
+    const val = insInput.value.trim().toUpperCase();
+    if (!val) { insInput.focus(); return; }
+    const next = [...codes]; next.splice(index + 1, 0, val);
+    close(); onSave(next);
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  editInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') overlay.querySelector('#_chipSave').click();
+    if (e.key === 'Escape') close();
+  });
+  insInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') close();
+  });
+}
+
+function renderPreview() {
+  const codes = parseCompressed($('sList').value);
+  renderStrip($('sPreview'), codes, (i, allCodes) => {
+    showChipEditDialog(i, allCodes, (newCodes) => {
+      $('sList').value = newCodes.join(',');
+      renderPreview();
+    });
+  });
+}
+
+// ─── Favourites ───────────────────────────────────────────────────────────────
+function getFavourites() {
+  try { return JSON.parse(localStorage.getItem('cp_favs') || '[]'); } catch { return []; }
+}
+function toggleFavourite(trainNo) {
+  let favs = getFavourites();
+  const isFav = favs.includes(trainNo);
+  if (isFav) { favs = favs.filter(f => f !== trainNo); }
+  else { favs.unshift(trainNo); }
+  localStorage.setItem('cp_favs', JSON.stringify(favs));
+  return !isFav;
+}
+
+// ─── Identity / auth helpers ──────────────────────────────────────────────────
+function getIdentity() {
+  if (!currentUser || currentUser.role === 'guest') return null;
+  return { name: currentUser.name, email: currentUser.email, phone: currentUser.phone, station: currentUser.station || '', uid: currentUser.uid };
+}
+
+function canEdit() {
+  return currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin');
+}
+
+function requireStaff() {
+  if (!currentUser || currentUser.role === 'guest') {
+    toast('Sign in as railway staff to contribute');
+    showOverlay('authOverlay');
+    return false;
+  }
+  if (currentUser.role === 'pending') {
+    toast('Your account is pending admin approval');
+    return false;
+  }
+  return true;
+}
+
+function updateMeLabel() {
+  if (!currentUser) {
+    $('meLabel').textContent = '…';
+  } else if (currentUser.role === 'guest') {
+    $('meLabel').textContent = 'Staff Login';
+  } else if (currentUser.role === 'pending') {
+    $('meLabel').textContent = '⏳ Pending';
+  } else {
+    $('meLabel').textContent = currentUser.name ? currentUser.name.split(' ')[0] : 'Set name';
+  }
+}
+
+function updateFabVisibility() {
+  $('fabAdd').style.display = canEdit() ? 'flex' : 'none';
+}
+
+$('meBtn').addEventListener('click', () => {
+  if (!currentUser || currentUser.role === 'guest') {
+    showAuthScreen('choice');
+    showOverlay('authOverlay');
+  } else {
+    $('idTitle').textContent = 'Your profile';
+    $('idHint').textContent = currentUser.role === 'pending'
+      ? 'Complete your profile. An admin will approve your account.'
+      : 'Your name and station are stamped on entries you submit.';
+    $('verifiedEmailLabel').textContent = currentUser.email || (auth.currentUser && auth.currentUser.email) || '—';
+    $('idName').value = currentUser.name || '';
+    $('idStation').value = currentUser.station || '';
+    $('idPhone').value = currentUser.phone || '';
+    $('pendingNotice').style.display = currentUser.role === 'pending' ? 'block' : 'none';
+    $('adminPanelBtn').style.display = currentUser.role === 'admin' ? 'flex' : 'none';
+    showOverlay('identityOverlay');
+  }
+});
+
+// ─── Profile save (identity overlay) ─────────────────────────────────────────
+$('idSaveBtn').addEventListener('click', async () => {
+  const name = $('idName').value.trim();
+  const station = $('idStation').value.trim();
+  if (!name) { toast('Please enter your name'); return; }
+  const uid = auth.currentUser ? auth.currentUser.uid : null;
+  if (!uid) { toast('Not signed in'); return; }
+  const profile = {
+    uid,
+    name,
+    station,
+    phone: $('idPhone').value.trim().replace(/\D/g, '').slice(-10),
+    email: currentUser.email || (auth.currentUser && auth.currentUser.email) || '',
+    role: currentUser.role || 'staff',
+    updatedAt: Date.now()
+  };
+  try {
+    await db.collection('users').doc(uid).set(profile, { merge: true });
+    currentUser = { ...currentUser, ...profile };
+    updateMeLabel();
+    hideOverlay('identityOverlay');
+    toast('Profile saved');
+  } catch (e) {
+    toast('Could not save profile — try again');
+  }
+});
+
+$('signOutBtn').addEventListener('click', async () => {
+  await auth.signOut();
+  currentUser = { role: 'guest' };
+  updateMeLabel();
+  updateFabVisibility();
+  hideOverlay('identityOverlay');
+  renderTrainsList();
+});
+
+// ─── Admin panel ─────────────────────────────────────────────────────────────
+async function loadAdminPanel() {
+  const listEl = $('adminUsersList');
+  listEl.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading…</div>';
+  try {
+    const snap = await db.collection('users').where('role', '==', 'pending').get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">No pending approvals ✓</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.docs.forEach(doc => {
+      const u = doc.data();
+      const card = document.createElement('div');
+      card.className = 'user-card';
+      card.innerHTML = `
+        <div class="u-name">${u.name || '(no name set)'}</div>
+        <div class="u-meta">${u.email || '—'} · Station: ${u.station || '—'}</div>
+        ${u.phone ? `<div class="u-meta">📱 ${u.phone}</div>` : ''}
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn-danger" data-uid="${u.uid}" data-action="reject">Reject</button>
+          <button class="btn btn-primary" style="flex:1" data-uid="${u.uid}" data-action="approve">✓ Approve</button>
+        </div>
+      `;
+      card.querySelectorAll('button[data-uid]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          const isApprove = btn.dataset.action === 'approve';
+          const newRole = isApprove ? 'staff' : 'rejected';
+          await db.collection('users').doc(btn.dataset.uid).update({ role: newRole });
+          toast(isApprove ? 'User approved ✓' : 'User rejected');
+          // Send push notification to approved user if they have an FCM token
+          if (isApprove && u.fcmToken) {
+            sendPush(u.fcmToken, '✅ Account Approved', 'You can now add and edit coach positions. Welcome!');
+          }
+          loadAdminPanel();
+        });
+      });
+      listEl.appendChild(card);
+    });
+  } catch (e) {
+    listEl.innerHTML = '<div style="color:var(--red);font-size:13px">Failed to load — check Firestore rules</div>';
+  }
+}
+
+$('adminPanelBtn').addEventListener('click', () => {
+  hideOverlay('identityOverlay');
+  showOverlay('adminOverlay');
+  loadAdminPanel();
+});
+
+// ─── Email / password auth ────────────────────────────────────────────────────
+function showAuthScreen(name) {
+  document.querySelectorAll('.auth-screen').forEach(el => el.classList.remove('active'));
+  $('authScreen' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+function setAuthWorking(on) {
+  $('authWorking').style.display = on ? 'block' : 'none';
+  $('emailSignInBtn').disabled = on;
+  $('emailRegisterBtn').disabled = on;
+}
+
+$('staffLoginBtn').addEventListener('click', () => showAuthScreen('email'));
+$('backToChoiceBtn').addEventListener('click', () => showAuthScreen('choice'));
+
+$('guestBtn').addEventListener('click', () => {
+  localStorage.setItem('cp_guest', '1');
+  currentUser = { role: 'guest' };
+  updateMeLabel();
+  hideOverlay('authOverlay');
+  renderTrainsList();
+});
+
+$('emailSignInBtn').addEventListener('click', async () => {
+  const email = $('authEmailInput').value.trim();
+  const password = $('authPasswordInput').value;
+  if (!email || !password) { toast('Enter email and password'); return; }
+  setAuthWorking(true);
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+    hideOverlay('authOverlay');
+  } catch (e) {
+    console.error('Sign in error:', e.code, e.message);
+    const msg = e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'
+              ? 'Wrong email or password'
+              : e.code === 'auth/too-many-requests' ? 'Too many attempts — try later'
+              : e.code === 'auth/invalid-email' ? 'Invalid email address'
+              : `Sign in failed (${e.code || 'unknown'})`;
+    toast(msg);
+  }
+  setAuthWorking(false);
+});
+
+$('emailRegisterBtn').addEventListener('click', async () => {
+  const email = $('authEmailInput').value.trim();
+  const password = $('authPasswordInput').value;
+  if (!email || !password) { toast('Enter email and password'); return; }
+  if (password.length < 6) { toast('Password must be at least 6 characters'); return; }
+  setAuthWorking(true);
+  try {
+    await auth.createUserWithEmailAndPassword(email, password);
+    hideOverlay('authOverlay');
+  } catch (e) {
+    console.error('Register error:', e.code, e.message);
+    const msg = e.code === 'auth/email-already-in-use' ? 'An account with this email already exists — sign in instead'
+              : e.code === 'auth/weak-password' ? 'Password too weak — use at least 6 characters'
+              : e.code === 'auth/invalid-email' ? 'Invalid email address'
+              : `Could not create account (${e.code || 'unknown'})`;
+    toast(msg);
+  }
+  setAuthWorking(false);
+});
+
+// ─── Share capture helper ─────────────────────────────────────────────────────
+function populateShareCapture(d) {
+  $('rTrainNo').textContent = d.trainNo;
+  $('rTrainName').textContent = d.trainName || '';
+  $('rDate').textContent = formatDateOnly(d.date);
+  const fromTo = (d.fromStation && d.toStation)
+    ? `${d.fromStation} → ${d.toStation}`
+    : d.fromStation || d.toStation || '';
+  $('rRoute').textContent = fromTo;
+  renderStrip($('rStrip'), d.parsedList || []);
+  const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
+  const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
+  $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
+  $('rWhen').textContent = `${formatDateTime(new Date(d.updatedAt))} · update #${d.updateCount || 1}`;
+  const clEl = $('rConfirmLine');
+  const confirmList = d.confirmations || [];
+  if (!confirmList.length) { clEl.style.display = 'none'; clEl.innerHTML = ''; return; }
+  clEl.style.display = 'flex';
+  const latest = confirmList[confirmList.length - 1];
+  const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
+  clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+}
+
+// ─── Push notifications ───────────────────────────────────────────────────────
+async function initPushNotifications() {
+  if (!messaging || !currentUser || !currentUser.uid) return;
+  if (currentUser.role !== 'staff' && currentUser.role !== 'admin') return;
+  if (!('Notification' in window)) return;
+
+  // Don't re-prompt if already denied
+  if (Notification.permission === 'denied') return;
+
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+  if (permission !== 'granted') return;
+
+  try {
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+    if (token) {
+      await db.collection('users').doc(currentUser.uid).update({ fcmToken: token });
+    }
+  } catch (e) {
+    // Token fetch can fail on localhost or when VAPID_KEY is a placeholder — silent
+  }
+}
+
+// Called after approval/formation events; calls the Netlify Function
+async function sendPush(token, title, body) {
+  if (!token || token === '') return;
+  try {
+    await fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, title, body }),
+    });
+  } catch (_) {} // non-critical — never block the UI
+}
+
+// ─── Stale badge ──────────────────────────────────────────────────────────────
+function staleBadge(isoDate) {
+  const today = todayStr();
+  if (isoDate >= today) return '';
+  const days = Math.round((new Date(today) - new Date(isoDate)) / 86400000);
+  if (days < 2) return '';
+  const cls = days <= 3 ? 'mild' : 'old';
+  const label = `${days} days old`;
+  return `<span class="stale-badge ${cls}">⚠ ${label}</span>`;
+}
+
+// ─── Train history (last N days) ─────────────────────────────────────────────
+async function getTrainHistory(trainNo, days = 7) {
+  const dates = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+  const records = await Promise.all(dates.map(dt => getTrainRecord(`${trainNo}_${dt}`).catch(() => null)));
+  return records.filter(Boolean); // newest first
+}
+
+// ─── Get most recent past formation (for copy hint) ──────────────────────────
+async function getMostRecentFormation(trainNo) {
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dt = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const rec = await getTrainRecord(`${trainNo}_${dt}`).catch(() => null);
+    if (rec) return rec;
+  }
+  return null;
+}
+
+// ─── Trains list ──────────────────────────────────────────────────────────────
+async function renderTrainsList() {
+  const filter = ($('listSearch').value || '').trim();
+  let list = await getAllTrains(filter);
+
+  if (activeTab === 'fav') {
+    const favs = getFavourites();
+    list = list.filter(d => favs.includes(d.trainNo));
+  }
+
+  const favs = getFavourites();
+  const wrap = $('trainsList');
+  $('listCount').textContent = `${list.length} train${list.length !== 1 ? 's' : ''}`;
+  wrap.innerHTML = '';
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="trains-empty">${
+      filter ? `No match for "${filter}"` :
+      activeTab === 'fav' ? 'No favourites yet — tap ☆ to add' :
+      'No trains saved yet'
+    }</div>`;
+    return;
+  }
+
+  list.forEach(initialData => {
+    let cur = initialData; // closure: tracks currently displayed date's data
+    const isFav = favs.includes(cur.trainNo);
+    const fromTo = (cur.fromStation && cur.toStation)
+      ? `${cur.fromStation} → ${cur.toStation}`
+      : cur.fromStation || cur.toStation || '';
+
+    const item = document.createElement('div');
+    item.className = 'train-item';
+    item.innerHTML = `
+      <div class="train-item-head">
+        <button class="star-btn${isFav ? ' starred' : ''}" data-train="${cur.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
+        <div class="tno-badge">${cur.trainNo}</div>
+        <div class="train-item-meta">
+          ${fromTo ? `<div class="ti-route">${fromTo}</div>` : ''}
+          <div class="ti-name">${cur.trainName || '—'}</div>
+        </div>
+        <div class="ti-when">
+          <span class="ti-date">${formatDateOnly(cur.date)}</span><br>
+          <span class="ti-time">${formatTime(new Date(cur.updatedAt))}</span>
+          <span class="ti-stale">${staleBadge(cur.date)}</span>
+        </div>
+        <div class="ti-chev">▾</div>
+      </div>
+      <div class="train-item-body">
+        <div class="date-tabs i-date-tabs"></div>
+        <div class="inline-card">
+          <div class="inline-label">COACH POSITION</div>
+          <div class="inline-head">
+            <div>
+              <div class="inline-tno">${cur.trainNo}</div>
+              ${cur.trainName ? `<div class="inline-name">${cur.trainName}</div>` : ''}
+              ${fromTo ? `<div class="inline-route">${fromTo}</div>` : ''}
+            </div>
+            <div class="inline-date i-date">${formatDateOnly(cur.date)}</div>
+          </div>
+          <div class="strip-wrap"><div class="strip i-strip"></div></div>
+          <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
+          <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
+          <div class="confirm-line i-cl"></div>
+          <div class="btn-row">
+            <button class="btn btn-secondary i-share">⬆ Share</button>
+            ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
+            <button class="btn btn-secondary i-edit">Edit</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    wrap.appendChild(item);
+
+    // Helper: refresh the card body elements from a data record
+    function applyData(rec) {
+      cur = rec;
+      const confirmList = rec.confirmations || [];
+      const stationPart = rec.submittedByStation ? ` · ${rec.submittedByStation}` : '';
+      const idHint = rec.submittedByPhone
+        ? `(${rec.submittedByPhone.slice(-4)})`
+        : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
+
+      renderStrip(item.querySelector('.i-strip'), rec.parsedList || []);
+      item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
+      item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
+      item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
+      item.querySelector('.ti-date').textContent = formatDateOnly(rec.date);
+      item.querySelector('.ti-time').textContent = formatTime(new Date(rec.updatedAt));
+      item.querySelector('.ti-stale').innerHTML = staleBadge(rec.date);
+
+      const clEl = item.querySelector('.i-cl');
+      if (confirmList.length) {
+        const latest = confirmList[confirmList.length - 1];
+        const names = confirmList.length === 1 ? latest.name : `${latest.name} +${confirmList.length - 1} more`;
+        clEl.style.display = 'flex';
+        clEl.innerHTML = `✓ Confirmed by <b>${names}</b> · ${formatDateTime(new Date(latest.at))}`;
+      } else {
+        clEl.style.display = 'none';
+        clEl.innerHTML = '';
+      }
+    }
+
+    // Initial render
+    applyData(cur);
+
+    // Date tabs builder (called once on first expand)
+    async function loadDateTabs() {
+      const history = await getTrainHistory(cur.trainNo, 7);
+      if (history.length <= 1) return;
+      const tabsEl = item.querySelector('.i-date-tabs');
+      tabsEl.innerHTML = '';
+      history.forEach(rec => {
+        const btn = document.createElement('button');
+        btn.className = 'date-tab' + (rec.date === cur.date ? ' active' : '');
+        btn.textContent = formatDateOnly(rec.date) + (rec.date === todayStr() ? ' ●' : '');
+        btn.addEventListener('click', () => {
+          tabsEl.querySelectorAll('.date-tab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          applyData(rec);
+        });
+        tabsEl.appendChild(btn);
+      });
+    }
+
+    // Star button
+    item.querySelector('.star-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isNowFav = toggleFavourite(cur.trainNo);
+      e.currentTarget.textContent = isNowFav ? '★' : '☆';
+      e.currentTarget.classList.toggle('starred', isNowFav);
+      e.currentTarget.setAttribute('aria-label', isNowFav ? 'Remove from favourites' : 'Add to favourites');
+      if (activeTab === 'fav' && !isNowFav) renderTrainsList();
+    });
+
+    // Expand / collapse
+    item.querySelector('.train-item-head').addEventListener('click', (e) => {
+      if (e.target.closest('.star-btn')) return;
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.train-item.open').forEach(el => el.classList.remove('open'));
+      if (!wasOpen) {
+        item.classList.add('open');
+        if (!item.dataset.histLoaded) { item.dataset.histLoaded = '1'; loadDateTabs(); }
+      }
+    });
+
+    // Share
+    item.querySelector('.i-share').addEventListener('click', () => {
+      populateShareCapture(cur);
+      shareAsImage(cur.trainNo, cur.date);
+    });
+
+    if (canEdit()) {
+      // Confirm
+      item.querySelector('.i-confirm').addEventListener('click', async () => {
+        const identity = getIdentity();
+        if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+        const key = `${cur.trainNo}_${cur.date}`;
+        const rec = await getTrainRecord(key);
+        if (!rec) return;
+        const cList = (rec.confirmations || []).filter(c => c.uid !== identity.uid);
+        cList.push({ name: identity.name, uid: identity.uid || '', station: identity.station || '', at: Date.now() });
+        rec.confirmations = cList;
+        await saveTrainRecord(key, rec);
+        applyData(rec);
+        toast('Marked as confirmed');
+      });
+
+      // Edit
+      item.querySelector('.i-edit').addEventListener('click', () => {
+        openSubmit(cur.trainNo, cur.date, cur.trainName, cur.rawList, cur.fromStation, cur.toStation);
+      });
+    }
+  });
+}
+
+$('tabAll').addEventListener('click', () => {
+  activeTab = 'all';
+  $('tabAll').classList.add('active');
+  $('tabFav').classList.remove('active');
+  $('tabStation').classList.remove('active');
+  $('stationBar').classList.remove('visible');
+  $('listSearch').style.display = '';
+  $('listSearch').placeholder = 'Search train number or name…';
+  renderTrainsList();
+});
+$('tabFav').addEventListener('click', () => {
+  activeTab = 'fav';
+  $('tabFav').classList.add('active');
+  $('tabAll').classList.remove('active');
+  $('tabStation').classList.remove('active');
+  $('stationBar').classList.remove('visible');
+  $('listSearch').style.display = '';
+  $('listSearch').placeholder = 'Search train number or name…';
+  renderTrainsList();
+});
+$('tabStation').addEventListener('click', () => {
+  activeTab = 'station';
+  $('tabStation').classList.add('active');
+  $('tabAll').classList.remove('active');
+  $('tabFav').classList.remove('active');
+  $('stationBar').classList.add('visible');
+  $('listSearch').style.display = 'none';
+  $('listCount').textContent = '';
+  // Pre-fill user's home station
+  const myStation = (currentUser && currentUser.station || '').trim().toUpperCase();
+  if (myStation && !$('stationCodeInput').value) {
+    $('stationCodeInput').value = myStation;
+  }
+  if ($('stationCodeInput').value) renderStationView();
+  else { $('trainsList').innerHTML = '<div class="trains-empty">Enter a station code above and tap Search</div>'; }
+});
+$('listSearch').addEventListener('input', renderTrainsList);
+
+// ─── Station search ───────────────────────────────────────────────────────────
+let _stationCache = {};
+
+$('stationSearchBtn').addEventListener('click', renderStationView);
+$('stationCodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') renderStationView(); });
+
+async function renderStationView() {
+  const code = $('stationCodeInput').value.trim().toUpperCase();
+  if (!code || code.length < 2) {
+    $('trainsList').innerHTML = '<div class="trains-empty">Enter a station code and tap Search</div>';
+    return;
+  }
+
+  if (_stationCache[code]) {
+    renderStationResults(code, _stationCache[code]);
+    return;
+  }
+
+  $('trainsList').innerHTML = '<div class="trains-empty">Loading trains at ' + code + '…</div>';
+  $('listCount').textContent = '';
+
+  try {
+    const res = await fetch(`/.netlify/functions/train-schedule?station=${encodeURIComponent(code)}`);
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${data.error || 'Could not load trains'}</div>`;
+      return;
+    }
+
+    // RapidAPI IRCTC1 returns { status: true, data: [...] }
+    const trains = data.data || data.Trains || data.trains || [];
+    _stationCache[code] = trains;
+    renderStationResults(code, trains);
+  } catch (e) {
+    $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ Network error — check connection</div>`;
+  }
+}
+
+function renderStationResults(code, trains) {
+  if (!trains.length) {
+    $('trainsList').innerHTML = `<div class="trains-empty">No trains found at <b>${code}</b></div>`;
+    $('listCount').textContent = '';
+    return;
+  }
+
+  // Normalise field names: RapidAPI IRCTC1 uses snake_case
+  const norm = trains.map(t => ({
+    no:   t.train_number || t.TrainNo || t.TrainNumber || '—',
+    name: t.train_name  || t.TrainName || '—',
+    dep:  t.from_time   || t.DepartureTime || '—',
+    arr:  t.to_time     || t.ArrivalTime   || '—',
+    days: Array.isArray(t.running_days)
+      ? t.running_days.map(d => d.slice(0,2)).join(' ')
+      : (t.RunsOn ? Object.entries(t.RunsOn).filter(([,v]) => v === 'Y')
+          .map(([d]) => d.slice(0,2)).join(' ') : ''),
+  }));
+
+  // Sort by departure time
+  norm.sort((a, b) => (a.dep || '99:99').localeCompare(b.dep || '99:99'));
+
+  $('listCount').textContent = `${norm.length} trains · ${code}`;
+
+  $('trainsList').innerHTML = norm.map(t => {
+    const showArr = t.arr && t.arr !== t.dep && t.arr !== '—';
+    return `<div class="st-train">
+      <div>
+        <div class="st-train-no">${t.no}</div>
+        <div class="st-train-name">${t.name}</div>
+        ${t.days ? `<div class="st-days">${t.days}</div>` : ''}
+      </div>
+      <div class="st-timing">
+        <div class="st-dep">${t.dep}</div>
+        ${showArr ? `<div class="st-arr">arr ${t.arr}</div>` : ''}
+        <div class="st-label">${showArr ? 'dep / arr' : 'dep'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Share as image ───────────────────────────────────────────────────────────
+async function shareAsImage(trainNo, date) {
+  if (typeof html2canvas !== 'function') { toast('Image tool still loading — try again in a moment'); return; }
+  const node = $('shareCapture');
+  const genEl = $('shareGenAt');
+  const brandEl = $('shareFooterBrand');
+  genEl.textContent = `Generated ${formatDateTime(new Date())}`;
+  genEl.style.display = 'block';
+  brandEl.textContent = `Train ${trainNo} · coachformation.netlify.app`;
+  try {
+    const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
+    genEl.style.display = 'none';
+    brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const fileName = `train-${trainNo}-${date}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: `Train ${trainNo} coach position`,
+          text: `Train ${trainNo} coach position — check more trains:\nhttps://coachformation.netlify.app`
+        }).catch(() => {});
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
+      toast('Image saved — share it from your gallery');
+    });
+  } catch (e) {
+    genEl.style.display = 'none';
+    brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
+    toast("Couldn't create image");
+  }
+}
+
+// ─── Submit sheet ─────────────────────────────────────────────────────────────
+function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
+  if (!requireStaff()) return;
+  $('sTrainNo').value = trainNo || '';
+  $('sTrainName').value = trainName || '';
+  $('sDate').value = date || todayStr();
+  $('sFromStation').value = fromStation || '';
+  $('sToStation').value = toStation || '';
+  $('sList').value = rawList || 'ENG';
+  renderPreview();
+  showOverlay('submitOverlay');
+}
+$('fabAdd').addEventListener('click', () => openSubmit());
+$('sList').addEventListener('input', renderPreview);
+
+// Copy-from-previous: auto-lookup when train number is typed
+let _copyLookupTimer;
+$('sTrainNo').addEventListener('input', () => {
+  clearTimeout(_copyLookupTimer);
+  const copyBox = $('sCopyBox');
+  copyBox.classList.remove('show');
+  _copyLookupTimer = setTimeout(async () => {
+    const trainNo = $('sTrainNo').value.trim();
+    if (trainNo.length < 4) return;
+    // Only show copy hint when coach list is at default (new entry, not edit)
+    const listVal = $('sList').value.trim();
+    if (listVal && listVal !== 'ENG') return;
+    const rec = await getMostRecentFormation(trainNo);
+    if (!rec) return;
+    $('sCopyDate').textContent = formatDateOnly(rec.date);
+    renderStrip($('sCopyStrip'), rec.parsedList || []);
+    copyBox.classList.add('show');
+    $('sCopyBtn').onclick = () => {
+      if (!$('sTrainName').value) $('sTrainName').value = rec.trainName || '';
+      if (!$('sFromStation').value) $('sFromStation').value = rec.fromStation || '';
+      if (!$('sToStation').value) $('sToStation').value = rec.toStation || '';
+      $('sList').value = rec.rawList;
+      renderPreview();
+      copyBox.classList.remove('show');
+      toast('Formation copied — update as needed');
+    };
+  }, 600);
+});
+$('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
+$('sReverseBtn').addEventListener('click', () => {
+  const codes = parseCompressed($('sList').value);
+  if (!codes.length) return;
+  const isEng = codes[0].toUpperCase() === 'ENG';
+  const result = isEng
+    ? [codes[0], ...codes.slice(1).reverse()]
+    : codes.reverse();
+  $('sList').value = result.join(',');
+  renderPreview();
+});
+
+$('sSaveBtn').addEventListener('click', async () => {
+  if (!requireStaff()) return;
+  const identity = getIdentity();
+  const trainNo = $('sTrainNo').value.trim();
+  const trainName = $('sTrainName').value.trim();
+  const date = $('sDate').value || todayStr();
+  const rawList = $('sList').value.trim();
+  const fromStation = $('sFromStation').value.trim().toUpperCase();
+  const toStation = $('sToStation').value.trim().toUpperCase();
+  if (!trainNo || !rawList) { toast('Train number and coach list required'); return; }
+  const parsedList = parseCompressed(rawList);
+  const key = `${trainNo}_${date}`;
+  const existing = await getTrainRecord(key);
+
+  await saveTrainRecord(key, {
+    trainNo, trainName, date, rawList, parsedList,
+    fromStation, toStation,
+    submittedByName: identity.name,
+    submittedByEmail: identity.email || '',
+    submittedByPhone: identity.phone || '',
+    submittedByStation: identity.station || '',
+    submittedByUID: identity.uid || '',
+    updatedAt: Date.now(),
+    updateCount: (existing && existing.updateCount ? existing.updateCount : 0) + 1,
+    confirmations: []
+  });
+  hideOverlay('submitOverlay');
+  toast('Saved');
+  renderTrainsList();
+});
+
+// ─── Firebase Auth state ──────────────────────────────────────────────────────
+auth.onAuthStateChanged(async (firebaseUser) => {
+  if (firebaseUser) {
+    // Signed in — load profile
+    const email = firebaseUser.email || '';
+    try {
+      const profileSnap = await db.collection('users').doc(firebaseUser.uid).get();
+      if (profileSnap.exists) {
+        currentUser = profileSnap.data();
+      } else {
+        // New user — save a skeleton profile + show profile setup
+        currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
+        $('idTitle').textContent = 'Almost done — set your name';
+        $('idHint').textContent = 'Fill in your details. An admin will approve your account before you can add or edit positions.';
+        $('verifiedEmailLabel').textContent = email;
+        $('idName').value = '';
+        $('idStation').value = '';
+        $('idPhone').value = '';
+        showOverlay('identityOverlay');
+      }
+    } catch (e) {
+      currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
+    }
+    migrateLocalIfNeeded();
+  } else {
+    // Default to guest — user can tap "Staff Login" in the header to sign in
+    currentUser = { role: 'guest' };
+  }
+  updateMeLabel();
+  updateFabVisibility();
+  renderTrainsList();
+  // Request push permission once user is confirmed staff/admin
+  if (currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin')) {
+    setTimeout(initPushNotifications, 2000); // slight delay so UI settles first
+  }
+});
+
+// Foreground push messages (app is open — show as toast)
+if (messaging) {
+  messaging.onMessage((payload) => {
+    const notif = payload.notification || {};
+    toast(`${notif.title || ''}${notif.body ? ' — ' + notif.body : ''}`);
+  });
+}
+
+// ─── Offline indicator ────────────────────────────────────────────────────────
+function updateOfflineBanner() {
+  $('offlineBanner').classList.toggle('show', !navigator.onLine);
+}
+window.addEventListener('online', updateOfflineBanner);
+window.addEventListener('offline', updateOfflineBanner);
+updateOfflineBanner();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// Show disclaimer once per session
+(function() {
+  if (!sessionStorage.getItem('disc_ok')) {
+    const modal = $('disclaimerModal');
+    modal.style.display = 'flex';
+    $('disclaimerOk').addEventListener('click', () => {
+      modal.style.display = 'none';
+      sessionStorage.setItem('disc_ok', '1');
+    });
+  }
+})();
+</script>
+</body>
+</html>
