@@ -83,6 +83,13 @@
   }
   .tab.active{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
   .list-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .erail-link{
+    display:inline-flex;align-items:center;gap:4px;
+    background:transparent;border:1.5px solid var(--teal);border-radius:999px;
+    color:var(--teal);font-size:12px;font-weight:600;padding:4px 11px;
+    cursor:pointer;text-decoration:none;transition:all .15s ease;flex-shrink:0;
+  }
+  .erail-link:active{opacity:.7;}
   .trains-empty{text-align:center;color:var(--muted);font-size:13px;padding:40px 0;}
   input,textarea{
     width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
@@ -326,6 +333,7 @@
       <button class="tab active" id="tabAll">All</button>
       <button class="tab" id="tabFav">★ Favourites</button>
       <span class="list-count" id="listCount"></span>
+      <a id="erailStationBtn" class="erail-link" target="_blank" rel="noopener" href="https://erail.in/" title="See all trains at your station on eRail.in">🚉 eRail</a>
     </div>
   </div>
 
@@ -840,6 +848,16 @@ function requireStaff() {
 }
 
 function updateMeLabel() {
+  const stCode = (currentUser && currentUser.station || '').trim().toUpperCase();
+  const erailBtn = $('erailStationBtn');
+  if (stCode) {
+    erailBtn.href = `https://erail.in/station/${stCode}/`;
+    erailBtn.title = `Trains at ${stCode} on eRail.in`;
+  } else {
+    erailBtn.href = 'https://erail.in/';
+    erailBtn.title = 'See trains on eRail.in';
+  }
+
   if (!currentUser) {
     $('meLabel').textContent = '…';
   } else if (currentUser.role === 'guest') {
@@ -1187,6 +1205,8 @@ async function renderTrainsList() {
             ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
             <button class="btn btn-secondary i-edit">Edit</button>` : ''}
           </div>
+          <a class="erail-link" style="align-self:flex-start;margin-top:4px" target="_blank" rel="noopener"
+             href="https://erail.in/train/${cur.trainNo}/">📅 Live schedule on eRail.in ↗</a>
         </div>
       </div>
     `;
