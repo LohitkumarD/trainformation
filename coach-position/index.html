@@ -1387,16 +1387,27 @@ async function renderStationView() {
     const data = await res.json();
 
     if (!res.ok || data.error) {
-      $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${data.error || 'Could not load trains'}</div>`;
+      const hint = res.status === 503
+        ? 'RAPIDAPI_KEY not set in Netlify — add it and redeploy'
+        : res.status === 429
+        ? 'API rate limit reached (500 calls/month on free plan)'
+        : res.status === 404
+        ? 'Function not found — trigger a fresh Netlify deploy'
+        : (data.error || `HTTP ${res.status}`);
+      $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${hint}</div>`;
       return;
     }
 
     // RapidAPI IRCTC1 returns { status: true, data: [...] }
     const trains = data.data || data.Trains || data.trains || [];
+    if (!Array.isArray(trains)) {
+      $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ Unexpected response — check RapidAPI subscription for irctc1.p.rapidapi.com</div>`;
+      return;
+    }
     _stationCache[code] = trains;
     renderStationResults(code, trains);
   } catch (e) {
-    $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ Network error — check connection</div>`;
+    $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${e.message || 'Network error — check connection'}</div>`;
   }
 }
 
