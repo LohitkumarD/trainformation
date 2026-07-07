@@ -1,13 +1,14 @@
 /**
- * Proxy to RapidAPI → IRCTC1 API (irctc1.p.rapidapi.com)
+ * Proxy to erail.in API — covers ALL 22,000+ Indian Railway stations.
  * Keeps the API key server-side; the PWA calls /.netlify/functions/train-schedule
  *
- * Netlify env var required: RAPIDAPI_KEY
- * Get a free key (500 calls/month) at: https://rapidapi.com/IRCTCAPI/api/irctc1
+ * Netlify env var (optional): ERAIL_API_KEY
+ * Get a free key at: http://api.erail.in/auth/register
+ * (works without a key using the public demo access, but may be rate-limited)
  *
  * Usage:
- *   ?station=DVG     →  getTrainsAtStation
- *   ?train=12431     →  getTrainSchedule
+ *   ?station=RNR     →  trains at station
+ *   ?train=12431     →  train schedule/route
  */
 exports.handler = async (event) => {
   const CORS = {
@@ -20,14 +21,8 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers: CORS, body: '' };
   }
 
-  const apiKey = process.env.RAPIDAPI_KEY;
-  if (!apiKey) {
-    return {
-      statusCode: 503,
-      headers: CORS,
-      body: JSON.stringify({ error: 'Schedule service not configured — set RAPIDAPI_KEY in Netlify environment variables. Get a free key at rapidapi.com/IRCTCAPI/api/irctc1' }),
-    };
-  }
+  // Use registered key if available, otherwise try public access
+  const apiKey = process.env.ERAIL_API_KEY || '0';
 
   const q = event.queryStringParameters || {};
   let url;
@@ -37,31 +32,23 @@ exports.handler = async (event) => {
     if (!/^[A-Z]{2,7}$/.test(code)) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid station code' }) };
     }
-    url = `https://irctc1.p.rapidapi.com/api/v3/getTrainsAtStation?stationCode=${encodeURIComponent(code)}`;
+    url = `https://api.erail.in/trains-at-station/?Station=${encodeURIComponent(code)}&APIKey=${encodeURIComponent(apiKey)}`;
   } else if (q.train) {
     const trainNo = q.train.trim();
     if (!/^\d{4,5}$/.test(trainNo)) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid train number' }) };
     }
-    url = `https://irctc1.p.rapidapi.com/api/v3/getTrainSchedule?trainNo=${encodeURIComponent(trainNo)}&timezone=UTC%2B05%3A30`;
+    url = `https://api.erail.in/train/?TrainNo=${encodeURIComponent(trainNo)}&APIKey=${encodeURIComponent(apiKey)}`;
   } else {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Provide ?station=DVG or ?train=12431' }) };
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Provide ?station=RNR or ?train=12431' }) };
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        'X-RapidAPI-Key': apiKey,
-        'X-RapidAPI-Host': 'irctc1.p.rapidapi.com',
-      },
-    });
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Upstream returned non-JSON' }) };
-    }
-    if (res.status === 429) {
-      return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'API rate limit reached — free plan allows 500 calls/month' }) };
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Upstream returned non-JSON. erail.in API may be down or key invalid.' }) };
     }
     return { statusCode: 200, headers: CORS, body: JSON.stringify(data) };
   } catch (e) {
