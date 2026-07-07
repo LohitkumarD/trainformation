@@ -16,18 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm install firebase-admin
+        working-directory: scripts
 
       - name: Write service account file
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > serviceAccount.json
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccount.json
 
-      - name: Deploy Firestore rules and indexes
+      - name: Deploy Firestore rules
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ../serviceAccount.json
-        run: firebase deploy --only firestore --project coachposition
-        working-directory: coach-position
+          FIREBASE_SA: ./scripts/serviceAccount.json
+        run: node scripts/deploy-rules.js coach-position/firestore.rules
 
       - name: Cleanup
         if: always()
-        run: rm -f serviceAccount.json
+        run: rm -f scripts/serviceAccount.json
