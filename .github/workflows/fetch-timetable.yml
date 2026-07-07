@@ -1,0 +1,34 @@
+name: Fetch Train Timetable → Firestore
+
+on:
+  workflow_dispatch:   # manual trigger only — run once from GitHub Actions UI
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install node-fetch firebase-admin
+        working-directory: scripts
+
+      - name: Write service account file
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/serviceAccount.json
+
+      - name: Run timetable fetch
+        env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          FIREBASE_SA: ./serviceAccount.json
+        run: node scripts/fetch-timetable.js
+        working-directory: .
+
+      - name: Cleanup
+        if: always()
+        run: rm -f scripts/serviceAccount.json
