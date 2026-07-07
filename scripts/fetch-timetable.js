@@ -1,19 +1,17 @@
 /**
- * One-time script: fetch train schedules from RapidAPI and save to Firestore.
+ * One-time script: load Indian Railways timetable from datameet/railways → Firestore.
  *
- * Setup:
- *   npm install node-fetch firebase-admin   (run once in this folder)
+ * Source: https://github.com/datameet/railways (free, no API key needed)
  *
  * Usage:
- *   RAPIDAPI_KEY=your_key \
- *   FIREBASE_SA=path/to/serviceAccount.json \
- *   node scripts/fetch-timetable.js
+ *   npm install node-fetch firebase-admin   (run once in scripts/)
+ *   FIREBASE_SA=path/to/serviceAccount.json node scripts/fetch-timetable.js
  *
  * What it does:
- *   1. For each station code in STATIONS list → fetch all trains at that station
- *   2. Collect unique train numbers across all stations
- *   3. For each train → fetch full stoppage schedule
- *   4. Save to Firestore /timetable/{trainNo}
+ *   1. Downloads schedules.json (~82 MB, 417k records) from datameet/railways
+ *   2. Groups all stops by train number
+ *   3. Keeps trains that stop at any of the configured STATIONS
+ *   4. Saves to Firestore /timetable/{trainNo}
  *
  * Firestore document shape:
  *   {
@@ -24,24 +22,22 @@
  *       { code:"BJP", name:"Bijapur", arr:null, dep:"06:00", day:1 },
  *       { code:"DVG", name:"Davangere", arr:"09:15", dep:"09:17", day:1 },
  *       ...
- *     ]
+ *     ],
+ *     source: "datameet/railways"
  *   }
  */
 
 const fetch = require('node-fetch');
 const admin = require('firebase-admin');
-const fs = require('fs');
+const fs    = require('fs');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-const FIREBASE_SA  = process.env.FIREBASE_SA;   // path to service account JSON
+const FIREBASE_SA = process.env.FIREBASE_SA;
+if (!FIREBASE_SA) { console.error('Set FIREBASE_SA env var (path to service account JSON)'); process.exit(1); }
 
-if (!RAPIDAPI_KEY) { console.error('Set RAPIDAPI_KEY env var'); process.exit(1); }
-if (!FIREBASE_SA)  { console.error('Set FIREBASE_SA env var (path to service account JSON)'); process.exit(1); }
-
-// Add/remove station codes for your area
-const STATIONS = [
+// Stations to filter — keep any train that stops at at least one of these
+const STATIONS = new Set([
   'DVG',  // Davangere
   'RNR',  // Ranibennur
   'HRR',  // Harihar
@@ -55,112 +51,93 @@ const STATIONS = [
   'BGM',  // Belagavi
   'SBC',  // Bangalore City
   'YPR',  // Yesvantpur
-];
+]);
 
-const RAPIDAPI_HOST = 'irctc1.p.rapidapi.com';
-const HEADERS = {
-  'x-rapidapi-key':  RAPIDAPI_KEY,
-  'x-rapidapi-host': RAPIDAPI_HOST,
-};
+const SCHEDULES_URL =
+  'https://raw.githubusercontent.com/datameet/railways/master/schedules.json';
 
-// ─── API CALLS ────────────────────────────────────────────────────────────────
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-async function getTrainsAtStation(stationCode) {
-  // getLiveStation with hours=24 discovers trains passing this station in the next 24 h
-  const url = `https://${RAPIDAPI_HOST}/api/v3/getLiveStation?stationCode=${stationCode}&hours=24`;
-  const res = await fetch(url, { headers: HEADERS });
-  const json = await res.json();
-  if (!json.status) { console.warn(`  ⚠ No data for station ${stationCode}:`, json.message || ''); return []; }
-  return (json.data || []).map(t => ({
-    trainNo:   String(t.train_number || t.trainNo || t.trainNumber || '').trim(),
-    trainName: (t.train_name || t.trainName || '').trim(),
-  })).filter(t => t.trainNo);
-}
-
-async function getTrainSchedule(trainNo) {
-  const url = `https://${RAPIDAPI_HOST}/api/v3/getTrainSchedule?trainNo=${trainNo}`;
-  const res = await fetch(url, { headers: HEADERS });
-  const json = await res.json();
-  if (!json.status) { console.warn(`  ⚠ No schedule for ${trainNo}:`, json.message || ''); return null; }
-  return json.data || null;
+function toHHMM(t) {
+  if (!t || t === 'None') return null;
+  return String(t).slice(0, 5); // "09:15:00" → "09:15"
 }
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // Init Firebase Admin
   const sa = JSON.parse(fs.readFileSync(FIREBASE_SA, 'utf8'));
   admin.initializeApp({ credential: admin.credential.cert(sa) });
   const db = admin.firestore();
 
-  console.log('Step 1: Fetching trains at each station...\n');
+  console.log('Step 1: Downloading schedules.json from datameet/railways...');
+  const res = await fetch(SCHEDULES_URL);
+  if (!res.ok) { console.error(`Download failed: ${res.status} ${res.statusText}`); process.exit(1); }
+  const text = await res.text();
+  console.log(`  Downloaded ${(text.length / 1e6).toFixed(1)} MB`);
 
-  const trainMap = {}; // trainNo → trainName
+  console.log('\nStep 2: Parsing & grouping by train...');
+  const schedules = JSON.parse(text);
+  console.log(`  Total records: ${schedules.length}`);
 
-  for (const code of STATIONS) {
-    process.stdout.write(`  Station ${code} ... `);
-    try {
-      const trains = await getTrainsAtStation(code);
-      trains.forEach(t => { if (!trainMap[t.trainNo]) trainMap[t.trainNo] = t.trainName; });
-      console.log(`${trains.length} trains`);
-    } catch (e) {
-      console.log(`ERROR: ${e.message}`);
+  const trainMap = {}; // trainNo → { trainName, stops[] }
+
+  for (const s of schedules) {
+    const trainNo = String(s.train_number || '').trim();
+    if (!trainNo) continue;
+
+    if (!trainMap[trainNo]) {
+      trainMap[trainNo] = { trainName: (s.train_name || '').trim(), stops: [] };
     }
-    await sleep(300); // be kind to the API
+
+    trainMap[trainNo].stops.push({
+      code: (s.station_code || '').trim().toUpperCase(),
+      name: (s.station_name || '').trim(),
+      arr:  toHHMM(s.arrival),
+      dep:  toHHMM(s.departure),
+      day:  Number(s.day) || 1,
+    });
   }
 
-  const allTrainNos = Object.keys(trainMap);
-  console.log(`\nTotal unique trains: ${allTrainNos.length}\n`);
-  console.log('Step 2: Fetching full schedule for each train...\n');
+  console.log(`  Total unique trains in dataset: ${Object.keys(trainMap).length}`);
 
-  const batch = [];
-  let done = 0;
+  // Keep only trains that stop at one of our stations
+  const relevant = Object.entries(trainMap).filter(([, t]) =>
+    t.stops.some(s => STATIONS.has(s.code))
+  );
+  console.log(`  Trains stopping at configured stations: ${relevant.length}`);
 
-  for (const trainNo of allTrainNos) {
-    process.stdout.write(`  [${++done}/${allTrainNos.length}] Train ${trainNo} ... `);
-    try {
-      const schedule = await getTrainSchedule(trainNo);
-      if (!schedule || !schedule.length) { console.log('no data'); continue; }
-
-      const stoppages = schedule.map(s => ({
-        code: (s.station_code || s.stationCode || '').trim().toUpperCase(),
-        name: (s.station_name || s.stationName || '').trim(),
-        arr:  s.arrival_time   || s.arrivalTime  || null,
-        dep:  s.departure_time || s.departureTime || null,
-        day:  s.day_count      || s.dayCount      || 1,
-      })).filter(s => s.code);
-
-      const stationCodes = [...new Set(stoppages.map(s => s.code))];
-
-      batch.push({
-        trainNo,
-        trainName: trainMap[trainNo] || '',
-        stationCodes,
-        stoppages,
-        fetchedAt: new Date().toISOString(),
+  console.log('\nStep 3: Building Firestore documents...');
+  const batch = relevant.map(([trainNo, t]) => {
+    // Sort all stops by day then time
+    const stoppages = t.stops
+      .filter(s => s.code)
+      .sort((a, b) => {
+        if (a.day !== b.day) return a.day - b.day;
+        return (a.dep || a.arr || '99:99').localeCompare(b.dep || b.arr || '99:99');
       });
 
-      console.log(`${stoppages.length} stops`);
-    } catch (e) {
-      console.log(`ERROR: ${e.message}`);
-    }
-    await sleep(300);
-  }
+    return {
+      trainNo,
+      trainName: t.trainName,
+      stationCodes: [...new Set(stoppages.map(s => s.code))],
+      stoppages,
+      fetchedAt: new Date().toISOString(),
+      source: 'datameet/railways',
+    };
+  });
 
-  console.log(`\nStep 3: Saving ${batch.length} trains to Firestore...\n`);
+  console.log(`\nStep 4: Saving ${batch.length} trains to Firestore /timetable...`);
 
-  // Write in chunks of 500 (Firestore batch limit)
   const CHUNK = 400;
   for (let i = 0; i < batch.length; i += CHUNK) {
     const chunk = batch.slice(i, i + CHUNK);
     const wb = db.batch();
-    chunk.forEach(doc => {
-      wb.set(db.collection('timetable').doc(doc.trainNo), doc, { merge: true });
-    });
+    chunk.forEach(doc =>
+      wb.set(db.collection('timetable').doc(doc.trainNo), doc, { merge: true })
+    );
     await wb.commit();
-    console.log(`  Saved ${i + chunk.length}/${batch.length}`);
+    console.log(`  Saved ${Math.min(i + CHUNK, batch.length)}/${batch.length}`);
   }
 
   console.log('\nDone! Timetable loaded into Firestore /timetable collection.');
