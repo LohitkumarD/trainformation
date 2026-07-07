@@ -36,22 +36,28 @@ const fs    = require('fs');
 const FIREBASE_SA = process.env.FIREBASE_SA;
 if (!FIREBASE_SA) { console.error('Set FIREBASE_SA env var (path to service account JSON)'); process.exit(1); }
 
-// Stations to filter — keep any train that stops at at least one of these
+// Station codes as used in datameet/railways dataset.
+// Where IRCTC codes differ from datameet codes both are listed so
+// the stationCodes array in Firestore contains both — queries from
+// the app (which uses IRCTC codes in user profiles) still match.
 const STATIONS = new Set([
-  'DVG',  // Davangere
-  'RNR',  // Ranibennur
-  'HRR',  // Harihar
-  'BIRR', // Birur
-  'CDH',  // Chikodi Road
-  'ASK',  // Arsikere
-  'TRR',  // Tarikere
-  'KR',   // Kadur
-  'CQK',  // Chikkamagaluru
-  'UBL',  // Hubballi
-  'BGM',  // Belagavi
-  'SBC',  // Bangalore City
-  'YPR',  // Yesvantpur
+  'DVG',        // Davangere
+  'RNR',        // Ranibennur
+  'HRR',        // Harihar
+  'RRB','BIRR', // Birur (datameet=RRB, IRCTC=BIRR)
+  'CKR','CDH',  // Chikodi Road (datameet=CKR, IRCTC=CDH)
+  'ASK',        // Arsikere
+  'TKE','TRR',  // Tarikere (datameet=TKE, IRCTC=TRR)
+  'DRU','KR',   // Kadur (datameet=DRU, IRCTC=KR)
+  'CQK',        // Chikkamagaluru (IRCTC code; minor branch line)
+  'UBL',        // Hubballi
+  'BGM',        // Belagavi
+  'SBC',        // Bangalore City
+  'YPR',        // Yesvantpur
 ]);
+
+// Aliases: map datameet codes → IRCTC codes so both are stored in stationCodes
+const IRCTC_ALIAS = { RRB:'BIRR', CKR:'CDH', TKE:'TRR', DRU:'KR' };
 
 const SCHEDULES_URL =
   'https://raw.githubusercontent.com/datameet/railways/master/schedules.json';
@@ -108,7 +114,7 @@ async function main() {
   console.log(`  Trains stopping at configured stations: ${relevant.length}`);
 
   console.log('\nStep 3: Building Firestore documents...');
-  const batch = relevant.map(([trainNo, t]) => {
+  const docs = relevant.map(([trainNo, t]) => {
     // Sort all stops by day then time
     const stoppages = t.stops
       .filter(s => s.code)
@@ -117,27 +123,34 @@ async function main() {
         return (a.dep || a.arr || '99:99').localeCompare(b.dep || b.arr || '99:99');
       });
 
+    // Include both datameet codes AND IRCTC alias codes so queries
+    // from the app (which uses IRCTC codes in user profiles) still match
+    const rawCodes = [...new Set(stoppages.map(s => s.code))];
+    const stationCodes = [...new Set(rawCodes.flatMap(c => IRCTC_ALIAS[c] ? [c, IRCTC_ALIAS[c]] : [c]))];
+
     return {
       trainNo,
       trainName: t.trainName,
-      stationCodes: [...new Set(stoppages.map(s => s.code))],
+      stationCodes,
       stoppages,
       fetchedAt: new Date().toISOString(),
       source: 'datameet/railways',
     };
   });
 
-  console.log(`\nStep 4: Saving ${batch.length} trains to Firestore /timetable...`);
+  console.log(`\nStep 4: Saving ${docs.length} trains to Firestore /timetable...`);
 
-  const CHUNK = 400;
-  for (let i = 0; i < batch.length; i += CHUNK) {
-    const chunk = batch.slice(i, i + CHUNK);
+  // Use small chunks (40 docs) — large stop lists make documents ~40 KB each
+  // and Firestore batches are limited to 10 MB total per commit.
+  const CHUNK = 40;
+  for (let i = 0; i < docs.length; i += CHUNK) {
+    const chunk = docs.slice(i, i + CHUNK);
     const wb = db.batch();
     chunk.forEach(doc =>
       wb.set(db.collection('timetable').doc(doc.trainNo), doc, { merge: true })
     );
     await wb.commit();
-    console.log(`  Saved ${Math.min(i + CHUNK, batch.length)}/${batch.length}`);
+    console.log(`  Saved ${Math.min(i + CHUNK, docs.length)}/${docs.length}`);
   }
 
   console.log('\nDone! Timetable loaded into Firestore /timetable collection.');
