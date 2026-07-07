@@ -292,6 +292,39 @@
   .app-disclaimer{font-size:10px;color:var(--muted);text-align:center;padding:8px 16px 80px;line-height:1.5;letter-spacing:.01em;}
   .card-disclaimer{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;padding:0 2px;}
   .share-disclaimer{font-size:9px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.03em;margin-top:2px;}
+
+  /* ─── Station view ─── */
+  #stationBar{align-items:center;gap:8px;}
+  .station-code-input{
+    width:96px;background:var(--surface);border:1.5px solid var(--amber);
+    border-radius:8px;color:var(--amber);font-family:var(--mono);font-size:15px;
+    font-weight:700;letter-spacing:.1em;padding:7px 10px;outline:none;
+    text-transform:uppercase;text-align:center;transition:box-shadow .15s ease;
+  }
+  .station-code-input:focus{box-shadow:0 0 0 3px rgba(217,119,6,.12);}
+  .timetable-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+  .tt-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none;transition:background .1s;}
+  .tt-head:active{background:var(--surface-2);}
+  .tt-timing{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:1px;}
+  .tt-arr{font-size:10px;color:var(--muted);font-family:var(--mono);}
+  .tt-dep{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);}
+  .tt-day{font-size:10px;color:var(--muted);font-family:var(--mono);}
+  .tt-fm-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;white-space:nowrap;display:inline-block;background:rgba(22,163,74,.1);color:var(--green);border:1px solid rgba(22,163,74,.2);}
+  .tt-body{max-height:0;overflow:hidden;transition:max-height .4s ease;}
+  .timetable-item.open .tt-body{max-height:900px;}
+  .tt-chev{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .18s ease;}
+  .timetable-item.open .tt-chev{transform:rotate(180deg);}
+  .tt-inner{padding:14px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;gap:12px;}
+  .tt-section-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
+  .tt-stoppage-list{display:flex;flex-direction:column;max-height:220px;overflow-y:auto;border-radius:6px;border:1px solid var(--line);background:var(--surface);}
+  .tt-stop{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line);}
+  .tt-stop:last-child{border-bottom:none;}
+  .tt-stop.highlight{background:rgba(217,119,6,.06);}
+  .tt-stop-time{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:42px;text-align:right;flex-shrink:0;}
+  .tt-stop-code{font-family:var(--mono);font-size:11px;font-weight:700;min-width:44px;flex-shrink:0;}
+  .tt-stop.highlight .tt-stop-code{color:var(--amber);}
+  .tt-stop-name{font-size:11px;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .station-prompt{text-align:center;color:var(--muted);font-size:13px;padding:40px 16px;display:flex;flex-direction:column;gap:12px;align-items:center;}
 </style>
 </head>
 <body>
@@ -324,7 +357,12 @@
     <div class="tabs-row">
       <button class="tab active" id="tabAll">All</button>
       <button class="tab" id="tabFav">★ Favourites</button>
+      <button class="tab" id="tabStation">Station</button>
       <span class="list-count" id="listCount"></span>
+    </div>
+    <div id="stationBar" style="display:none">
+      <input class="station-code-input" id="stationCodeInput" placeholder="DVG" maxlength="6" autocomplete="off" spellcheck="false">
+      <span style="font-size:12px;color:var(--muted)">← station code</span>
     </div>
   </div>
 
@@ -542,6 +580,13 @@ db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 // ─── App state ────────────────────────────────────────────────────────────────
 let currentUser = null;
 let activeTab = 'all';
+
+// Station-view state
+const IRCTC_ALIAS_MAP = { RRB:'BIRR', CKR:'CDH', TKE:'TRR', DRU:'KR' };
+const DATAMEET_CODE_MAP = Object.fromEntries(Object.entries(IRCTC_ALIAS_MAP).map(([k,v])=>[v,k]));
+let stationViewCode = '';
+let _cachedStationTrains = null;
+let _cachedStationCode = '';
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
 async function getTrainRecord(key) {
@@ -1118,6 +1163,7 @@ async function getMostRecentFormation(trainNo) {
 
 // ─── Trains list ──────────────────────────────────────────────────────────────
 async function renderTrainsList() {
+  if (activeTab === 'station') { renderStationView(); return; }
   const filter = ($('listSearch').value || '').trim();
   let list = await getAllTrains(filter);
 
@@ -1296,15 +1342,37 @@ $('tabAll').addEventListener('click', () => {
   activeTab = 'all';
   $('tabAll').classList.add('active');
   $('tabFav').classList.remove('active');
+  $('tabStation').classList.remove('active');
+  $('stationBar').style.display = 'none';
+  $('listSearch').placeholder = 'Search train number or name…';
   renderTrainsList();
 });
 $('tabFav').addEventListener('click', () => {
   activeTab = 'fav';
   $('tabFav').classList.add('active');
   $('tabAll').classList.remove('active');
+  $('tabStation').classList.remove('active');
+  $('stationBar').style.display = 'none';
+  $('listSearch').placeholder = 'Search train number or name…';
   renderTrainsList();
 });
-$('listSearch').addEventListener('input', renderTrainsList);
+$('tabStation').addEventListener('click', () => {
+  activeTab = 'station';
+  $('tabStation').classList.add('active');
+  $('tabAll').classList.remove('active');
+  $('tabFav').classList.remove('active');
+  $('stationBar').style.display = 'flex';
+  $('listSearch').placeholder = 'Filter by train number or name…';
+  if (!stationViewCode) {
+    const s = (currentUser && currentUser.station || '').trim().toUpperCase();
+    if (s) { stationViewCode = s; $('stationCodeInput').value = s; }
+  }
+  renderStationView();
+});
+$('listSearch').addEventListener('input', () => {
+  if (activeTab === 'station') renderStationView();
+  else renderTrainsList();
+});
 
 // ─── Share as image ───────────────────────────────────────────────────────────
 async function shareAsImage(trainNo, date) {
@@ -1486,6 +1554,199 @@ updateOfflineBanner();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// ─── Station view ──────────────────────────────────────────────────────────────
+function findStopAtStation(stoppages, code) {
+  return stoppages.find(s =>
+    s.code === code ||
+    IRCTC_ALIAS_MAP[s.code] === code ||
+    (DATAMEET_CODE_MAP[code] && s.code === DATAMEET_CODE_MAP[code])
+  );
+}
+
+async function renderStationView() {
+  const wrap = $('trainsList');
+  const code = stationViewCode;
+
+  if (!code || code.length < 2) {
+    $('listCount').textContent = '';
+    wrap.innerHTML = `<div class="station-prompt"><div style="font-size:36px">🚉</div><div>Enter a station code above to see all trains stopping there.</div></div>`;
+    return;
+  }
+
+  if (code !== _cachedStationCode) {
+    _cachedStationTrains = null;
+    _cachedStationCode = '';
+    wrap.innerHTML = `<div class="trains-empty" style="color:var(--muted)">Loading trains for ${code}…</div>`;
+
+    try {
+      const snap = await db.collection('timetable')
+        .where('stationCodes', 'array-contains', code)
+        .get();
+
+      if (snap.empty) {
+        wrap.innerHTML = `<div class="trains-empty">No timetable data for <b>${code}</b>.<br><span style="font-size:11px;color:var(--muted)">Timetable may not be loaded yet.</span></div>`;
+        $('listCount').textContent = '';
+        return;
+      }
+
+      const trains = snap.docs.map(doc => {
+        const d = doc.data();
+        return { ...d, myStop: findStopAtStation(d.stoppages, code) };
+      }).filter(t => t.myStop);
+
+      trains.sort((a, b) => {
+        if (a.myStop.day !== b.myStop.day) return a.myStop.day - b.myStop.day;
+        const ta = a.myStop.dep || a.myStop.arr || '99:99';
+        const tb = b.myStop.dep || b.myStop.arr || '99:99';
+        return ta.localeCompare(tb);
+      });
+
+      _cachedStationTrains = trains;
+      _cachedStationCode = code;
+    } catch (e) {
+      console.error('Station fetch error:', e);
+      wrap.innerHTML = `<div class="trains-empty" style="color:var(--red)">Could not load timetable. Check your connection and try again.</div>`;
+      return;
+    }
+  }
+
+  const filter = ($('listSearch').value || '').trim().toLowerCase();
+  const filtered = filter
+    ? _cachedStationTrains.filter(t => t.trainNo.includes(filter) || (t.trainName || '').toLowerCase().includes(filter))
+    : _cachedStationTrains;
+
+  $('listCount').textContent = filter
+    ? `${filtered.length}/${_cachedStationTrains.length} at ${code}`
+    : `${filtered.length} trains · ${code}`;
+
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="trains-empty">No match for "${filter}"</div>`;
+    return;
+  }
+
+  wrap.innerHTML = '';
+  const today = todayStr();
+
+  filtered.forEach(train => {
+    const stop = train.myStop;
+    const depTime = stop.dep || stop.arr || '—';
+    const showArr = stop.arr && stop.arr !== stop.dep;
+
+    const item = document.createElement('div');
+    item.className = 'timetable-item';
+    item.innerHTML = `
+      <div class="tt-head">
+        <div style="flex:1;min-width:0">
+          <div class="tno-badge" style="display:inline-block;margin-bottom:4px">${train.trainNo}</div>
+          <div style="font-size:12px;color:var(--muted)">${train.trainName || '—'}</div>
+          <span class="tt-fm-badge" id="fmb_${train.trainNo}" style="display:none;margin-top:3px">✓ Formation</span>
+        </div>
+        <div class="tt-timing">
+          ${showArr ? `<div class="tt-arr">arr ${stop.arr}</div>` : ''}
+          <div class="tt-dep">${depTime}</div>
+          ${stop.day > 1 ? `<div class="tt-day">Day ${stop.day}</div>` : ''}
+        </div>
+        <div class="tt-chev">▾</div>
+      </div>
+      <div class="tt-body">
+        <div class="tt-inner" id="ttInner_${train.trainNo}">
+          <div style="color:var(--muted);font-size:13px;text-align:center;padding:8px 0">Loading…</div>
+        </div>
+      </div>`;
+
+    getTrainRecord(`${train.trainNo}_${today}`).then(rec => {
+      if (rec && rec.parsedList && rec.parsedList.length) {
+        const badge = document.getElementById(`fmb_${train.trainNo}`);
+        if (badge) badge.style.display = 'inline-block';
+      }
+    }).catch(() => {});
+
+    item.querySelector('.tt-head').addEventListener('click', async () => {
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.timetable-item.open').forEach(el => el.classList.remove('open'));
+      if (!wasOpen) {
+        item.classList.add('open');
+        if (!item.dataset.loaded) {
+          item.dataset.loaded = '1';
+          await loadTimetableItemBody(item.querySelector('.tt-inner'), train, code, today);
+        }
+      }
+    });
+
+    wrap.appendChild(item);
+  });
+}
+
+async function loadTimetableItemBody(inner, train, myCode, today) {
+  inner.innerHTML = '';
+
+  const formRec = await getTrainRecord(`${train.trainNo}_${today}`).catch(() => null);
+
+  if (formRec && formRec.parsedList && formRec.parsedList.length) {
+    const sect = document.createElement('div');
+    sect.innerHTML = `<div class="tt-section-label">COACH POSITION · ${formatDateOnly(formRec.date)}</div>`;
+    const sw = document.createElement('div'); sw.className = 'strip-wrap';
+    const stripEl = document.createElement('div'); stripEl.className = 'strip';
+    sw.appendChild(stripEl);
+    renderStrip(stripEl, formRec.parsedList);
+    const meta = document.createElement('div'); meta.className = 'meta-line';
+    const stPart = formRec.submittedByStation ? ` · ${formRec.submittedByStation}` : '';
+    meta.innerHTML = `<span class="dot"></span> By <b>${formRec.submittedByName || '—'}${stPart}</b>`;
+    sect.appendChild(sw); sect.appendChild(meta);
+    inner.appendChild(sect);
+    const sep = document.createElement('hr');
+    sep.style.cssText = 'border:none;border-top:1px solid var(--line);margin:0 -14px;';
+    inner.appendChild(sep);
+  }
+
+  const routeSect = document.createElement('div');
+  routeSect.innerHTML = `<div class="tt-section-label">ROUTE · ${train.stoppages.length} STOPS</div>`;
+  const stopList = document.createElement('div'); stopList.className = 'tt-stoppage-list';
+
+  train.stoppages.forEach(s => {
+    const isHere = s.code === myCode ||
+                   IRCTC_ALIAS_MAP[s.code] === myCode ||
+                   (DATAMEET_CODE_MAP[myCode] && s.code === DATAMEET_CODE_MAP[myCode]);
+    const row = document.createElement('div');
+    row.className = 'tt-stop' + (isHere ? ' highlight' : '');
+    row.innerHTML = `
+      <div class="tt-stop-time">${s.dep || s.arr || '—'}</div>
+      <div class="tt-stop-code">${isHere ? '▶ ' : ''}${s.code}</div>
+      <div class="tt-stop-name">${s.name}</div>`;
+    stopList.appendChild(row);
+    if (isHere) setTimeout(() => row.scrollIntoView({ block:'nearest' }), 80);
+  });
+
+  routeSect.appendChild(stopList);
+  inner.appendChild(routeSect);
+
+  if (canEdit()) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-secondary';
+    editBtn.style.cssText = 'font-size:13px;padding:8px 14px;';
+    editBtn.textContent = formRec ? '✏ Edit formation' : '+ Add formation';
+    editBtn.addEventListener('click', () => {
+      const first = train.stoppages[0];
+      const last = train.stoppages[train.stoppages.length - 1];
+      openSubmit(train.trainNo, today, train.trainName,
+        formRec ? formRec.rawList : 'ENG',
+        first ? first.code : '', last ? last.code : '');
+    });
+    inner.appendChild(editBtn);
+  }
+}
+
+let _stationInputTimer;
+$('stationCodeInput').addEventListener('input', () => {
+  clearTimeout(_stationInputTimer);
+  _stationInputTimer = setTimeout(() => {
+    const code = $('stationCodeInput').value.trim().toUpperCase();
+    if (code !== stationViewCode) { _cachedStationTrains = null; _cachedStationCode = ''; }
+    stationViewCode = code;
+    renderStationView();
+  }, 500);
+});
 
 // Show disclaimer once per session
 (function() {
