@@ -1,9 +1,7 @@
 name: Fetch Train Timetable → Firestore
 
 on:
-  workflow_dispatch:   # trigger manually from GitHub Actions UI
-  schedule:
-    - cron: '0 2 1 * *'  # 1st of every month at 02:00 UTC (refresh if datameet updates)
+  workflow_dispatch:   # trigger manually from GitHub Actions UI (data source removed from app)
 
 jobs:
   fetch:
