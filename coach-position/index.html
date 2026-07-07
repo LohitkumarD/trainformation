@@ -1398,10 +1398,12 @@ async function renderStationView() {
       return;
     }
 
-    // RapidAPI IRCTC1 returns { status: true, data: [...] }
-    const trains = data.data || data.Trains || data.trains || [];
-    if (!Array.isArray(trains)) {
-      $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ Unexpected response — check RapidAPI subscription for irctc1.p.rapidapi.com</div>`;
+    // erail.in returns { Trains: [...] } or { message: "..." }
+    const trains = data.Trains || data.trains || data.data || [];
+    if (!Array.isArray(trains) || !trains.length) {
+      const msg = data.message || data.Message || '';
+      $('trainsList').innerHTML = `<div class="trains-empty">No trains found at <b>${code}</b>${msg ? '<br><span style="font-size:11px;color:var(--muted)">' + msg + '</span>' : ''}</div>`;
+      $('listCount').textContent = '';
       return;
     }
     _stationCache[code] = trains;
@@ -1418,16 +1420,17 @@ function renderStationResults(code, trains) {
     return;
   }
 
-  // Normalise field names: RapidAPI IRCTC1 uses snake_case
+  // Normalise field names across erail.in / RapidAPI / IndianRailAPI formats
   const norm = trains.map(t => ({
-    no:   t.train_number || t.TrainNo || t.TrainNumber || '—',
-    name: t.train_name  || t.TrainName || '—',
-    dep:  t.from_time   || t.DepartureTime || '—',
-    arr:  t.to_time     || t.ArrivalTime   || '—',
-    days: Array.isArray(t.running_days)
-      ? t.running_days.map(d => d.slice(0,2)).join(' ')
-      : (t.RunsOn ? Object.entries(t.RunsOn).filter(([,v]) => v === 'Y')
-          .map(([d]) => d.slice(0,2)).join(' ') : ''),
+    no:   t.TrainNo   || t.train_number || t.TrainNumber || '—',
+    name: t.TrainName || t.train_name   || '—',
+    dep:  t.Departure || t.from_time    || t.DepartureTime || '—',
+    arr:  t.Arrival   || t.to_time      || t.ArrivalTime   || '—',
+    days: t.RunsOn
+      ? t.RunsOn  // erail.in returns e.g. "1111110"
+      : Array.isArray(t.running_days)
+        ? t.running_days.map(d => d.slice(0,2)).join(' ')
+        : '',
   }));
 
   // Sort by departure time
@@ -1435,13 +1438,22 @@ function renderStationResults(code, trains) {
 
   $('listCount').textContent = `${norm.length} trains · ${code}`;
 
+  const DAY_LABELS = ['M','T','W','Th','F','Sa','Su'];
+  function formatDays(d) {
+    if (!d) return '';
+    // erail.in: "1111110" binary string (Mon=index 0)
+    if (/^[01]{7}$/.test(d)) return d.split('').map((v,i) => v==='1' ? DAY_LABELS[i] : null).filter(Boolean).join(' ');
+    return d; // already formatted
+  }
+
   $('trainsList').innerHTML = norm.map(t => {
     const showArr = t.arr && t.arr !== t.dep && t.arr !== '—';
+    const days = formatDays(t.days);
     return `<div class="st-train">
       <div>
         <div class="st-train-no">${t.no}</div>
         <div class="st-train-name">${t.name}</div>
-        ${t.days ? `<div class="st-days">${t.days}</div>` : ''}
+        ${days ? `<div class="st-days">${days}</div>` : ''}
       </div>
       <div class="st-timing">
         <div class="st-dep">${t.dep}</div>
