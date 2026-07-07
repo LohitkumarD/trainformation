@@ -1391,7 +1391,8 @@ async function renderStationView() {
       return;
     }
 
-    const trains = data.Trains || data.trains || [];
+    // RapidAPI IRCTC1 returns { status: true, data: [...] }
+    const trains = data.data || data.Trains || data.trains || [];
     _stationCache[code] = trains;
     renderStationResults(code, trains);
   } catch (e) {
@@ -1406,33 +1407,34 @@ function renderStationResults(code, trains) {
     return;
   }
 
-  // Sort by departure time at this station
-  const sorted = [...trains].sort((a, b) => {
-    const ta = a.DepartureTime || a.ArrivalTime || '99:99';
-    const tb = b.DepartureTime || b.ArrivalTime || '99:99';
-    return ta.localeCompare(tb);
-  });
+  // Normalise field names: RapidAPI IRCTC1 uses snake_case
+  const norm = trains.map(t => ({
+    no:   t.train_number || t.TrainNo || t.TrainNumber || '—',
+    name: t.train_name  || t.TrainName || '—',
+    dep:  t.from_time   || t.DepartureTime || '—',
+    arr:  t.to_time     || t.ArrivalTime   || '—',
+    days: Array.isArray(t.running_days)
+      ? t.running_days.map(d => d.slice(0,2)).join(' ')
+      : (t.RunsOn ? Object.entries(t.RunsOn).filter(([,v]) => v === 'Y')
+          .map(([d]) => d.slice(0,2)).join(' ') : ''),
+  }));
 
-  $('listCount').textContent = `${sorted.length} trains · ${code}`;
+  // Sort by departure time
+  norm.sort((a, b) => (a.dep || '99:99').localeCompare(b.dep || '99:99'));
 
-  const DAY_MAP = { Mon:'M', Tue:'T', Wed:'W', Thu:'Th', Fri:'F', Sat:'Sa', Sun:'Su' };
+  $('listCount').textContent = `${norm.length} trains · ${code}`;
 
-  $('trainsList').innerHTML = sorted.map(t => {
-    const dep = t.DepartureTime || '—';
-    const arr = t.ArrivalTime || '—';
-    const showArr = arr && arr !== dep && arr !== 'Source';
-    const runsOn = t.RunsOn ? Object.entries(t.RunsOn)
-      .filter(([,v]) => v === 'Y').map(([d]) => DAY_MAP[d] || d).join(' ') : '';
-
+  $('trainsList').innerHTML = norm.map(t => {
+    const showArr = t.arr && t.arr !== t.dep && t.arr !== '—';
     return `<div class="st-train">
       <div>
-        <div class="st-train-no">${t.TrainNo || t.TrainNumber || '—'}</div>
-        <div class="st-train-name">${t.TrainName || '—'}</div>
-        ${runsOn ? `<div class="st-days">${runsOn}</div>` : ''}
+        <div class="st-train-no">${t.no}</div>
+        <div class="st-train-name">${t.name}</div>
+        ${t.days ? `<div class="st-days">${t.days}</div>` : ''}
       </div>
       <div class="st-timing">
-        <div class="st-dep">${dep}</div>
-        ${showArr ? `<div class="st-arr">arr ${arr}</div>` : ''}
+        <div class="st-dep">${t.dep}</div>
+        ${showArr ? `<div class="st-arr">arr ${t.arr}</div>` : ''}
         <div class="st-label">${showArr ? 'dep / arr' : 'dep'}</div>
       </div>
     </div>`;
