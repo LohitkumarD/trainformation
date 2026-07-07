@@ -13,7 +13,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install dependencies
         run: npm install node-fetch firebase-admin
@@ -25,9 +25,8 @@ jobs:
       - name: Run timetable fetch
         env:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          FIREBASE_SA: ./serviceAccount.json
+          FIREBASE_SA: ./scripts/serviceAccount.json
         run: node scripts/fetch-timetable.js
-        working-directory: .
 
       - name: Cleanup
         if: always()
