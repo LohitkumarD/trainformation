@@ -1388,9 +1388,9 @@ async function renderStationView() {
 
     if (!res.ok || data.error) {
       const hint = res.status === 503
-        ? 'RAPIDAPI_KEY not set in Netlify — add it and redeploy'
+        ? (data.error || 'INDIANRAIL_API_KEY not set — register at indianrailapi.com, then add key to Netlify env vars and redeploy')
         : res.status === 429
-        ? 'API rate limit reached (500 calls/month on free plan)'
+        ? 'API rate limit reached — check your indianrailapi.com plan'
         : res.status === 404
         ? 'Function not found — trigger a fresh Netlify deploy'
         : (data.error || `HTTP ${res.status}`);
@@ -1398,7 +1398,7 @@ async function renderStationView() {
       return;
     }
 
-    // erail.in returns { Trains: [...] } or { message: "..." }
+    // indianrailapi.com returns { ResponseCode, Trains: [...] }
     const trains = data.Trains || data.trains || data.data || [];
     if (!Array.isArray(trains) || !trains.length) {
       const msg = data.message || data.Message || '';
@@ -1420,14 +1420,14 @@ function renderStationResults(code, trains) {
     return;
   }
 
-  // Normalise field names across erail.in / RapidAPI / IndianRailAPI formats
+  // Normalise field names — indianrailapi.com primary, fallbacks for older formats
   const norm = trains.map(t => ({
-    no:   t.TrainNo   || t.train_number || t.TrainNumber || '—',
-    name: t.TrainName || t.train_name   || '—',
-    dep:  t.Departure || t.from_time    || t.DepartureTime || '—',
-    arr:  t.Arrival   || t.to_time      || t.ArrivalTime   || '—',
-    days: t.RunsOn
-      ? t.RunsOn  // erail.in returns e.g. "1111110"
+    no:   t.TrainNo   || t.TrainNumber || t.train_number || '—',
+    name: t.TrainName || t.train_name  || '—',
+    dep:  t.DepartureTime || t.Departure || t.from_time || '—',
+    arr:  t.ArrivalTime   || t.Arrival   || t.to_time   || '—',
+    days: t.RunningDays || t.RunsOn
+      ? (t.RunningDays || t.RunsOn)
       : Array.isArray(t.running_days)
         ? t.running_days.map(d => d.slice(0,2)).join(' ')
         : '',

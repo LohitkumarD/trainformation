@@ -1,13 +1,12 @@
 /**
- * Proxy to erail.in API — covers ALL 22,000+ Indian Railway stations.
+ * Proxy to indianrailapi.com — covers all scheduled Indian Railway stations.
  * Keeps the API key server-side; the PWA calls /.netlify/functions/train-schedule
  *
- * Netlify env var (optional): ERAIL_API_KEY
- * Get a free key at: http://api.erail.in/auth/register
- * (works without a key using the public demo access, but may be rate-limited)
+ * Netlify env var (required): INDIANRAIL_API_KEY
+ * Get a free test key at: https://indianrailapi.com
  *
  * Usage:
- *   ?station=RNR     →  trains at station
+ *   ?station=RNR     →  all trains at station (timetable)
  *   ?train=12431     →  train schedule/route
  */
 exports.handler = async (event) => {
@@ -21,8 +20,14 @@ exports.handler = async (event) => {
     return { statusCode: 204, headers: CORS, body: '' };
   }
 
-  // Use registered key if available, otherwise try public access
-  const apiKey = process.env.ERAIL_API_KEY || '0';
+  const apiKey = process.env.INDIANRAIL_API_KEY;
+  if (!apiKey) {
+    return {
+      statusCode: 503,
+      headers: CORS,
+      body: JSON.stringify({ error: 'INDIANRAIL_API_KEY not set — register at indianrailapi.com for a free key, then add it to Netlify environment variables.' }),
+    };
+  }
 
   const q = event.queryStringParameters || {};
   let url;
@@ -32,13 +37,13 @@ exports.handler = async (event) => {
     if (!/^[A-Z]{2,7}$/.test(code)) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid station code' }) };
     }
-    url = `https://api.erail.in/trains-at-station/?Station=${encodeURIComponent(code)}&APIKey=${encodeURIComponent(apiKey)}`;
+    url = `http://indianrailapi.com/api/v2/AllTrainOnStation/apikey/${encodeURIComponent(apiKey)}/StationCode/${encodeURIComponent(code)}/`;
   } else if (q.train) {
     const trainNo = q.train.trim();
     if (!/^\d{4,5}$/.test(trainNo)) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid train number' }) };
     }
-    url = `https://api.erail.in/train/?TrainNo=${encodeURIComponent(trainNo)}&APIKey=${encodeURIComponent(apiKey)}`;
+    url = `http://indianrailapi.com/api/v2/TrainDetails/apikey/${encodeURIComponent(apiKey)}/TrainNumber/${encodeURIComponent(trainNo)}/`;
   } else {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Provide ?station=RNR or ?train=12431' }) };
   }
@@ -48,7 +53,7 @@ exports.handler = async (event) => {
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Upstream returned non-JSON. erail.in API may be down or key invalid.' }) };
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Upstream returned non-JSON — API may be down or key invalid.' }) };
     }
     return { statusCode: 200, headers: CORS, body: JSON.stringify(data) };
   } catch (e) {
