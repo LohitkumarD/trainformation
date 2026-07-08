@@ -1,4 +1,4 @@
-const CACHE = 'coach-position-v39';
+const CACHE = 'coach-position-v44';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './firebase-messaging-sw.js'];
 
 self.addEventListener('install', (event) => {

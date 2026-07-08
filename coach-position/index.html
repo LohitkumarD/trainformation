@@ -98,8 +98,9 @@
     transition:opacity .15s;
   }
   .station-search-btn:active{opacity:.8;}
-  /* Station results */
+  /* Trains tab results */
   .st-train{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:4px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+  .st-train.st-saved{border-color:var(--teal);background:rgba(14,116,144,.06);}
   .st-train-no{font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:.06em;}
   .st-train-name{font-size:12px;color:var(--muted);margin-top:1px;}
   .st-days{font-size:11px;color:var(--muted);margin-top:4px;}
@@ -107,6 +108,10 @@
   .st-dep{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--green);}
   .st-arr{font-family:var(--mono);font-size:12px;color:var(--muted);}
   .st-label{font-size:10px;color:var(--muted);text-align:right;}
+  .st-save-btn{background:none;border:none;cursor:pointer;font-size:20px;padding:4px 2px;line-height:1;flex-shrink:0;transition:transform .15s;}
+  .st-save-btn:active{transform:scale(1.3);}
+  .st-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+  .st-classes{font-size:10px;color:var(--muted);text-align:right;}
   .trains-empty{text-align:center;color:var(--muted);font-size:13px;padding:40px 0;}
   input,textarea{
     width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
@@ -349,12 +354,11 @@
     <div class="tabs-row">
       <button class="tab active" id="tabAll">All</button>
       <button class="tab" id="tabFav">★ Favourites</button>
-      <button class="tab" id="tabStation">🚉 Station</button>
+      <button class="tab" id="tabStation">🚆 Trains</button>
       <span class="list-count" id="listCount"></span>
     </div>
     <div class="station-bar" id="stationBar">
-      <input class="station-input" id="stationCodeInput" placeholder="Station code e.g. DVG" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false">
-      <button class="station-search-btn" id="stationSearchBtn">Search</button>
+      <input class="station-input" id="stationCodeInput" placeholder="Search train no. or name…" autocomplete="off" spellcheck="false">
     </div>
   </div>
 
@@ -933,6 +937,8 @@ $('idSaveBtn').addEventListener('click', async () => {
 $('signOutBtn').addEventListener('click', async () => {
   await auth.signOut();
   currentUser = { role: 'guest' };
+  _myTrainIds = new Set();
+  _allTrains = null;
   updateMeLabel();
   updateFabVisibility();
   hideOverlay('identityOverlay');
@@ -1343,7 +1349,15 @@ $('tabFav').addEventListener('click', () => {
   $('listSearch').placeholder = 'Search train number or name…';
   renderTrainsList();
 });
-$('tabStation').addEventListener('click', () => {
+$('tabStation').addEventListener('click', openTrainsTab);
+$('stationCodeInput').addEventListener('input', () => { if (activeTab === 'station') renderTrainsTab(); });
+$('listSearch').addEventListener('input', renderTrainsList);
+
+// ─── Trains tab (local Firestore database) ────────────────────────────────────
+let _allTrains = null;
+let _myTrainIds = new Set();
+
+async function openTrainsTab() {
   activeTab = 'station';
   $('tabStation').classList.add('active');
   $('tabAll').classList.remove('active');
@@ -1351,114 +1365,98 @@ $('tabStation').addEventListener('click', () => {
   $('stationBar').classList.add('visible');
   $('listSearch').style.display = 'none';
   $('listCount').textContent = '';
-  // Pre-fill user's home station
-  const myStation = (currentUser && currentUser.station || '').trim().toUpperCase();
-  if (myStation && !$('stationCodeInput').value) {
-    $('stationCodeInput').value = myStation;
+  if (!_allTrains) {
+    $('trainsList').innerHTML = '<div class="trains-empty">Loading trains…</div>';
+    await loadAllTrains();
   }
-  if ($('stationCodeInput').value) renderStationView();
-  else { $('trainsList').innerHTML = '<div class="trains-empty">Enter a station code above and tap Search</div>'; }
-});
-$('listSearch').addEventListener('input', renderTrainsList);
+  renderTrainsTab();
+}
 
-// ─── Station search ───────────────────────────────────────────────────────────
-let _stationCache = {};
-
-$('stationSearchBtn').addEventListener('click', renderStationView);
-$('stationCodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') renderStationView(); });
-
-async function renderStationView() {
-  const code = $('stationCodeInput').value.trim().toUpperCase();
-  if (!code || code.length < 2) {
-    $('trainsList').innerHTML = '<div class="trains-empty">Enter a station code and tap Search</div>';
-    return;
-  }
-
-  if (_stationCache[code]) {
-    renderStationResults(code, _stationCache[code]);
-    return;
-  }
-
-  $('trainsList').innerHTML = '<div class="trains-empty">Loading trains at ' + code + '…</div>';
-  $('listCount').textContent = '';
-
+async function loadAllTrains() {
   try {
-    const res = await fetch(`/.netlify/functions/train-schedule?station=${encodeURIComponent(code)}`);
-    const data = await res.json();
-
-    if (!res.ok || data.error) {
-      const hint = res.status === 503
-        ? 'RAPIDAPI_KEY not set in Netlify — add it and redeploy'
-        : res.status === 429
-        ? 'API rate limit reached (500 calls/month on free plan)'
-        : res.status === 404
-        ? 'Function not found — trigger a fresh Netlify deploy'
-        : (data.error || `HTTP ${res.status}`);
-      $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${hint}</div>`;
-      return;
-    }
-
-    // erail.in returns { Trains: [...] } or { message: "..." }
-    const trains = data.Trains || data.trains || data.data || [];
-    if (!Array.isArray(trains) || !trains.length) {
-      const msg = data.message || data.Message || '';
-      $('trainsList').innerHTML = `<div class="trains-empty">No trains found at <b>${code}</b>${msg ? '<br><span style="font-size:11px;color:var(--muted)">' + msg + '</span>' : ''}</div>`;
-      $('listCount').textContent = '';
-      return;
-    }
-    _stationCache[code] = trains;
-    renderStationResults(code, trains);
+    const snap = await db.collection('trains').orderBy('dep').get();
+    _allTrains = snap.docs.map(d => d.data());
+    if (currentUser) await loadMyTrains();
   } catch (e) {
-    $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${e.message || 'Network error — check connection'}</div>`;
+    _allTrains = [];
+    $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ Could not load trains: ${e.message}<br><span style="font-size:11px;color:var(--muted)">Run the import script to populate the train database.</span></div>`;
   }
 }
 
-function renderStationResults(code, trains) {
-  if (!trains.length) {
-    $('trainsList').innerHTML = `<div class="trains-empty">No trains found at <b>${code}</b></div>`;
-    $('listCount').textContent = '';
+async function loadMyTrains() {
+  if (!currentUser) return;
+  try {
+    const snap = await db.collection('users').doc(currentUser.uid).collection('myTrains').get();
+    _myTrainIds = new Set(snap.docs.map(d => d.id));
+  } catch (_) {}
+}
+
+async function toggleMyTrain(trainNo) {
+  if (!currentUser) { toast('Sign in to save trains'); return; }
+  const key = String(trainNo);
+  const ref = db.collection('users').doc(currentUser.uid).collection('myTrains').doc(key);
+  if (_myTrainIds.has(key)) {
+    _myTrainIds.delete(key);
+    toast('Removed from My Trains');
+    await ref.delete();
+  } else {
+    _myTrainIds.add(key);
+    toast('Saved to My Trains ★');
+    await ref.set({ no: key, savedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  }
+  renderTrainsTab();
+}
+
+function renderTrainsTab() {
+  if (!_allTrains) return;
+  const q = ($('stationCodeInput').value || '').trim().toLowerCase();
+  let list = _allTrains;
+  if (q) {
+    list = _allTrains.filter(t =>
+      String(t.no).includes(q) ||
+      (t.name || '').toLowerCase().includes(q) ||
+      (t.srcCode || '').toLowerCase().includes(q) ||
+      (t.dstCode || '').toLowerCase().includes(q) ||
+      (t.srcName || '').toLowerCase().includes(q) ||
+      (t.dstName || '').toLowerCase().includes(q)
+    );
+  }
+  // Saved trains float to top, then sort by departure
+  list = [...list].sort((a, b) => {
+    const as = _myTrainIds.has(String(a.no)) ? 0 : 1;
+    const bs = _myTrainIds.has(String(b.no)) ? 0 : 1;
+    if (as !== bs) return as - bs;
+    return (a.dep || '99:99').localeCompare(b.dep || '99:99');
+  });
+  $('listCount').textContent = `${list.length} train${list.length !== 1 ? 's' : ''}`;
+  if (!list.length) {
+    $('trainsList').innerHTML = `<div class="trains-empty">${q ? `No trains matching "${q}"` : 'No trains — run the import script first'}</div>`;
     return;
   }
-
-  // Normalise field names across erail.in / RapidAPI / IndianRailAPI formats
-  const norm = trains.map(t => ({
-    no:   t.TrainNo   || t.train_number || t.TrainNumber || '—',
-    name: t.TrainName || t.train_name   || '—',
-    dep:  t.Departure || t.from_time    || t.DepartureTime || '—',
-    arr:  t.Arrival   || t.to_time      || t.ArrivalTime   || '—',
-    days: t.RunsOn
-      ? t.RunsOn  // erail.in returns e.g. "1111110"
-      : Array.isArray(t.running_days)
-        ? t.running_days.map(d => d.slice(0,2)).join(' ')
-        : '',
-  }));
-
-  // Sort by departure time
-  norm.sort((a, b) => (a.dep || '99:99').localeCompare(b.dep || '99:99'));
-
-  $('listCount').textContent = `${norm.length} trains · ${code}`;
-
-  const DAY_LABELS = ['M','T','W','Th','F','Sa','Su'];
-  function formatDays(d) {
-    if (!d) return '';
-    // erail.in: "1111110" binary string (Mon=index 0)
-    if (/^[01]{7}$/.test(d)) return d.split('').map((v,i) => v==='1' ? DAY_LABELS[i] : null).filter(Boolean).join(' ');
-    return d; // already formatted
-  }
-
-  $('trainsList').innerHTML = norm.map(t => {
-    const showArr = t.arr && t.arr !== t.dep && t.arr !== '—';
-    const days = formatDays(t.days);
-    return `<div class="st-train">
-      <div>
-        <div class="st-train-no">${t.no}</div>
-        <div class="st-train-name">${t.name}</div>
-        ${days ? `<div class="st-days">${days}</div>` : ''}
+  $('trainsList').innerHTML = list.map(t => {
+    const saved = _myTrainIds.has(String(t.no));
+    const showArr = t.arr && t.arr !== t.dep;
+    const cls = (t.classes || '').replace(/"/g, '');
+    const pantry = t.pantry ? ' 🍽' : '';
+    return `<div class="st-train${saved ? ' st-saved' : ''}">
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <div class="st-train-no">${t.no} <span style="font-size:11px;font-weight:400;color:var(--muted)">${t.type || ''}${pantry}</span></div>
+        <div class="st-train-name">${t.name || '—'}</div>
+        <div class="st-days" style="margin-top:3px">
+          <span style="color:var(--blue);font-weight:600">From</span> ${t.srcName || t.srcCode || '—'} <span style="color:var(--muted)">(${t.srcCode || ''})</span>
+        </div>
+        <div class="st-days">
+          <span style="color:var(--green);font-weight:600">To</span> ${t.dstName || t.dstCode || '—'} <span style="color:var(--muted)">(${t.dstCode || ''})</span>
+        </div>
+        ${cls ? `<div class="st-days" style="margin-top:2px">${cls}</div>` : ''}
       </div>
-      <div class="st-timing">
-        <div class="st-dep">${t.dep}</div>
-        ${showArr ? `<div class="st-arr">arr ${t.arr}</div>` : ''}
-        <div class="st-label">${showArr ? 'dep / arr' : 'dep'}</div>
+      <div class="st-right">
+        <button class="st-save-btn" onclick="toggleMyTrain('${t.no}')">${saved ? '★' : '☆'}</button>
+        <div class="st-timing">
+          ${showArr ? `<div class="st-arr" style="margin-bottom:2px">arr ${t.arr}</div>` : ''}
+          <div class="st-dep">${t.dep || (t.arr ? '' : '—')}</div>
+          <div class="st-label">${showArr && t.dep ? 'arr / dep' : t.dep ? 'dep' : t.arr ? 'arr' : ''}</div>
+        </div>
       </div>
     </div>`;
   }).join('');
