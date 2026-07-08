@@ -1592,15 +1592,32 @@ $('scanFileInput').addEventListener('change', async (e) => {
         if (!trainNo || !coaches.length) continue;
         const docSnap = await db.collection('trains').doc(trainNo).get();
         if (docSnap.exists && docSnap.data().dep !== undefined) {
+          const d = docSnap.data();
+          // Save coaches to import doc (Trains tab chips)
           await db.collection('trains').doc(trainNo).set(
             { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
             { merge: true }
           );
+          // Also save as a CP record (All tab)
+          const today = todayStr();
+          const cpKey = `${trainNo}_${today}`;
+          const who = currentUser && currentUser.name ? currentUser.name : 'Scan';
+          await saveTrainRecord(cpKey, {
+            trainNo, trainName: d.name || '', date: today,
+            rawList: coaches.join(','), parsedList: coaches,
+            fromStation: d.srcCode || '', toStation: d.dstCode || '',
+            submittedByName: who,
+            submittedByEmail: currentUser?.email || '',
+            submittedByPhone: currentUser?.phone || '',
+            submittedByStation: currentUser?.station || '',
+            submittedByUID: currentUser?.uid || '',
+            updatedAt: Date.now(), updateCount: 1, confirmations: []
+          });
           if (_allTrains) {
             const t = _allTrains.find(x => String(x.no) === trainNo);
             if (t) t.coaches = coaches;
           }
-          matched.push({ trainNo, name: docSnap.data().name || '', coaches });
+          matched.push({ trainNo, name: d.name || '', coaches });
         } else {
           unmatched.push({ trainNo, coaches });
         }
@@ -1628,7 +1645,7 @@ $('scanFileInput').addEventListener('change', async (e) => {
   }
   if (!html) html = '<div style="color:var(--muted);text-align:center;padding:24px 0">No trains detected in image</div>';
   $('scanResults').innerHTML = html;
-  if (matched.length) renderTrainsTab();
+  if (matched.length) { renderTrainsTab(); renderTrainsList(); }
 });
 
 function fileToBase64(file) {
@@ -1852,6 +1869,113 @@ updateOfflineBanner();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// ─── Web Share Target: process images shared from WhatsApp etc. ───────────────
+(async function checkSharedImages() {
+  if (!location.search.includes('cp-shared=1')) return;
+  history.replaceState({}, '', location.pathname);
+  try {
+    const shareCache = await caches.open('cp-share-target');
+    const countRes = await shareCache.match('shared-count');
+    if (!countRes) return;
+    const count = parseInt(await countRes.text(), 10) || 0;
+    if (!count) return;
+    await shareCache.delete('shared-count');
+
+    // Wait for auth to be ready (up to 5s) before scanning
+    await new Promise(resolve => {
+      if (currentUser) { resolve(); return; }
+      const unsub = auth.onAuthStateChanged(() => { unsub(); resolve(); });
+      setTimeout(resolve, 5000);
+    });
+
+    if (!requireStaff()) {
+      // Clear the cache so stale images don't accumulate
+      for (let i = 0; i < count; i++) await shareCache.delete(`shared-image-${i}`);
+      return;
+    }
+
+    // Switch to Trains tab so results are contextual
+    await openTrainsTab();
+
+    $('scanResults').innerHTML = `<div style="text-align:center;color:var(--muted);padding:24px 0">Scanning ${count} shared image${count > 1 ? 's' : ''}…</div>`;
+    showOverlay('scanOverlay');
+
+    const matched = [], unmatched = [], errors = [];
+    for (let i = 0; i < count; i++) {
+      const imgRes = await shareCache.match(`shared-image-${i}`);
+      if (!imgRes) continue;
+      await shareCache.delete(`shared-image-${i}`);
+      try {
+        const blob = await imgRes.blob();
+        const base64 = await fileToBase64(blob);
+        const mimeType = blob.type || 'image/jpeg';
+        const res = await fetch('/.netlify/functions/scan-cp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mimeType })
+        });
+        const data = await res.json();
+        if (data.error) { errors.push(data.error); continue; }
+        for (const scanned of (data.trains || [])) {
+          const trainNo = String(scanned.trainNo || '').trim();
+          const coaches = (scanned.coaches || []).map(c => String(c).toUpperCase().trim()).filter(Boolean);
+          if (!trainNo || !coaches.length) continue;
+          const docSnap = await db.collection('trains').doc(trainNo).get();
+          if (docSnap.exists && docSnap.data().dep !== undefined) {
+            const d = docSnap.data();
+            await db.collection('trains').doc(trainNo).set(
+              { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+              { merge: true }
+            );
+            const today = todayStr();
+            const who = currentUser && currentUser.name ? currentUser.name : 'Scan';
+            await saveTrainRecord(`${trainNo}_${today}`, {
+              trainNo, trainName: d.name || '', date: today,
+              rawList: coaches.join(','), parsedList: coaches,
+              fromStation: d.srcCode || '', toStation: d.dstCode || '',
+              submittedByName: who,
+              submittedByEmail: currentUser?.email || '',
+              submittedByPhone: currentUser?.phone || '',
+              submittedByStation: currentUser?.station || '',
+              submittedByUID: currentUser?.uid || '',
+              updatedAt: Date.now(), updateCount: 1, confirmations: []
+            });
+            if (_allTrains) {
+              const t = _allTrains.find(x => String(x.no) === trainNo);
+              if (t) t.coaches = coaches;
+            }
+            matched.push({ trainNo, name: d.name || '', coaches });
+          } else {
+            unmatched.push({ trainNo, coaches });
+          }
+        }
+      } catch (err) {
+        errors.push(err.message);
+      }
+    }
+
+    let html = '';
+    if (matched.length) {
+      html += `<div style="color:var(--green);font-weight:600;margin-bottom:10px">✓ Saved CP for ${matched.length} train${matched.length > 1 ? 's' : ''}</div>`;
+      html += matched.map(r => `
+        <div class="scan-result-card">
+          <div style="font-weight:700">${r.trainNo} <span style="font-weight:400;color:var(--muted);font-size:12px">${r.name}</span></div>
+          <div class="st-cp-strip">${cpChipsHtml(r.coaches)}</div>
+        </div>`).join('');
+    }
+    if (unmatched.length) {
+      html += `<div style="color:var(--amber);font-weight:600;margin-top:10px">⚠ Not in your train database (${unmatched.length})</div>`;
+      html += unmatched.map(r => `<div style="font-size:12px;color:var(--muted);padding:4px 0">Train ${r.trainNo} — add to database first</div>`).join('');
+    }
+    if (errors.length) html += `<div style="color:var(--red);font-size:12px;margin-top:8px">${errors.join('<br>')}</div>`;
+    if (!html) html = '<div style="color:var(--muted);text-align:center;padding:24px 0">No trains detected in image</div>';
+    $('scanResults').innerHTML = html;
+    if (matched.length) { renderTrainsTab(); renderTrainsList(); }
+  } catch (e) {
+    console.error('Share target error:', e);
+  }
+})();
 
 // Show disclaimer once per session
 (function() {
