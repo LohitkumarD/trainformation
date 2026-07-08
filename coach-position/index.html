@@ -966,6 +966,7 @@ $('idSaveBtn').addEventListener('click', async () => {
   try {
     await db.collection('users').doc(uid).set(profile, { merge: true });
     currentUser = { ...currentUser, ...profile };
+    saveCachedProfile(currentUser);
     updateMeLabel();
     hideOverlay('identityOverlay');
     toast('Profile saved');
@@ -976,6 +977,7 @@ $('idSaveBtn').addEventListener('click', async () => {
 
 $('signOutBtn').addEventListener('click', async () => {
   await auth.signOut();
+  clearCachedProfile();
   currentUser = { role: 'guest' };
   _myTrainIds = new Set();
   _allTrains = null;
@@ -1817,17 +1819,62 @@ $('sSaveBtn').addEventListener('click', async () => {
 });
 
 // ─── Firebase Auth state ──────────────────────────────────────────────────────
+const PROFILE_CACHE_KEY = 'cp_profile_v1';
+
+function loadCachedProfile(uid) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return p && p.uid === uid ? p : null;
+  } catch { return null; }
+}
+
+function saveCachedProfile(profile) {
+  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile)); } catch {}
+}
+
+function clearCachedProfile() {
+  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch {}
+}
+
 auth.onAuthStateChanged(async (firebaseUser) => {
   if (firebaseUser) {
-    // Signed in — load profile
     const email = firebaseUser.email || '';
+    const uid = firebaseUser.uid;
+
+    // Use cached profile instantly — resolves auth immediately without Firestore
+    const cached = loadCachedProfile(uid);
+    if (cached) {
+      currentUser = cached;
+      updateMeLabel();
+      updateFabVisibility();
+      renderTrainsList();
+      if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
+      if (currentUser.role === 'staff' || currentUser.role === 'admin') {
+        setTimeout(initPushNotifications, 2000);
+      }
+      // Refresh profile from Firestore silently in background
+      db.collection('users').doc(uid).get().then(snap => {
+        if (snap.exists) {
+          currentUser = snap.data();
+          saveCachedProfile(currentUser);
+          updateMeLabel();
+        }
+      }).catch(() => {});
+      migrateLocalIfNeeded();
+      return;
+    }
+
+    // No cache — first sign-in on this device: fetch from Firestore
     try {
-      const profileSnap = await db.collection('users').doc(firebaseUser.uid).get();
+      const profileSnap = await db.collection('users').doc(uid).get();
       if (profileSnap.exists) {
         currentUser = profileSnap.data();
+        saveCachedProfile(currentUser);
       } else {
-        // New user — save a skeleton profile + show profile setup
-        currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
+        // New user — save skeleton profile + show profile setup
+        currentUser = { uid, email, role: 'pending', name: '', station: '', phone: '' };
         $('idTitle').textContent = 'Almost done — set your name';
         $('idHint').textContent = 'Fill in your details. An admin will approve your account before you can add or edit positions.';
         $('verifiedEmailLabel').textContent = email;
@@ -1837,21 +1884,19 @@ auth.onAuthStateChanged(async (firebaseUser) => {
         showOverlay('identityOverlay');
       }
     } catch (e) {
-      currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
+      currentUser = { uid, email, role: 'pending', name: '', station: '', phone: '' };
     }
     migrateLocalIfNeeded();
   } else {
-    // Default to guest — user can tap "Staff Login" in the header to sign in
     currentUser = { role: 'guest' };
+    clearCachedProfile();
   }
   updateMeLabel();
   updateFabVisibility();
   renderTrainsList();
-  // Request push permission once user is confirmed staff/admin
   if (currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin')) {
-    setTimeout(initPushNotifications, 2000); // slight delay so UI settles first
+    setTimeout(initPushNotifications, 2000);
   }
-  // Signal that auth + profile are fully loaded (share target flow waits for this)
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 });
 
