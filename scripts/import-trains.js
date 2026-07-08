@@ -94,10 +94,10 @@ async function main() {
     const arr = extractTime(row[12]);
     const dep = extractTime(row[15]);
 
-    // Only include trains that have a departure time at this station.
-    // Trains with only arrival (terminating trains) are skipped.
-    // Don't mark as seen yet — a later date's row might have a departure.
-    if (!dep) continue;
+    // Only include trains that originate at this station:
+    // must have a departure time AND no arrival time.
+    // Trains with an arrival time are passing-through or terminating trains.
+    if (!dep || arr) continue;
 
     seen.add(trainNo);
 
