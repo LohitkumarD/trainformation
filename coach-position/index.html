@@ -1388,18 +1388,19 @@ async function renderStationView() {
 
     if (!res.ok || data.error) {
       const hint = res.status === 503
-        ? (data.error || 'INDIANRAIL_API_KEY not set — register at indianrailapi.com, then add key to Netlify env vars and redeploy')
+        ? (data.error || 'RAILRADAR_API_KEY not set — register at railradar.in, then add key to Netlify env vars and redeploy')
         : res.status === 429
-        ? 'API rate limit reached — check your indianrailapi.com plan'
+        ? 'API rate limit reached (300 req/day on free plan) — try again later'
         : res.status === 404
-        ? 'Function not found — trigger a fresh Netlify deploy'
+        ? 'Station not found in RailRadar database'
         : (data.error || `HTTP ${res.status}`);
       $('trainsList').innerHTML = `<div class="trains-empty" style="color:var(--red)">⚠ ${hint}</div>`;
       return;
     }
 
-    // indianrailapi.com returns { ResponseCode, Trains: [...] }
-    const trains = data.Trains || data.trains || data.data || [];
+    // RailRadar returns { success, data: { trains: [...] } } or { success, data: [...] }
+    const inner = data.data || data;
+    const trains = inner.trains || inner.Trains || (Array.isArray(inner) ? inner : []);
     if (!Array.isArray(trains) || !trains.length) {
       const msg = data.message || data.Message || '';
       $('trainsList').innerHTML = `<div class="trains-empty">No trains found at <b>${code}</b>${msg ? '<br><span style="font-size:11px;color:var(--muted)">' + msg + '</span>' : ''}</div>`;
@@ -1420,17 +1421,15 @@ function renderStationResults(code, trains) {
     return;
   }
 
-  // Normalise field names — indianrailapi.com primary, fallbacks for older formats
+  // Normalise field names — RailRadar + fallbacks for older formats
   const norm = trains.map(t => ({
-    no:   t.TrainNo   || t.TrainNumber || t.train_number || '—',
-    name: t.TrainName || t.train_name  || '—',
-    dep:  t.DepartureTime || t.Departure || t.from_time || '—',
-    arr:  t.ArrivalTime   || t.Arrival   || t.to_time   || '—',
-    days: t.RunningDays || t.RunsOn
-      ? (t.RunningDays || t.RunsOn)
-      : Array.isArray(t.running_days)
-        ? t.running_days.map(d => d.slice(0,2)).join(' ')
-        : '',
+    no:   t.train_number || t.trainNumber || t.TrainNo || t.TrainNumber || '—',
+    name: t.train_name   || t.trainName   || t.TrainName || '—',
+    dep:  t.departure_time || t.departureTime || t.DepartureTime || t.Departure || '—',
+    arr:  t.arrival_time   || t.arrivalTime   || t.ArrivalTime   || t.Arrival   || '—',
+    days: t.running_days
+      ? (Array.isArray(t.running_days) ? t.running_days.map(d => d.slice(0,2)).join(' ') : t.running_days)
+      : (t.RunningDays || t.RunsOn || ''),
   }));
 
   // Sort by departure time
