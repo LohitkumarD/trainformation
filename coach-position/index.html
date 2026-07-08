@@ -613,6 +613,9 @@ db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 // ─── App state ────────────────────────────────────────────────────────────────
 let currentUser = null;
 let activeTab = 'all';
+// Resolves after the first onAuthStateChanged fires AND the Firestore profile is loaded.
+let _authReadyResolve;
+const _authReady = new Promise(r => { _authReadyResolve = r; });
 
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
@@ -1848,6 +1851,8 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   if (currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin')) {
     setTimeout(initPushNotifications, 2000); // slight delay so UI settles first
   }
+  // Signal that auth + profile are fully loaded (share target flow waits for this)
+  if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 });
 
 // Foreground push messages (app is open — show as toast)
@@ -1874,6 +1879,12 @@ if ('serviceWorker' in navigator) {
 (async function checkSharedImages() {
   if (!location.search.includes('cp-shared=1')) return;
   history.replaceState({}, '', location.pathname);
+
+  // Auto-dismiss disclaimer so the scan overlay is not blocked
+  sessionStorage.setItem('disc_ok', '1');
+  const discEl = $('disclaimerModal');
+  if (discEl) discEl.style.display = 'none';
+
   try {
     const shareCache = await caches.open('cp-share-target');
     const countRes = await shareCache.match('shared-count');
@@ -1882,12 +1893,8 @@ if ('serviceWorker' in navigator) {
     if (!count) return;
     await shareCache.delete('shared-count');
 
-    // Wait for auth to be ready (up to 5s) before scanning
-    await new Promise(resolve => {
-      if (currentUser) { resolve(); return; }
-      const unsub = auth.onAuthStateChanged(() => { unsub(); resolve(); });
-      setTimeout(resolve, 5000);
-    });
+    // Wait for auth + Firestore profile to be fully loaded before scanning
+    await _authReady;
 
     if (!requireStaff()) {
       // Clear the cache so stale images don't accumulate
