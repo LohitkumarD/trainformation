@@ -322,6 +322,14 @@
   .card-disclaimer{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;padding:0 2px;}
   .share-disclaimer{font-size:9px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.03em;margin-top:2px;}
 
+  /* Trains tab — coach position on card */
+  .st-cp-strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:7px;}
+  .st-cp-chip{font-family:var(--mono);font-size:9px;padding:2px 5px;border-radius:4px;color:#fff;font-weight:700;white-space:nowrap;}
+  .st-cp-btn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px;padding:3px 8px;cursor:pointer;margin-top:5px;font-family:var(--mono);transition:all .12s;}
+  .st-cp-btn:active{background:var(--surface-2);}
+  .st-cp-btn.has-cp{border-color:var(--teal);color:var(--teal);}
+  .scan-result-card{background:var(--surface-2);border-radius:8px;padding:10px;margin-bottom:8px;}
+
 </style>
 </head>
 <body>
@@ -359,7 +367,9 @@
     </div>
     <div class="station-bar" id="stationBar">
       <input class="station-input" id="stationCodeInput" placeholder="Search train no. or name…" autocomplete="off" spellcheck="false">
+      <button class="station-search-btn" id="scanCpBtn" title="Scan coach position from WhatsApp image" style="font-size:18px;padding:9px 13px">📷</button>
     </div>
+    <input type="file" id="scanFileInput" accept="image/*" multiple style="display:none">
   </div>
 
   <main>
@@ -545,6 +555,34 @@
     <h3>User approvals</h3>
     <p class="hint">Approve or reject pending railway staff accounts. Only approved staff can add or edit coach positions.</p>
     <div id="adminUsersList"><div style="color:var(--muted);font-size:13px">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Coach Position editor overlay (for Trains tab) -->
+<div class="overlay" id="cpOverlay">
+  <div class="sheet">
+    <button class="close" data-close="cpOverlay">✕</button>
+    <h3 id="cpTrainTitle">Coach Position</h3>
+    <div style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:6px" id="cpTrainName"></div>
+    <div>
+      <label class="field-label">Coach list (from engine end)</label>
+      <textarea id="cpList" rows="2" placeholder="ENG,SLR,S1-S8,B1-B4,A1,PC,SLRD"></textarea>
+      <p class="hint">Comma-separated. Ranges OK (S1-S8). Tap a chip to edit it individually.</p>
+    </div>
+    <div>
+      <label class="field-label" style="margin-bottom:5px">Preview <span style="font-size:11px;color:var(--muted)">(tap chip to edit)</span></label>
+      <div class="strip-wrap"><div class="strip preview-strip" id="cpPreview"></div></div>
+    </div>
+    <button class="btn btn-primary btn-block" id="cpSaveBtn">Save Coach Position</button>
+  </div>
+</div>
+
+<!-- Scan results overlay -->
+<div class="overlay" id="scanOverlay">
+  <div class="sheet">
+    <button class="close" data-close="scanOverlay">✕</button>
+    <h3>📷 Scan Results</h3>
+    <div id="scanResults" style="font-size:13px"></div>
   </div>
 </div>
 
@@ -1449,6 +1487,10 @@ function renderTrainsTab() {
           <span style="color:var(--green);font-weight:600">To</span> ${t.dstName || t.dstCode || '—'} <span style="color:var(--muted)">(${t.dstCode || ''})</span>
         </div>
         ${cls ? `<div class="st-days" style="margin-top:2px">${cls}</div>` : ''}
+        ${t.coaches && t.coaches.length ? `<div class="st-cp-strip">${cpChipsHtml(t.coaches)}</div>` : ''}
+        <button class="st-cp-btn${t.coaches && t.coaches.length ? ' has-cp' : ''}" onclick="openCpEditor('${t.no}')">
+          ${t.coaches && t.coaches.length ? '✏ Edit CP' : '+ Add CP'}
+        </button>
       </div>
       <div class="st-right">
         <button class="st-save-btn" onclick="toggleMyTrain('${t.no}')">${saved ? '★' : '☆'}</button>
@@ -1460,6 +1502,143 @@ function renderTrainsTab() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ─── Trains tab — Coach Position editor ──────────────────────────────────────
+let _cpTrainNo = null;
+
+const _cpColors = {eng:'#EF4444',sl:'#F97316',pwr:'#D97706',end:'#65A30D',gen:'#16A34A',ac2:'#0D9488',ac3e:'#0891B2',d2s:'#0284C7',ac3:'#2563EB',ac1:'#4F46E5',cc:'#7C3AED',ec:'#C026D3',pc:'#E11D48',unk:'#64748B'};
+
+function cpChipsHtml(coaches) {
+  const shown = (coaches || []).slice(0, 14);
+  const rest = (coaches || []).length - 14;
+  return shown.map(c => {
+    const bg = _cpColors[classOf(String(c).toUpperCase())] || '#64748B';
+    return `<span class="st-cp-chip" style="background:${bg}">${c}</span>`;
+  }).join('') + (rest > 0 ? `<span class="st-cp-chip" style="background:#64748B">+${rest}</span>` : '');
+}
+
+function openCpEditor(trainNo) {
+  if (!requireStaff()) return;
+  _cpTrainNo = String(trainNo);
+  const t = _allTrains && _allTrains.find(x => String(x.no) === _cpTrainNo);
+  $('cpTrainTitle').textContent = `Coach Position — ${trainNo}`;
+  $('cpTrainName').textContent = t ? (t.name || '') : '';
+  $('cpList').value = (t && t.coaches && t.coaches.length) ? t.coaches.join(',') : 'ENG';
+  renderCpPreview();
+  showOverlay('cpOverlay');
+}
+
+function renderCpPreview() {
+  const codes = parseCompressed($('cpList').value);
+  renderStrip($('cpPreview'), codes, (i, allCodes) => {
+    showChipEditDialog(i, allCodes, (newCodes) => {
+      $('cpList').value = newCodes.join(',');
+      renderCpPreview();
+    });
+  });
+}
+
+$('cpList').addEventListener('input', renderCpPreview);
+
+$('cpSaveBtn').addEventListener('click', async () => {
+  if (!_cpTrainNo) return;
+  const coaches = parseCompressed($('cpList').value);
+  if (!coaches.length) { toast('Enter at least one coach'); return; }
+  try {
+    await db.collection('trains').doc(_cpTrainNo).set(
+      { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    if (_allTrains) {
+      const t = _allTrains.find(x => String(x.no) === _cpTrainNo);
+      if (t) t.coaches = coaches;
+    }
+    hideOverlay('cpOverlay');
+    toast('Coach position saved ✓');
+    renderTrainsTab();
+  } catch (e) {
+    toast('Could not save — ' + e.message);
+  }
+});
+
+// ─── Trains tab — Scan WhatsApp CP images ─────────────────────────────────────
+$('scanCpBtn').addEventListener('click', () => {
+  if (!requireStaff()) return;
+  $('scanFileInput').click();
+});
+
+$('scanFileInput').addEventListener('change', async (e) => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  e.target.value = '';
+  $('scanResults').innerHTML = `<div style="text-align:center;color:var(--muted);padding:24px 0">Scanning ${files.length} image${files.length > 1 ? 's' : ''}…</div>`;
+  showOverlay('scanOverlay');
+
+  const matched = [], unmatched = [], errors = [];
+
+  for (const file of files) {
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await fetch('/.netlify/functions/scan-cp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, mimeType: file.type || 'image/jpeg' })
+      });
+      const data = await res.json();
+      if (data.error) { errors.push(data.error); continue; }
+      for (const scanned of (data.trains || [])) {
+        const trainNo = String(scanned.trainNo || '').trim();
+        const coaches = (scanned.coaches || []).map(c => String(c).toUpperCase().trim()).filter(Boolean);
+        if (!trainNo || !coaches.length) continue;
+        const docSnap = await db.collection('trains').doc(trainNo).get();
+        if (docSnap.exists && docSnap.data().dep !== undefined) {
+          await db.collection('trains').doc(trainNo).set(
+            { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+            { merge: true }
+          );
+          if (_allTrains) {
+            const t = _allTrains.find(x => String(x.no) === trainNo);
+            if (t) t.coaches = coaches;
+          }
+          matched.push({ trainNo, name: docSnap.data().name || '', coaches });
+        } else {
+          unmatched.push({ trainNo, coaches });
+        }
+      }
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+
+  let html = '';
+  if (matched.length) {
+    html += `<div style="color:var(--green);font-weight:600;margin-bottom:10px">✓ Saved CP for ${matched.length} train${matched.length > 1 ? 's' : ''}</div>`;
+    html += matched.map(r => `
+      <div class="scan-result-card">
+        <div style="font-weight:700">${r.trainNo} <span style="font-weight:400;color:var(--muted);font-size:12px">${r.name}</span></div>
+        <div class="st-cp-strip">${cpChipsHtml(r.coaches)}</div>
+      </div>`).join('');
+  }
+  if (unmatched.length) {
+    html += `<div style="color:var(--amber);font-weight:600;margin-top:10px">⚠ Not in your train database (${unmatched.length})</div>`;
+    html += unmatched.map(r => `<div style="font-size:12px;color:var(--muted);padding:4px 0">Train ${r.trainNo} — not in imported trains list</div>`).join('');
+  }
+  if (errors.length) {
+    html += `<div style="color:var(--red);font-size:12px;margin-top:8px">${errors.join('<br>')}</div>`;
+  }
+  if (!html) html = '<div style="color:var(--muted);text-align:center;padding:24px 0">No trains detected in image</div>';
+  $('scanResults').innerHTML = html;
+  if (matched.length) renderTrainsTab();
+});
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // ─── Share as image ───────────────────────────────────────────────────────────
