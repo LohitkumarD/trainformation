@@ -1,4 +1,4 @@
-const CACHE = 'coach-position-v47';
+const CACHE = 'coach-position-v48';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg', './firebase-messaging-sw.js'];
 
 self.addEventListener('install', (event) => {
@@ -13,6 +13,26 @@ self.addEventListener('activate', (event) => {
       Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+// Share Target: intercept POST from WhatsApp / other apps
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  if (event.request.method === 'POST' && url.pathname.endsWith('index.html')) {
+    event.respondWith((async () => {
+      const formData = await event.request.formData();
+      const files = formData.getAll('image');
+      if (files.length) {
+        const shareCache = await caches.open('cp-share-target');
+        await Promise.all(files.map((f, i) =>
+          shareCache.put(`shared-image-${i}`, new Response(f, { headers: { 'Content-Type': f.type || 'image/jpeg' } }))
+        ));
+        await shareCache.put('shared-count', new Response(String(files.length)));
+      }
+      return Response.redirect('./index.html?cp-shared=1', 303);
+    })());
+    return;
+  }
 });
 
 self.addEventListener('fetch', (event) => {
