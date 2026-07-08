@@ -78,12 +78,10 @@ async function main() {
     const arr = extractTime(row[12]);
     const dep = extractTime(row[15]);
 
-    // Skip rows where BOTH are blank (likely cancelled header entries)
-    if (!arr && !dep) {
-      // Try next occurrence instead of skipping entirely — mark as seen
-      // so duplicates don't get added but this one still might contribute
-      // a time. For simplicity: just store with empty times and move on.
-    }
+    // Only include trains that have a departure time at this station.
+    // Trains with only arrival (terminating trains) are skipped.
+    // Don't mark as seen yet — a later date's row might have a departure.
+    if (!dep) continue;
 
     seen.add(trainNo);
 
