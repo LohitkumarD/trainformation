@@ -1416,7 +1416,9 @@ function renderTrainsTab() {
       String(t.no).includes(q) ||
       (t.name || '').toLowerCase().includes(q) ||
       (t.srcCode || '').toLowerCase().includes(q) ||
-      (t.dstCode || '').toLowerCase().includes(q)
+      (t.dstCode || '').toLowerCase().includes(q) ||
+      (t.srcName || '').toLowerCase().includes(q) ||
+      (t.dstName || '').toLowerCase().includes(q)
     );
   }
   // Saved trains float to top, then sort by departure
@@ -1435,17 +1437,25 @@ function renderTrainsTab() {
     const saved = _myTrainIds.has(String(t.no));
     const showArr = t.arr && t.arr !== t.dep;
     const cls = (t.classes || '').replace(/"/g, '');
+    const pantry = t.pantry ? ' 🍽' : '';
     return `<div class="st-train${saved ? ' st-saved' : ''}">
       <div style="flex:1;min-width:0;overflow:hidden">
-        <div class="st-train-no">${t.no} <span style="font-size:11px;font-weight:400;color:var(--muted)">${t.type || ''}</span></div>
+        <div class="st-train-no">${t.no} <span style="font-size:11px;font-weight:400;color:var(--muted)">${t.type || ''}${pantry}</span></div>
         <div class="st-train-name">${t.name || '—'}</div>
-        <div class="st-days">${t.srcCode || ''}→${t.dstCode || ''}${cls ? ' · ' + cls : ''}</div>
+        <div class="st-days" style="margin-top:3px">
+          <span style="color:var(--blue);font-weight:600">From</span> ${t.srcName || t.srcCode || '—'} <span style="color:var(--muted)">(${t.srcCode || ''})</span>
+        </div>
+        <div class="st-days">
+          <span style="color:var(--green);font-weight:600">To</span> ${t.dstName || t.dstCode || '—'} <span style="color:var(--muted)">(${t.dstCode || ''})</span>
+        </div>
+        ${cls ? `<div class="st-days" style="margin-top:2px">${cls}</div>` : ''}
       </div>
       <div class="st-right">
         <button class="st-save-btn" onclick="toggleMyTrain('${t.no}')">${saved ? '★' : '☆'}</button>
         <div class="st-timing">
-          <div class="st-dep">${t.dep || '—'}</div>
-          ${showArr ? `<div class="st-arr">arr ${t.arr}</div>` : ''}
+          ${showArr ? `<div class="st-arr" style="margin-bottom:2px">arr ${t.arr}</div>` : ''}
+          <div class="st-dep">${t.dep || (t.arr ? '' : '—')}</div>
+          <div class="st-label">${showArr && t.dep ? 'arr / dep' : t.dep ? 'dep' : t.arr ? 'arr' : ''}</div>
         </div>
       </div>
     </div>`;

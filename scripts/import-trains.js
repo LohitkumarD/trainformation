@@ -101,7 +101,6 @@ async function main() {
       pantry:  (row[11] || '').trim().toUpperCase() === 'PC',
       arr,
       dep,
-      station: 'SBC',
     });
   }
 
