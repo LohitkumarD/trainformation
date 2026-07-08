@@ -325,9 +325,8 @@
   /* Trains tab — coach position on card */
   .st-cp-strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:7px;}
   .st-cp-chip{font-family:var(--mono);font-size:9px;padding:2px 5px;border-radius:4px;color:#fff;font-weight:700;white-space:nowrap;}
-  .st-cp-btn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px;padding:3px 8px;cursor:pointer;margin-top:5px;font-family:var(--mono);transition:all .12s;}
-  .st-cp-btn:active{background:var(--surface-2);}
-  .st-cp-btn.has-cp{border-color:var(--teal);color:var(--teal);}
+  .st-cp-label{font-size:10px;color:var(--muted);margin-top:5px;font-family:var(--mono);}
+  .st-cp-label.add{color:var(--teal);font-weight:600;}
   .scan-result-card{background:var(--surface-2);border-radius:8px;padding:10px;margin-bottom:8px;}
 
 </style>
@@ -1476,7 +1475,10 @@ function renderTrainsTab() {
     const showArr = t.arr && t.arr !== t.dep;
     const cls = (t.classes || '').replace(/"/g, '');
     const pantry = t.pantry ? ' 🍽' : '';
-    return `<div class="st-train${saved ? ' st-saved' : ''}">
+    const cpHint = t.coaches && t.coaches.length
+      ? `<div class="st-cp-strip">${cpChipsHtml(t.coaches)}</div><div class="st-cp-label">tap to edit CP</div>`
+      : `<div class="st-cp-label add">tap to add CP</div>`;
+    return `<div class="st-train${saved ? ' st-saved' : ''}" onclick="openCpEditor('${t.no}')" style="cursor:pointer">
       <div style="flex:1;min-width:0;overflow:hidden">
         <div class="st-train-no">${t.no} <span style="font-size:11px;font-weight:400;color:var(--muted)">${t.type || ''}${pantry}</span></div>
         <div class="st-train-name">${t.name || '—'}</div>
@@ -1487,13 +1489,10 @@ function renderTrainsTab() {
           <span style="color:var(--green);font-weight:600">To</span> ${t.dstName || t.dstCode || '—'} <span style="color:var(--muted)">(${t.dstCode || ''})</span>
         </div>
         ${cls ? `<div class="st-days" style="margin-top:2px">${cls}</div>` : ''}
-        ${t.coaches && t.coaches.length ? `<div class="st-cp-strip">${cpChipsHtml(t.coaches)}</div>` : ''}
-        <button class="st-cp-btn${t.coaches && t.coaches.length ? ' has-cp' : ''}" onclick="openCpEditor('${t.no}')">
-          ${t.coaches && t.coaches.length ? '✏ Edit CP' : '+ Add CP'}
-        </button>
+        ${cpHint}
       </div>
       <div class="st-right">
-        <button class="st-save-btn" onclick="toggleMyTrain('${t.no}')">${saved ? '★' : '☆'}</button>
+        <button class="st-save-btn" onclick="event.stopPropagation();toggleMyTrain('${t.no}')">${saved ? '★' : '☆'}</button>
         <div class="st-timing">
           ${showArr ? `<div class="st-arr" style="margin-bottom:2px">arr ${t.arr}</div>` : ''}
           <div class="st-dep">${t.dep || (t.arr ? '' : '—')}</div>
