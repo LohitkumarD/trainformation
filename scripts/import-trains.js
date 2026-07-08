@@ -55,12 +55,28 @@ function extractTime(val) {
   return h.padStart(2, '0') + ':' + min;
 }
 
+async function clearTrains() {
+  const snap = await db.collection('trains').get();
+  if (snap.empty) { console.log('No existing trains to delete.'); return; }
+  let deleted = 0;
+  for (let i = 0; i < snap.docs.length; i += 500) {
+    const batch = db.batch();
+    for (const doc of snap.docs.slice(i, i + 500)) batch.delete(doc.ref);
+    await batch.commit();
+    deleted += Math.min(500, snap.docs.length - i);
+    console.log(`  Deleted ${deleted}/${snap.docs.length} existing trains…`);
+  }
+  console.log('Cleared existing trains collection.');
+}
+
 async function main() {
   const csvPath = process.argv[2];
   if (!csvPath) {
     console.error('Usage: node scripts/import-trains.js <path/to/Coach_Position.csv>');
     process.exit(1);
   }
+
+  await clearTrains();
 
   const text = fs.readFileSync(csvPath, 'utf8');
   const rows = parseCSV(text);
