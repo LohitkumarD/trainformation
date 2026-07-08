@@ -1478,7 +1478,7 @@ function renderTrainsTab() {
     const cpHint = t.coaches && t.coaches.length
       ? `<div class="st-cp-strip">${cpChipsHtml(t.coaches)}</div><div class="st-cp-label">tap to edit CP</div>`
       : `<div class="st-cp-label add">tap to add CP</div>`;
-    return `<div class="st-train${saved ? ' st-saved' : ''}" onclick="openCpEditor('${t.no}')" style="cursor:pointer">
+    return `<div class="st-train${saved ? ' st-saved' : ''}" onclick="openSubmitForTrain('${t.no}')" style="cursor:pointer">
       <div style="flex:1;min-width:0;overflow:hidden">
         <div class="st-train-no">${t.no} <span style="font-size:11px;font-weight:400;color:var(--muted)">${t.type || ''}${pantry}</span></div>
         <div class="st-train-name">${t.name || '—'}</div>
@@ -1640,6 +1640,28 @@ function fileToBase64(file) {
   });
 }
 
+// Open the full submit form pre-filled from the Trains tab train database
+async function openSubmitForTrain(trainNo) {
+  const t = _allTrains && _allTrains.find(x => String(x.no) === String(trainNo));
+  const today = todayStr();
+  // Check for existing CP record today first, then fall back to stored coaches
+  let rawList = 'ENG';
+  const existing = await getTrainRecord(`${trainNo}_${today}`).catch(() => null);
+  if (existing && existing.rawList) {
+    rawList = existing.rawList;
+  } else if (t && t.coaches && t.coaches.length) {
+    rawList = t.coaches.join(',');
+  }
+  openSubmit(
+    trainNo,
+    today,
+    t ? (t.name || '') : '',
+    rawList,
+    t ? (t.srcCode || '') : '',
+    t ? (t.dstCode || '') : ''
+  );
+}
+
 // ─── Share as image ───────────────────────────────────────────────────────────
 async function shareAsImage(trainNo, date) {
   if (typeof html2canvas !== 'function') { toast('Image tool still loading — try again in a moment'); return; }
@@ -1759,9 +1781,19 @@ $('sSaveBtn').addEventListener('click', async () => {
     updateCount: (existing && existing.updateCount ? existing.updateCount : 0) + 1,
     confirmations: []
   });
+  // Sync coaches to the import doc so the Trains tab chips stay current
+  db.collection('trains').doc(trainNo).set(
+    { coaches: parsedList, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  ).catch(() => {});
+  if (_allTrains) {
+    const tr = _allTrains.find(x => String(x.no) === trainNo);
+    if (tr) tr.coaches = parsedList;
+  }
   hideOverlay('submitOverlay');
   toast('Saved');
   renderTrainsList();
+  if (activeTab === 'station') renderTrainsTab();
 });
 
 // ─── Firebase Auth state ──────────────────────────────────────────────────────
