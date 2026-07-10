@@ -332,6 +332,17 @@
 </style>
 </head>
 <body>
+<!-- PWA install banner -->
+<div id="installBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--surface);border-top:2px solid var(--amber);border-radius:16px 16px 0 0;padding:14px 16px;z-index:180;box-shadow:0 -4px 20px rgba(0,0,0,.12);align-items:center;gap:10px;">
+  <span style="font-size:22px">📲</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-weight:700;font-size:14px">Install Coach Position</div>
+    <div id="installHint" style="font-size:12px;color:var(--muted)">Add to home screen for offline use &amp; push alerts</div>
+  </div>
+  <button id="installBtn" style="background:var(--amber);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;flex-shrink:0">Install</button>
+  <button id="installDismiss" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 4px;flex-shrink:0">✕</button>
+</div>
+
 <!-- Disclaimer modal — shown once per session -->
 <div id="disclaimerModal" class="disclaimer-modal" style="display:none">
   <div class="disclaimer-box">
@@ -963,6 +974,7 @@ $('idSaveBtn').addEventListener('click', async () => {
     role: currentUser.role || 'staff',
     updatedAt: Date.now()
   };
+  const wasPending = currentUser.role === 'pending';
   try {
     await db.collection('users').doc(uid).set(profile, { merge: true });
     currentUser = { ...currentUser, ...profile };
@@ -970,6 +982,10 @@ $('idSaveBtn').addEventListener('click', async () => {
     updateMeLabel();
     hideOverlay('identityOverlay');
     toast('Profile saved');
+    // Notify admins that a new staff member is waiting for approval
+    if (wasPending) {
+      sendAdminNotification('👤 New Staff Registration', `${name}${station ? ' · ' + station : ''} needs approval`);
+    }
   } catch (e) {
     toast('Could not save profile — try again');
   }
@@ -1126,38 +1142,83 @@ function populateShareCapture(d) {
 
 // ─── Push notifications ───────────────────────────────────────────────────────
 async function initPushNotifications() {
-  if (!messaging || !currentUser || !currentUser.uid) return;
-  if (currentUser.role !== 'staff' && currentUser.role !== 'admin') return;
-  if (!('Notification' in window)) return;
-
-  // Don't re-prompt if already denied
+  if (!messaging || !('Notification' in window)) return;
   if (Notification.permission === 'denied') return;
+  // Only ask once per device (unless already granted)
+  if (Notification.permission !== 'granted' && localStorage.getItem('push_asked')) return;
 
   const permission = Notification.permission === 'granted'
     ? 'granted'
     : await Notification.requestPermission();
+  localStorage.setItem('push_asked', '1');
   if (permission !== 'granted') return;
 
   try {
     const token = await messaging.getToken({ vapidKey: VAPID_KEY });
-    if (token) {
-      await db.collection('users').doc(currentUser.uid).update({ fcmToken: token });
+    if (!token) return;
+
+    // Stable per-device ID so we can update the same doc without duplicates
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('device_id', deviceId);
     }
-  } catch (e) {
-    // Token fetch can fail on localhost or when VAPID_KEY is a placeholder — silent
-  }
+
+    // Store in broadcast collection (all users, including guests)
+    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+    localStorage.setItem('push_token', token);
+
+    // If logged in, also update the user profile
+    if (currentUser?.uid && currentUser.role !== 'guest') {
+      db.collection('users').doc(currentUser.uid).update({ fcmToken: token }).catch(() => {});
+    }
+
+    // Admins get a separate collection so we can target them specifically
+    if (currentUser?.role === 'admin') {
+      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+    }
+  } catch (e) { /* silent — localhost or blocked */ }
 }
 
-// Called after approval/formation events; calls the Netlify Function
+// Broadcast CP update to all subscribed users
+function sendCpNotification(trainNo, trainName, coaches) {
+  try {
+    const summary = (coaches || []).slice(0, 8).join(' · ') + (coaches.length > 8 ? ` +${coaches.length - 8}` : '');
+    fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        broadcast: true,
+        title: `CP: ${trainNo}${trainName ? ' – ' + trainName.split(' ').slice(0, 3).join(' ') : ''}`,
+        body: summary || 'Coach position updated'
+      })
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+// Notify all admins (e.g. new user needs approval)
+function sendAdminNotification(title, body) {
+  try {
+    fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'admin', title, body })
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+// Send push to a single token (approval notification to a specific user)
 async function sendPush(token, title, body) {
-  if (!token || token === '') return;
+  if (!token) return;
   try {
     await fetch('/.netlify/functions/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, title, body }),
     });
-  } catch (_) {} // non-critical — never block the UI
+  } catch (_) {}
 }
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
@@ -1617,12 +1678,14 @@ $('scanFileInput').addEventListener('change', async (e) => {
           });
           if (_allTrains) { const t = _allTrains.find(x => String(x.no) === trainNo); if (t) t.coaches = coaches; }
           matched.push({ trainNo, name: d.name || '', coaches });
+          sendCpNotification(trainNo, d.name || '', coaches);
         } else {
           // Not in station trains list — still save CP record so it appears in All tab
           await saveTrainRecord(`${trainNo}_${today}`, {
             ...cpFields, trainName: scanned.trainName || '', fromStation: '', toStation: ''
           });
           unmatched.push({ trainNo, name: scanned.trainName || '', coaches });
+          sendCpNotification(trainNo, scanned.trainName || '', coaches);
         }
       }
     } catch (err) {
@@ -1842,6 +1905,7 @@ $('sSaveBtn').addEventListener('click', async () => {
   }
   hideOverlay('submitOverlay');
   toast('Saved');
+  sendCpNotification(trainNo, trainName, parsedList);
   renderTrainsList();
   if (activeTab === 'station') renderTrainsTab();
 });
@@ -1879,9 +1943,7 @@ auth.onAuthStateChanged(async (firebaseUser) => {
       updateFabVisibility();
       renderTrainsList();
       if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
-      if (currentUser.role === 'staff' || currentUser.role === 'admin') {
-        setTimeout(initPushNotifications, 2000);
-      }
+      setTimeout(initPushNotifications, 3000);
       // Refresh profile from Firestore silently in background
       db.collection('users').doc(uid).get().then(snap => {
         if (snap.exists) {
@@ -1922,9 +1984,7 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   updateMeLabel();
   updateFabVisibility();
   renderTrainsList();
-  if (currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin')) {
-    setTimeout(initPushNotifications, 2000);
-  }
+  setTimeout(initPushNotifications, 3000);
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 });
 
@@ -1951,6 +2011,48 @@ if ('serviceWorker' in navigator) {
     window.location.reload();
   });
 }
+
+// ─── PWA Install Prompt ────────────────────────────────────────────────────────
+(function() {
+  const banner = $('installBanner');
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isStandalone) return; // already installed
+
+  let _installPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+    if (!sessionStorage.getItem('install_dismissed')) {
+      setTimeout(() => { banner.style.display = 'flex'; }, 4000);
+    }
+  });
+
+  $('installBtn').addEventListener('click', async () => {
+    if (!_installPrompt) return;
+    _installPrompt.prompt();
+    const { outcome } = await _installPrompt.userChoice;
+    _installPrompt = null;
+    banner.style.display = 'none';
+    if (outcome === 'accepted') toast('App installed ✓');
+  });
+
+  $('installDismiss').addEventListener('click', () => {
+    banner.style.display = 'none';
+    sessionStorage.setItem('install_dismissed', '1');
+  });
+
+  // iOS: no beforeinstallprompt — show a manual hint instead
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS && !isStandalone && !localStorage.getItem('ios_install_shown')) {
+    setTimeout(() => {
+      $('installHint').textContent = 'Tap Share (⎙) → Add to Home Screen';
+      $('installBtn').style.display = 'none';
+      banner.style.display = 'flex';
+      localStorage.setItem('ios_install_shown', '1');
+    }, 5000);
+  }
+})();
 
 // ─── Web Share Target: process images shared from WhatsApp etc. ───────────────
 (async function checkSharedImages() {
@@ -2027,11 +2129,13 @@ if ('serviceWorker' in navigator) {
             });
             if (_allTrains) { const t = _allTrains.find(x => String(x.no) === trainNo); if (t) t.coaches = coaches; }
             matched.push({ trainNo, name: d.name || '', coaches });
+            sendCpNotification(trainNo, d.name || '', coaches);
           } else {
             await saveTrainRecord(`${trainNo}_${today}`, {
               ...cpFields, trainName: scanned.trainName || '', fromStation: '', toStation: ''
             });
             unmatched.push({ trainNo, name: scanned.trainName || '', coaches });
+            sendCpNotification(trainNo, scanned.trainName || '', coaches);
           }
         }
       } catch (err) {
