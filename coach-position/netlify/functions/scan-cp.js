@@ -31,21 +31,28 @@ exports.handler = async (event) => {
   const { image, mimeType = 'image/jpeg' } = body;
   if (!image) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'image (base64) required' }) };
 
-  const prompt = `This is an Indian Railways coach position chart. Extract the information and return ONLY valid JSON in this exact format:
+  const prompt = `This is an Indian Railways coach position / vehicle guidance chart. Extract coach formation and return ONLY valid JSON in this exact format:
 {
   "trains": [
     {
       "trainNo": "12345",
       "trainName": "TRAIN NAME",
-      "coaches": ["Engine", "SLR", "S1", "S2", "B1", "A1"]
+      "coaches": ["ENG", "SLR", "GEN", "GEN", "GEN", "S1", "S2", "B1", "A1", "GRD"]
     }
   ]
 }
 Rules:
 - trainNo must be the 4-5 digit train number only
-- coaches must be in order from engine end to guard end
-- Include every coach label exactly as shown (Engine, SLR, GRD, S1-S12, B1-B4, A1-A2, H1, HA1, PC etc.)
-- If multiple trains are on the chart, include all of them
+- coaches must be in order from engine/loco end to guard end
+- CRITICAL: Each coach must be a SEPARATE entry. Never group them.
+  - If you see "7 GEN" or "GEN x7" that means 7 individual GEN coaches: ["GEN","GEN","GEN","GEN","GEN","GEN","GEN"]
+  - If you see "5 GEN" that means: ["GEN","GEN","GEN","GEN","GEN"]
+  - If you see "D5-D1" that means coaches D5,D4,D3,D2,D1 in that order: ["D5","D4","D3","D2","D1"]
+  - If you see "S1-S6" that means: ["S1","S2","S3","S4","S5","S6"]
+  - If you see a table with rows, each row is one coach — list them all individually
+- Coach labels: ENG or LOCO for engine, SLR/LSLRD for luggage+guard, GEN/LS for general, GRD/LPR for guard/brake van
+  D1-D12 for DEMU/disabled, S1-S12 for sleeper, B1-B4 for 3AC, A1-A2 for 2AC, H1/HA1 for 1AC, C1 for CC, PC for pantry
+- If multiple trains are shown, include all of them
 - Return ONLY the JSON, no explanation`;
 
   try {

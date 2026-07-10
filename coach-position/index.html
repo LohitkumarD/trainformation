@@ -332,6 +332,17 @@
 </style>
 </head>
 <body>
+<!-- PWA install banner -->
+<div id="installBanner" style="display:none;position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:var(--surface);border-top:2px solid var(--amber);border-radius:16px 16px 0 0;padding:14px 16px;z-index:180;box-shadow:0 -4px 20px rgba(0,0,0,.12);align-items:center;gap:10px;">
+  <span style="font-size:22px">📲</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-weight:700;font-size:14px">Install Coach Position</div>
+    <div id="installHint" style="font-size:12px;color:var(--muted)">Add to home screen for offline use &amp; push alerts</div>
+  </div>
+  <button id="installBtn" style="background:var(--amber);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;flex-shrink:0">Install</button>
+  <button id="installDismiss" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;padding:2px 4px;flex-shrink:0">✕</button>
+</div>
+
 <!-- Disclaimer modal — shown once per session -->
 <div id="disclaimerModal" class="disclaimer-modal" style="display:none">
   <div class="disclaimer-box">
@@ -613,6 +624,9 @@ db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 // ─── App state ────────────────────────────────────────────────────────────────
 let currentUser = null;
 let activeTab = 'all';
+// Resolves after the first onAuthStateChanged fires AND the Firestore profile is loaded.
+let _authReadyResolve;
+const _authReady = new Promise(r => { _authReadyResolve = r; });
 
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
@@ -960,12 +974,18 @@ $('idSaveBtn').addEventListener('click', async () => {
     role: currentUser.role || 'staff',
     updatedAt: Date.now()
   };
+  const wasPending = currentUser.role === 'pending';
   try {
     await db.collection('users').doc(uid).set(profile, { merge: true });
     currentUser = { ...currentUser, ...profile };
+    saveCachedProfile(currentUser);
     updateMeLabel();
     hideOverlay('identityOverlay');
     toast('Profile saved');
+    // Notify admins that a new staff member is waiting for approval
+    if (wasPending) {
+      sendAdminNotification('👤 New Staff Registration', `${name}${station ? ' · ' + station : ''} needs approval`);
+    }
   } catch (e) {
     toast('Could not save profile — try again');
   }
@@ -973,6 +993,7 @@ $('idSaveBtn').addEventListener('click', async () => {
 
 $('signOutBtn').addEventListener('click', async () => {
   await auth.signOut();
+  clearCachedProfile();
   currentUser = { role: 'guest' };
   _myTrainIds = new Set();
   _allTrains = null;
@@ -1121,38 +1142,83 @@ function populateShareCapture(d) {
 
 // ─── Push notifications ───────────────────────────────────────────────────────
 async function initPushNotifications() {
-  if (!messaging || !currentUser || !currentUser.uid) return;
-  if (currentUser.role !== 'staff' && currentUser.role !== 'admin') return;
-  if (!('Notification' in window)) return;
-
-  // Don't re-prompt if already denied
+  if (!messaging || !('Notification' in window)) return;
   if (Notification.permission === 'denied') return;
+  // Only ask once per device (unless already granted)
+  if (Notification.permission !== 'granted' && localStorage.getItem('push_asked')) return;
 
   const permission = Notification.permission === 'granted'
     ? 'granted'
     : await Notification.requestPermission();
+  localStorage.setItem('push_asked', '1');
   if (permission !== 'granted') return;
 
   try {
     const token = await messaging.getToken({ vapidKey: VAPID_KEY });
-    if (token) {
-      await db.collection('users').doc(currentUser.uid).update({ fcmToken: token });
+    if (!token) return;
+
+    // Stable per-device ID so we can update the same doc without duplicates
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('device_id', deviceId);
     }
-  } catch (e) {
-    // Token fetch can fail on localhost or when VAPID_KEY is a placeholder — silent
-  }
+
+    // Store in broadcast collection (all users, including guests)
+    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+    localStorage.setItem('push_token', token);
+
+    // If logged in, also update the user profile
+    if (currentUser?.uid && currentUser.role !== 'guest') {
+      db.collection('users').doc(currentUser.uid).update({ fcmToken: token }).catch(() => {});
+    }
+
+    // Admins get a separate collection so we can target them specifically
+    if (currentUser?.role === 'admin') {
+      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+    }
+  } catch (e) { /* silent — localhost or blocked */ }
 }
 
-// Called after approval/formation events; calls the Netlify Function
+// Broadcast CP update to all subscribed users
+function sendCpNotification(trainNo, trainName, coaches) {
+  try {
+    const summary = (coaches || []).slice(0, 8).join(' · ') + (coaches.length > 8 ? ` +${coaches.length - 8}` : '');
+    fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        broadcast: true,
+        title: `CP: ${trainNo}${trainName ? ' – ' + trainName.split(' ').slice(0, 3).join(' ') : ''}`,
+        body: summary || 'Coach position updated'
+      })
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+// Notify all admins (e.g. new user needs approval)
+function sendAdminNotification(title, body) {
+  try {
+    fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'admin', title, body })
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+// Send push to a single token (approval notification to a specific user)
 async function sendPush(token, title, body) {
-  if (!token || token === '') return;
+  if (!token) return;
   try {
     await fetch('/.netlify/functions/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token, title, body }),
     });
-  } catch (_) {} // non-critical — never block the UI
+  } catch (_) {}
 }
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
@@ -1588,38 +1654,38 @@ $('scanFileInput').addEventListener('change', async (e) => {
       if (data.error) { errors.push(data.error); continue; }
       for (const scanned of (data.trains || [])) {
         const trainNo = String(scanned.trainNo || '').trim();
-        const coaches = (scanned.coaches || []).map(c => String(c).toUpperCase().trim()).filter(Boolean);
+        const coaches = expandCoaches((scanned.coaches || []).map(c => String(c).trim()).filter(Boolean));
         if (!trainNo || !coaches.length) continue;
+        const today = todayStr();
+        const who = currentUser?.name || 'Scan';
+        const cpFields = {
+          trainNo, date: today, rawList: coaches.join(','), parsedList: coaches,
+          submittedByName: who, submittedByEmail: currentUser?.email || '',
+          submittedByPhone: currentUser?.phone || '',
+          submittedByStation: currentUser?.station || '',
+          submittedByUID: currentUser?.uid || '',
+          updatedAt: Date.now(), updateCount: 1, confirmations: []
+        };
         const docSnap = await db.collection('trains').doc(trainNo).get();
         if (docSnap.exists && docSnap.data().dep !== undefined) {
           const d = docSnap.data();
-          // Save coaches to import doc (Trains tab chips)
           await db.collection('trains').doc(trainNo).set(
             { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
             { merge: true }
           );
-          // Also save as a CP record (All tab)
-          const today = todayStr();
-          const cpKey = `${trainNo}_${today}`;
-          const who = currentUser && currentUser.name ? currentUser.name : 'Scan';
-          await saveTrainRecord(cpKey, {
-            trainNo, trainName: d.name || '', date: today,
-            rawList: coaches.join(','), parsedList: coaches,
-            fromStation: d.srcCode || '', toStation: d.dstCode || '',
-            submittedByName: who,
-            submittedByEmail: currentUser?.email || '',
-            submittedByPhone: currentUser?.phone || '',
-            submittedByStation: currentUser?.station || '',
-            submittedByUID: currentUser?.uid || '',
-            updatedAt: Date.now(), updateCount: 1, confirmations: []
+          await saveTrainRecord(`${trainNo}_${today}`, {
+            ...cpFields, trainName: d.name || '', fromStation: d.srcCode || '', toStation: d.dstCode || ''
           });
-          if (_allTrains) {
-            const t = _allTrains.find(x => String(x.no) === trainNo);
-            if (t) t.coaches = coaches;
-          }
+          if (_allTrains) { const t = _allTrains.find(x => String(x.no) === trainNo); if (t) t.coaches = coaches; }
           matched.push({ trainNo, name: d.name || '', coaches });
+          sendCpNotification(trainNo, d.name || '', coaches);
         } else {
-          unmatched.push({ trainNo, coaches });
+          // Not in station trains list — still save CP record so it appears in All tab
+          await saveTrainRecord(`${trainNo}_${today}`, {
+            ...cpFields, trainName: scanned.trainName || '', fromStation: '', toStation: ''
+          });
+          unmatched.push({ trainNo, name: scanned.trainName || '', coaches });
+          sendCpNotification(trainNo, scanned.trainName || '', coaches);
         }
       }
     } catch (err) {
@@ -1637,15 +1703,19 @@ $('scanFileInput').addEventListener('change', async (e) => {
       </div>`).join('');
   }
   if (unmatched.length) {
-    html += `<div style="color:var(--amber);font-weight:600;margin-top:10px">⚠ Not in your train database (${unmatched.length})</div>`;
-    html += unmatched.map(r => `<div style="font-size:12px;color:var(--muted);padding:4px 0">Train ${r.trainNo} — not in imported trains list</div>`).join('');
+    html += `<div style="color:var(--teal);font-weight:600;margin-top:10px">✓ Saved to All tab (${unmatched.length} new train${unmatched.length > 1 ? 's' : ''})</div>`;
+    html += unmatched.map(r => `
+      <div class="scan-result-card">
+        <div style="font-weight:700">${r.trainNo} <span style="font-weight:400;color:var(--muted);font-size:12px">${r.name}</span></div>
+        <div class="st-cp-strip">${cpChipsHtml(r.coaches)}</div>
+      </div>`).join('');
   }
   if (errors.length) {
     html += `<div style="color:var(--red);font-size:12px;margin-top:8px">${errors.join('<br>')}</div>`;
   }
   if (!html) html = '<div style="color:var(--muted);text-align:center;padding:24px 0">No trains detected in image</div>';
   $('scanResults').innerHTML = html;
-  if (matched.length) { renderTrainsTab(); renderTrainsList(); }
+  if (matched.length || unmatched.length) { renderTrainsTab(); renderTrainsList(); }
 });
 
 function fileToBase64(file) {
@@ -1655,6 +1725,32 @@ function fileToBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// Expand shorthand coach notations returned by OCR:
+//   "7 GEN" → ["GEN","GEN","GEN","GEN","GEN","GEN","GEN"]
+//   "D5-D1" → ["D5","D4","D3","D2","D1"]
+//   "S1-S6" → ["S1","S2","S3","S4","S5","S6"]
+function expandCoaches(list) {
+  const out = [];
+  for (const raw of list) {
+    const c = String(raw).toUpperCase().trim();
+    const mul = c.match(/^(\d+)\s+([A-Z0-9]+)$/);
+    if (mul) {
+      const n = Math.min(parseInt(mul[1]), 30);
+      for (let i = 0; i < n; i++) out.push(mul[2]);
+      continue;
+    }
+    const rng = c.match(/^([A-Z]{1,3})(\d+)-([A-Z]{1,3})(\d+)$/);
+    if (rng && rng[1] === rng[3]) {
+      const prefix = rng[1], from = parseInt(rng[2]), to = parseInt(rng[4]);
+      const step = from <= to ? 1 : -1;
+      for (let i = from; i !== to + step; i += step) out.push(prefix + i);
+      continue;
+    }
+    out.push(c);
+  }
+  return out;
 }
 
 // Open the full submit form pre-filled from the Trains tab train database
@@ -1809,22 +1905,66 @@ $('sSaveBtn').addEventListener('click', async () => {
   }
   hideOverlay('submitOverlay');
   toast('Saved');
+  sendCpNotification(trainNo, trainName, parsedList);
   renderTrainsList();
   if (activeTab === 'station') renderTrainsTab();
 });
 
 // ─── Firebase Auth state ──────────────────────────────────────────────────────
+const PROFILE_CACHE_KEY = 'cp_profile_v1';
+
+function loadCachedProfile(uid) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return p && p.uid === uid ? p : null;
+  } catch { return null; }
+}
+
+function saveCachedProfile(profile) {
+  try { localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile)); } catch {}
+}
+
+function clearCachedProfile() {
+  try { localStorage.removeItem(PROFILE_CACHE_KEY); } catch {}
+}
+
 auth.onAuthStateChanged(async (firebaseUser) => {
   if (firebaseUser) {
-    // Signed in — load profile
     const email = firebaseUser.email || '';
+    const uid = firebaseUser.uid;
+
+    // Use cached profile instantly — resolves auth immediately without Firestore
+    const cached = loadCachedProfile(uid);
+    if (cached) {
+      currentUser = cached;
+      updateMeLabel();
+      updateFabVisibility();
+      renderTrainsList();
+      if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
+      setTimeout(initPushNotifications, 3000);
+      // Refresh profile from Firestore silently in background
+      db.collection('users').doc(uid).get().then(snap => {
+        if (snap.exists) {
+          currentUser = snap.data();
+          saveCachedProfile(currentUser);
+          updateMeLabel();
+        }
+      }).catch(() => {});
+      migrateLocalIfNeeded();
+      return;
+    }
+
+    // No cache — first sign-in on this device: fetch from Firestore
     try {
-      const profileSnap = await db.collection('users').doc(firebaseUser.uid).get();
+      const profileSnap = await db.collection('users').doc(uid).get();
       if (profileSnap.exists) {
         currentUser = profileSnap.data();
+        saveCachedProfile(currentUser);
       } else {
-        // New user — save a skeleton profile + show profile setup
-        currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
+        // New user — save skeleton profile + show profile setup
+        currentUser = { uid, email, role: 'pending', name: '', station: '', phone: '' };
         $('idTitle').textContent = 'Almost done — set your name';
         $('idHint').textContent = 'Fill in your details. An admin will approve your account before you can add or edit positions.';
         $('verifiedEmailLabel').textContent = email;
@@ -1834,20 +1974,18 @@ auth.onAuthStateChanged(async (firebaseUser) => {
         showOverlay('identityOverlay');
       }
     } catch (e) {
-      currentUser = { uid: firebaseUser.uid, email, role: 'pending', name: '', station: '', phone: '' };
+      currentUser = { uid, email, role: 'pending', name: '', station: '', phone: '' };
     }
     migrateLocalIfNeeded();
   } else {
-    // Default to guest — user can tap "Staff Login" in the header to sign in
     currentUser = { role: 'guest' };
+    clearCachedProfile();
   }
   updateMeLabel();
   updateFabVisibility();
   renderTrainsList();
-  // Request push permission once user is confirmed staff/admin
-  if (currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin')) {
-    setTimeout(initPushNotifications, 2000); // slight delay so UI settles first
-  }
+  setTimeout(initPushNotifications, 3000);
+  if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 });
 
 // Foreground push messages (app is open — show as toast)
@@ -1868,12 +2006,64 @@ updateOfflineBanner();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
+  // Auto-reload when a new SW takes control so users always get the latest version
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.location.reload();
+  });
 }
+
+// ─── PWA Install Prompt ────────────────────────────────────────────────────────
+(function() {
+  const banner = $('installBanner');
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isStandalone) return; // already installed
+
+  let _installPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+    if (!sessionStorage.getItem('install_dismissed')) {
+      setTimeout(() => { banner.style.display = 'flex'; }, 4000);
+    }
+  });
+
+  $('installBtn').addEventListener('click', async () => {
+    if (!_installPrompt) return;
+    _installPrompt.prompt();
+    const { outcome } = await _installPrompt.userChoice;
+    _installPrompt = null;
+    banner.style.display = 'none';
+    if (outcome === 'accepted') toast('App installed ✓');
+  });
+
+  $('installDismiss').addEventListener('click', () => {
+    banner.style.display = 'none';
+    sessionStorage.setItem('install_dismissed', '1');
+  });
+
+  // iOS: no beforeinstallprompt — show a manual hint instead
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS && !isStandalone && !localStorage.getItem('ios_install_shown')) {
+    setTimeout(() => {
+      $('installHint').textContent = 'Tap Share (⎙) → Add to Home Screen';
+      $('installBtn').style.display = 'none';
+      banner.style.display = 'flex';
+      localStorage.setItem('ios_install_shown', '1');
+    }, 5000);
+  }
+})();
 
 // ─── Web Share Target: process images shared from WhatsApp etc. ───────────────
 (async function checkSharedImages() {
   if (!location.search.includes('cp-shared=1')) return;
   history.replaceState({}, '', location.pathname);
+
+  // Auto-dismiss disclaimer so the scan overlay is not blocked
+  sessionStorage.setItem('disc_ok', '1');
+  const discEl = $('disclaimerModal');
+  if (discEl) discEl.style.display = 'none';
+
   try {
     const shareCache = await caches.open('cp-share-target');
     const countRes = await shareCache.match('shared-count');
@@ -1882,12 +2072,8 @@ if ('serviceWorker' in navigator) {
     if (!count) return;
     await shareCache.delete('shared-count');
 
-    // Wait for auth to be ready (up to 5s) before scanning
-    await new Promise(resolve => {
-      if (currentUser) { resolve(); return; }
-      const unsub = auth.onAuthStateChanged(() => { unsub(); resolve(); });
-      setTimeout(resolve, 5000);
-    });
+    // Wait for auth + Firestore profile to be fully loaded before scanning
+    await _authReady;
 
     if (!requireStaff()) {
       // Clear the cache so stale images don't accumulate
@@ -1919,8 +2105,18 @@ if ('serviceWorker' in navigator) {
         if (data.error) { errors.push(data.error); continue; }
         for (const scanned of (data.trains || [])) {
           const trainNo = String(scanned.trainNo || '').trim();
-          const coaches = (scanned.coaches || []).map(c => String(c).toUpperCase().trim()).filter(Boolean);
+          const coaches = expandCoaches((scanned.coaches || []).map(c => String(c).trim()).filter(Boolean));
           if (!trainNo || !coaches.length) continue;
+          const today = todayStr();
+          const who = currentUser?.name || 'Scan';
+          const cpFields = {
+            trainNo, date: today, rawList: coaches.join(','), parsedList: coaches,
+            submittedByName: who, submittedByEmail: currentUser?.email || '',
+            submittedByPhone: currentUser?.phone || '',
+            submittedByStation: currentUser?.station || '',
+            submittedByUID: currentUser?.uid || '',
+            updatedAt: Date.now(), updateCount: 1, confirmations: []
+          };
           const docSnap = await db.collection('trains').doc(trainNo).get();
           if (docSnap.exists && docSnap.data().dep !== undefined) {
             const d = docSnap.data();
@@ -1928,26 +2124,18 @@ if ('serviceWorker' in navigator) {
               { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
               { merge: true }
             );
-            const today = todayStr();
-            const who = currentUser && currentUser.name ? currentUser.name : 'Scan';
             await saveTrainRecord(`${trainNo}_${today}`, {
-              trainNo, trainName: d.name || '', date: today,
-              rawList: coaches.join(','), parsedList: coaches,
-              fromStation: d.srcCode || '', toStation: d.dstCode || '',
-              submittedByName: who,
-              submittedByEmail: currentUser?.email || '',
-              submittedByPhone: currentUser?.phone || '',
-              submittedByStation: currentUser?.station || '',
-              submittedByUID: currentUser?.uid || '',
-              updatedAt: Date.now(), updateCount: 1, confirmations: []
+              ...cpFields, trainName: d.name || '', fromStation: d.srcCode || '', toStation: d.dstCode || ''
             });
-            if (_allTrains) {
-              const t = _allTrains.find(x => String(x.no) === trainNo);
-              if (t) t.coaches = coaches;
-            }
+            if (_allTrains) { const t = _allTrains.find(x => String(x.no) === trainNo); if (t) t.coaches = coaches; }
             matched.push({ trainNo, name: d.name || '', coaches });
+            sendCpNotification(trainNo, d.name || '', coaches);
           } else {
-            unmatched.push({ trainNo, coaches });
+            await saveTrainRecord(`${trainNo}_${today}`, {
+              ...cpFields, trainName: scanned.trainName || '', fromStation: '', toStation: ''
+            });
+            unmatched.push({ trainNo, name: scanned.trainName || '', coaches });
+            sendCpNotification(trainNo, scanned.trainName || '', coaches);
           }
         }
       } catch (err) {
@@ -1965,8 +2153,12 @@ if ('serviceWorker' in navigator) {
         </div>`).join('');
     }
     if (unmatched.length) {
-      html += `<div style="color:var(--amber);font-weight:600;margin-top:10px">⚠ Not in your train database (${unmatched.length})</div>`;
-      html += unmatched.map(r => `<div style="font-size:12px;color:var(--muted);padding:4px 0">Train ${r.trainNo} — add to database first</div>`).join('');
+      html += `<div style="color:var(--teal);font-weight:600;margin-top:10px">✓ Saved to All tab (${unmatched.length} new train${unmatched.length > 1 ? 's' : ''})</div>`;
+      html += unmatched.map(r => `
+        <div class="scan-result-card">
+          <div style="font-weight:700">${r.trainNo} <span style="font-weight:400;color:var(--muted);font-size:12px">${r.name}</span></div>
+          <div class="st-cp-strip">${cpChipsHtml(r.coaches)}</div>
+        </div>`).join('');
     }
     if (errors.length) html += `<div style="color:var(--red);font-size:12px;margin-top:8px">${errors.join('<br>')}</div>`;
     if (!html) html = '<div style="color:var(--muted);text-align:center;padding:24px 0">No trains detected in image</div>';
