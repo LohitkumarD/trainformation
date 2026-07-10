@@ -1324,6 +1324,7 @@ async function renderTrainsList() {
             <button class="btn btn-secondary i-share">⬆ Share</button>
             ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
             <button class="btn btn-secondary i-edit">Edit</button>` : ''}
+            ${currentUser?.role === 'admin' ? `<button class="btn btn-danger i-delete">🗑</button>` : ''}
           </div>
         </div>
       </div>
@@ -1427,6 +1428,33 @@ async function renderTrainsList() {
       // Edit
       item.querySelector('.i-edit').addEventListener('click', () => {
         openSubmit(cur.trainNo, cur.date, cur.trainName, cur.rawList, cur.fromStation, cur.toStation);
+      });
+    }
+
+    // Delete (admin only)
+    const delBtn = item.querySelector('.i-delete');
+    if (delBtn) {
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete CP record for train ${cur.trainNo} on ${cur.date}?`)) return;
+        const key = `${cur.trainNo}_${cur.date}`;
+        try {
+          await db.collection('trains').doc(key).delete();
+          // Also clear coaches from the import doc so the Trains tab chip disappears
+          db.collection('trains').doc(cur.trainNo).update({
+            coaches: firebase.firestore.FieldValue.delete(),
+            cpUpdatedAt: firebase.firestore.FieldValue.delete()
+          }).catch(() => {});
+          if (_allTrains) {
+            const t = _allTrains.find(x => String(x.no) === cur.trainNo);
+            if (t) { delete t.coaches; delete t.cpUpdatedAt; }
+          }
+          toast('CP record deleted');
+          renderTrainsList();
+          if (activeTab === 'station') renderTrainsTab();
+        } catch (err) {
+          toast('Delete failed — ' + err.message);
+        }
       });
     }
   });
