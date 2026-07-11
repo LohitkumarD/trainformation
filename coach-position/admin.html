@@ -344,7 +344,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
       <div class="tbl-wrap">
         <table>
           <thead>
-            <tr><th>Name</th><th>Staff ID</th><th>Designation</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr>
+            <tr><th>Name</th><th>Staff ID</th><th>Designation</th><th>Station</th><th>Mobile</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr>
           </thead>
           <tbody id="users-body"></tbody>
         </table>
@@ -971,6 +971,8 @@ function renderUsers() {
       <td style="font-weight:600;">${u.name||'—'}</td>
       <td style="font-family:var(--mono);font-size:12px;">${u.staffId||'—'}</td>
       <td style="color:var(--muted);">${u.designation||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--amber);">${u.station||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${u.phone||'—'}</td>
       <td style="font-size:12px;color:var(--muted);">${u.email||'—'}</td>
       <td><span class="badge b-${st==='approved'?'approved':st==='rejected'?'rejected':'pending'}">${st}</span></td>
       <td style="font-size:12px;color:var(--muted);">${dt}</td>
