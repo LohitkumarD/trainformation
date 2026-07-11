@@ -1486,6 +1486,20 @@ async function populateShareCapture(d) {
 let _pushInitStarted = false;
 async function initPushNotifications() {
   if (_pushInitStarted) return; // avoid double-resolving/duplicate prompts across call sites
+
+  // On mobile, permission granted from a plain browser tab doesn't reliably
+  // carry over to the installed PWA's own OS-level notification toggle
+  // (confirmed on Android: install → check Settings → Notifications was
+  // unchecked when we'd asked pre-install). So on mobile, don't ask at all
+  // until the app is actually running installed/standalone — desktop has
+  // no such quirk and can ask immediately.
+  const isMobile = /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isMobile && !isStandalone) {
+    _pushInitResolve(); // let the install banner proceed on its own timer
+    return;
+  }
+
   _pushInitStarted = true;
   try {
     await _initPushNotificationsImpl();
