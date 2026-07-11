@@ -206,6 +206,10 @@
   .tcoach.d2s {--tc1:#3B9BD1;--tc2:#27709A;}  /* 2S — sky */
   .tcoach.pc  {--tc1:#B98A4A;--tc2:#87622F;}  /* Pantry — brown */
   .tcoach.unk {--tc1:#64748B;--tc2:#475366;}
+  /* reversal segments */
+  .seg-hd{font-size:11px;font-weight:800;font-family:var(--mono);letter-spacing:.06em;color:var(--amber);margin:10px 0 2px;display:flex;align-items:center;gap:6px;}
+  .seg-hd:first-child{margin-top:0;}
+  .seg-hd .seg-rev{background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.3);border-radius:5px;padding:1px 7px;font-size:10px;}
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
@@ -931,6 +935,52 @@ function renderTrainStrip(container, codes) {
   });
 }
 
+// ─── Reversal segments ────────────────────────────────────────────────────────
+// ENG never reverses — only the coaches from position 2 onwards flip at each
+// reversal station. Reversal stations are set per train in the admin panel.
+const _revCache = {};
+async function getReversalStations(trainNo) {
+  const key = String(trainNo);
+  if (_revCache[key] !== undefined) return _revCache[key];
+  try {
+    const doc = await db.collection('trains').doc(key).get();
+    const d = doc.exists ? doc.data() : null;
+    _revCache[key] = (d && Array.isArray(d.reversalStations)) ? d.reversalStations : [];
+  } catch { _revCache[key] = []; }
+  return _revCache[key];
+}
+
+function reverseFormation(codes) {
+  if (!codes.length) return codes;
+  return codes[0].toUpperCase() === 'ENG'
+    ? [codes[0], ...codes.slice(1).reverse()]
+    : [...codes].reverse();
+}
+
+// Render formation with all reversal segments into a container.
+// No reversals → single strip, same as before.
+function renderFormationSegments(container, parsedList, revStations, fromStation, toStation) {
+  if (!revStations || !revStations.length) {
+    renderTrainStrip(container, parsedList);
+    return;
+  }
+  container.classList.remove('train-strip');
+  container.innerHTML = '';
+  const points = [fromStation || 'ORIGIN', ...revStations, toStation || 'DESTINATION'];
+  let codes = parsedList;
+  for (let i = 0; i < points.length - 1; i++) {
+    if (i > 0) codes = reverseFormation(codes);
+    const hd = document.createElement('div');
+    hd.className = 'seg-hd';
+    hd.innerHTML = `${points[i]} → ${points[i + 1]}${i > 0 ? `<span class="seg-rev">🔄 reversed at ${points[i]}</span>` : ''}`;
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    renderTrainStrip(strip, codes);
+    container.appendChild(hd);
+    container.appendChild(strip);
+  }
+}
+
 function showChipEditDialog(index, codes, onSave) {
   const currentCode = codes[index];
   const overlay = document.createElement('div');
@@ -1233,7 +1283,7 @@ $('emailRegisterBtn').addEventListener('click', async () => {
 });
 
 // ─── Share capture helper ─────────────────────────────────────────────────────
-function populateShareCapture(d) {
+async function populateShareCapture(d) {
   $('rTrainNo').textContent = d.trainNo;
   $('rTrainName').textContent = d.trainName || '';
   $('rDate').textContent = formatDateOnly(d.date);
@@ -1241,7 +1291,8 @@ function populateShareCapture(d) {
     ? `${d.fromStation} → ${d.toStation}`
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
-  renderTrainStrip($('rStrip'), d.parsedList || []);
+  const _rev = await getReversalStations(d.trainNo);
+  renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation);
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -1468,6 +1519,11 @@ async function renderTrainsList() {
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
       renderTrainStrip(item.querySelector('.i-strip'), rec.parsedList || []);
+      // Upgrade to multi-segment view if this train has reversal stations
+      getReversalStations(rec.trainNo).then(rev => {
+        if (!rev.length || cur !== rec) return;
+        renderFormationSegments(item.querySelector('.i-strip'), rec.parsedList || [], rev, rec.fromStation, rec.toStation);
+      });
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
@@ -1535,8 +1591,8 @@ async function renderTrainsList() {
     });
 
     // Share
-    item.querySelector('.i-share').addEventListener('click', () => {
-      populateShareCapture(cur);
+    item.querySelector('.i-share').addEventListener('click', async () => {
+      await populateShareCapture(cur);
       shareAsImage(cur.trainNo, cur.date);
     });
 
