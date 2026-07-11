@@ -1452,6 +1452,7 @@ async function renderTrainsList() {
             <button class="btn btn-secondary i-edit">Edit</button>` : ''}
             ${currentUser?.role === 'admin' ? `<button class="btn btn-danger i-delete">🗑</button>` : ''}
           </div>
+          ${canEdit() ? `<button class="btn btn-primary btn-block i-same" style="display:none">↻ Same coach position — save for today</button>` : ''}
         </div>
       </div>
     `;
@@ -1484,6 +1485,10 @@ async function renderTrainsList() {
         clEl.style.display = 'none';
         clEl.innerHTML = '';
       }
+
+      // "Same CP today" — only when viewing an older date's record
+      const sameEl = item.querySelector('.i-same');
+      if (sameEl) sameEl.style.display = rec.date !== todayStr() ? '' : 'none';
     }
 
     // Initial render
@@ -1536,6 +1541,38 @@ async function renderTrainsList() {
     });
 
     if (canEdit()) {
+      // Same CP today — copy this record to today's date, stamped now
+      item.querySelector('.i-same').addEventListener('click', async () => {
+        const identity = getIdentity();
+        if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+        const today = todayStr();
+        if (cur.date === today) return;
+        if (!confirm(`Save the same coach position for today (${formatDateOnly(today)})?`)) return;
+        const key = `${cur.trainNo}_${today}`;
+        const existing = await getTrainRecord(key);
+        await saveTrainRecord(key, {
+          trainNo: cur.trainNo, trainName: cur.trainName || '', date: today,
+          rawList: cur.rawList || (cur.parsedList || []).join(','),
+          parsedList: cur.parsedList || [],
+          fromStation: cur.fromStation || '', toStation: cur.toStation || '',
+          submittedByName: identity.name,
+          submittedByEmail: identity.email || '',
+          submittedByPhone: identity.phone || '',
+          submittedByStation: identity.station || '',
+          submittedByUID: identity.uid || '',
+          updatedAt: Date.now(),
+          updateCount: (existing && existing.updateCount ? existing.updateCount : 0) + 1,
+          confirmations: []
+        });
+        db.collection('trains').doc(cur.trainNo).set(
+          { coaches: cur.parsedList || [], cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        ).catch(() => {});
+        toast('Saved for today ✓');
+        sendCpNotification(cur.trainNo, cur.trainName || '', cur.parsedList || []);
+        renderTrainsList();
+      });
+
       // Confirm
       item.querySelector('.i-confirm').addEventListener('click', async () => {
         const identity = getIdentity();
