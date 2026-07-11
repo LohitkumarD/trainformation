@@ -261,6 +261,17 @@
   .btn-row{display:flex;gap:10px;}
   .btn-row .btn{flex:1;}
 
+  /* CP card action row */
+  .card-actions{gap:8px;align-items:stretch;}
+  .card-actions .btn{flex:1;padding:11px 6px;font-size:13.5px;font-weight:700;border-radius:9px;white-space:nowrap;}
+  .card-actions .i-confirm{background:rgba(22,163,74,.09);color:var(--green);border:1.5px solid var(--green);}
+  .card-actions .i-confirm:active{background:rgba(22,163,74,.18);}
+  .card-actions .i-delete{
+    flex:0 0 42px;padding:0;font-size:15px;border-radius:9px;
+    background:transparent;color:var(--red);border:1.5px solid rgba(220,38,38,.45);
+  }
+  .card-actions .i-delete:active{background:rgba(220,38,38,.1);}
+
   .preview-strip .chip{min-width:34px;height:38px;border-radius:5px;}
   .preview-strip .chip-index{font-size:8px;}
   .preview-strip .chip-code{font-size:10px;}
@@ -1572,11 +1583,11 @@ async function renderTrainsList() {
           <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
           <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
           <div class="confirm-line i-cl"></div>
-          <div class="btn-row">
+          <div class="btn-row card-actions">
             <button class="btn btn-secondary i-share">⬆ Share</button>
-            ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
-            <button class="btn btn-secondary i-edit">Edit</button>` : ''}
-            ${currentUser?.role === 'admin' ? `<button class="btn btn-danger i-delete">🗑</button>` : ''}
+            ${canEdit() ? `<button class="btn i-confirm">✓ Confirm</button>
+            <button class="btn btn-secondary i-edit">✎ Edit</button>` : ''}
+            ${currentUser?.role === 'admin' ? `<button class="btn i-delete" title="Delete record">🗑</button>` : ''}
           </div>
           ${canEdit() ? `<button class="btn btn-primary btn-block i-same" style="display:none">↻ Same coach position — save for today</button>` : ''}
         </div>
