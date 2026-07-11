@@ -1228,7 +1228,7 @@ async function sendCustomNotification() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
     status.textContent = `Sent to ${data.sent}/${data.total} device${data.total===1?'':'s'}${data.failed?`, ${data.failed} failed`:''}`;
     toast('Notification sent', 'ok');
     document.getElementById('notif-title').value = '';

@@ -1480,7 +1480,10 @@ async function populateShareCapture(d) {
 
 // ─── Push notifications ───────────────────────────────────────────────────────
 async function initPushNotifications() {
-  if (!messaging || !('Notification' in window)) return;
+  if (!messaging || !('Notification' in window)) {
+    console.warn('[push] not supported on this browser/context (messaging=' + !!messaging + ')');
+    return;
+  }
   if (Notification.permission === 'denied') return;
   // Only ask once per device (unless already granted)
   if (Notification.permission !== 'granted' && localStorage.getItem('push_asked')) return;
@@ -1505,19 +1508,22 @@ async function initPushNotifications() {
     }
 
     // Store in broadcast collection (all users, including guests)
-    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
+      .catch(e => console.error('[push] fcm_tokens write failed:', e.message));
     localStorage.setItem('push_token', token);
 
     // If logged in, also update the user profile
     if (currentUser?.uid && currentUser.role !== 'guest') {
-      db.collection('users').doc(currentUser.uid).update({ fcmToken: token }).catch(() => {});
+      db.collection('users').doc(currentUser.uid).update({ fcmToken: token })
+        .catch(e => console.error('[push] users.fcmToken write failed:', e.message));
     }
 
     // Admins get a separate collection so we can target them specifically
     if (currentUser?.role === 'admin') {
-      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
+        .catch(e => console.error('[push] admin_fcm_tokens write failed:', e.message));
     }
-  } catch (e) { /* silent — localhost or blocked */ }
+  } catch (e) { console.error('[push] registration failed:', e.message); }
 }
 
 // Broadcast CP update to all subscribed users
