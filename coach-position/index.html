@@ -223,12 +223,6 @@
   .rev-block.open .rev-body{display:block;}
   .rev-sub{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px;display:flex;align-items:center;gap:5px;}
   .rev-sub b{color:var(--text);}
-  /* horizontal scroll for formation strips in the reversal view */
-  .seg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;}
-  .seg-scroll .train-strip{flex-wrap:nowrap;width:max-content;}
-  .seg-scroll::-webkit-scrollbar{height:5px;}
-  .seg-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px;}
-  .seg-scroll::-webkit-scrollbar-track{background:transparent;}
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
@@ -988,17 +982,11 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
   container.classList.remove('train-strip');
   container.innerHTML = '';
 
-  // Interactive view: strips scroll horizontally in a single row.
-  // Share capture (expandAll): strips wrap so html2canvas sees everything.
   const stripEl = (codes) => {
     const strip = document.createElement('div');
     strip.className = 'strip';
     renderTrainStrip(strip, codes);
-    if (expandAll) return strip;
-    const scroller = document.createElement('div');
-    scroller.className = 'seg-scroll';
-    scroller.appendChild(strip);
-    return scroller;
+    return strip;
   };
 
   // First leg — the formation as entered
