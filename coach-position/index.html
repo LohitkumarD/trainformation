@@ -173,6 +173,40 @@
   .chip.ec   {background:#C026D3;color:#FFFFFF;}
   .chip.pc   {background:#E11D48;color:#FFFFFF;}
   .chip.unk  {background:#64748B;color:#FFFFFF;}
+
+  /* ── Train view (display strips) ── */
+  .train-strip{display:flex;flex-wrap:wrap;gap:14px 8px;align-items:flex-end;padding:4px 0;}
+  .tcoach{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;}
+  .t-pos{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:2px;line-height:1;font-family:var(--mono);}
+  .t-body{
+    position:relative;width:66px;height:36px;border-radius:7px 7px 5px 5px;
+    background:linear-gradient(180deg,var(--tc1) 0%,var(--tc1) 62%,var(--tc2) 62%);
+    border:1.5px solid var(--tc2);
+    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:6px;
+  }
+  .t-win{width:10px;height:12px;border-radius:2.5px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
+  .t-door{width:7px;height:21px;border-radius:2px;background:rgba(0,0,0,.22);}
+  .t-wheels{display:flex;justify-content:space-between;width:52px;margin-top:-4px;}
+  .t-wheel{width:10px;height:10px;border-radius:50%;background:#3A4150;border:2px solid #8B94A8;}
+  .t-lbl{font-size:15px;font-weight:900;margin-top:3px;letter-spacing:.02em;line-height:1;color:var(--text);}
+  .tcoach.tghost{opacity:.45;}
+  .tcoach svg{display:block;}
+  /* type colours (same classes as chips, distinct per type) */
+  .tcoach.eng {--tc1:#4B5568;--tc2:#333B4A;}
+  .tcoach.end {--tc1:#C0556A;--tc2:#8E3B4B;}  /* SLR/SLRD — dark rose */
+  .tcoach.pwr {--tc1:#A94458;--tc2:#7C2F3F;}  /* LPR/EOG — maroon */
+  .tcoach.gen {--tc1:#6FB94E;--tc2:#4A8A30;}  /* GEN — green */
+  .tcoach.sl  {--tc1:#F49A3C;--tc2:#BF6F1E;}  /* Sleeper — orange */
+  .tcoach.ac3 {--tc1:#4A90E2;--tc2:#2D66B0;}  /* AC 3-tier — blue */
+  .tcoach.ac3e{--tc1:#8E6FD8;--tc2:#664BA8;}  /* AC 3 economy — violet */
+  .tcoach.ac2 {--tc1:#2BA8A0;--tc2:#1B7A74;}  /* AC 2-tier — teal */
+  .tcoach.ac1 {--tc1:#5D5FC7;--tc2:#3F4196;}  /* First AC — indigo */
+  .tcoach.cc  {--tc1:#E5739E;--tc2:#B04A73;}  /* Chair car — pink */
+  .tcoach.ec  {--tc1:#B44FC9;--tc2:#83368F;}  /* Executive CC — magenta */
+  .tcoach.d2s {--tc1:#3B9BD1;--tc2:#27709A;}  /* 2S — sky */
+  .tcoach.pc  {--tc1:#B98A4A;--tc2:#87622F;}  /* Pantry — brown */
+  .tcoach.unk {--tc1:#64748B;--tc2:#475366;}
+
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
   .meta-line b{color:var(--text);}
@@ -816,6 +850,74 @@ function renderStrip(container, codes, onChipClick) {
   });
 }
 
+// ─── Train view renderer (display only) ──────────────────────────────────────
+function engineSVG() {
+  // colours hardcoded (not CSS vars) so html2canvas share capture renders them
+  return `<svg width="72" height="43" viewBox="0 0 112 66">
+    <rect x="106" y="40" width="6" height="5" rx="1.5" fill="#39404F"/>
+    <rect x="46" y="1" width="22" height="5" rx="2" fill="#333B4A"/>
+    <rect x="74" y="2" width="14" height="4" rx="2" fill="#333B4A"/>
+    <path d="M52 2 L60 -4 L68 2" stroke="#333B4A" stroke-width="2" fill="none" transform="translate(0,6)"/>
+    <path d="M108 50 H18 Q10 50 7 43 L3 30 Q1 24 8 18 L20 8 Q23 5 29 5 h72 q7 0 7 7 Z" fill="#E9EBEF" stroke="#333B4A" stroke-width="2"/>
+    <path d="M40 5 h61 q7 0 7 7 v10 H36 Z" fill="#4B5568"/>
+    <path d="M6 40 L108 40 V50 H18 Q10 50 7 43 Z" fill="#333B4A"/>
+    <path d="M4 32 L26 32 L20 40 L6 40 Q4 37 4 34 Z" fill="#E8722C"/>
+    <path d="M8 19 L30 19 L26 26 L5 26 Z" fill="#E8722C" opacity=".92"/>
+    <path d="M16 10 L34 10 L34 24 L11 24 Q13 15 16 10 Z" fill="#AFD9EC" stroke="#333B4A" stroke-width="1.6"/>
+    <path d="M18 11 L24 11 L15 23 L12.5 23 Z" fill="#fff" opacity=".55"/>
+    <g fill="#AFD9EC" stroke="#20262f" stroke-width="1">
+      <rect x="44" y="10" width="13" height="10" rx="2"/>
+      <rect x="62" y="10" width="13" height="10" rx="2"/>
+    </g>
+    <circle cx="8" cy="30" r="3.4" fill="#FFE28A" stroke="#B98A2B" stroke-width="1.4"/>
+    <g stroke="#B9BFCB" stroke-width="1.6"><line x1="44" y1="30" x2="100" y2="30"/><line x1="44" y1="34" x2="100" y2="34"/></g>
+    <rect x="10" y="50" width="96" height="4" rx="2" fill="#2A303C"/>
+    <rect x="16" y="53" width="30" height="6" rx="3" fill="#39404F"/>
+    <rect x="66" y="53" width="30" height="6" rx="3" fill="#39404F"/>
+    <g fill="#3A4150" stroke="#8B94A8" stroke-width="2">
+      <circle cx="24" cy="59" r="5.5"/><circle cx="38" cy="59" r="5.5"/>
+      <circle cx="74" cy="59" r="5.5"/><circle cx="88" cy="59" r="5.5"/>
+    </g>
+    <g fill="#C9D1E0"><circle cx="24" cy="59" r="1.6"/><circle cx="38" cy="59" r="1.6"/><circle cx="74" cy="59" r="1.6"/><circle cx="88" cy="59" r="1.6"/></g>
+  </svg>`;
+}
+
+function renderTrainStrip(container, codes) {
+  container.classList.add('train-strip');
+  container.innerHTML = '';
+  const mk = (html) => {
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    return el.firstElementChild;
+  };
+  // Ghost engine when formation doesn't start with ENG (marks engine end)
+  if (codes.length && codes[0].toUpperCase() !== 'ENG') {
+    container.appendChild(mk(
+      `<div class="tcoach eng tghost" title="Engine end">
+        <div class="t-pos">&nbsp;</div>${engineSVG()}<div class="t-lbl">ENG</div>
+      </div>`
+    ));
+  }
+  codes.forEach((code, i) => {
+    if (code.toUpperCase() === 'ENG') {
+      container.appendChild(mk(
+        `<div class="tcoach eng">
+          <div class="t-pos">${i + 1}</div>${engineSVG()}<div class="t-lbl">ENG</div>
+        </div>`
+      ));
+      return;
+    }
+    container.appendChild(mk(
+      `<div class="tcoach ${classOf(code)}">
+        <div class="t-pos">${i + 1}</div>
+        <div class="t-body"><div class="t-win"></div><div class="t-win"></div><div class="t-door"></div><div class="t-win"></div></div>
+        <div class="t-wheels"><div class="t-wheel"></div><div class="t-wheel"></div></div>
+        <div class="t-lbl">${code}</div>
+      </div>`
+    ));
+  });
+}
+
 function showChipEditDialog(index, codes, onSave) {
   const currentCode = codes[index];
   const overlay = document.createElement('div');
@@ -1126,7 +1228,7 @@ function populateShareCapture(d) {
     ? `${d.fromStation} → ${d.toStation}`
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
-  renderStrip($('rStrip'), d.parsedList || []);
+  renderTrainStrip($('rStrip'), d.parsedList || []);
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -1340,7 +1442,7 @@ async function renderTrainsList() {
         ? `(${rec.submittedByPhone.slice(-4)})`
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
-      renderStrip(item.querySelector('.i-strip'), rec.parsedList || []);
+      renderTrainStrip(item.querySelector('.i-strip'), rec.parsedList || []);
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
