@@ -209,7 +209,20 @@
   /* reversal segments */
   .seg-hd{font-size:11px;font-weight:800;font-family:var(--mono);letter-spacing:.06em;color:var(--amber);margin:10px 0 2px;display:flex;align-items:center;gap:6px;}
   .seg-hd:first-child{margin-top:0;}
-  .seg-hd .seg-rev{background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.3);border-radius:5px;padding:1px 7px;font-size:10px;}
+  /* reversal station block (collapsible, highlighted) */
+  .rev-block{border:1.5px solid rgba(217,119,6,.45);border-radius:10px;overflow:hidden;margin:10px 0 0;background:var(--surface);}
+  .rev-bar{
+    background:linear-gradient(90deg,rgba(217,119,6,.16),rgba(217,119,6,.07));
+    padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+    font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--amber);letter-spacing:.05em;
+  }
+  .rev-bar .rev-star{font-size:15px;}
+  .rev-bar .rev-chev{margin-left:auto;transition:transform .18s ease;font-size:12px;}
+  .rev-block.open .rev-bar .rev-chev{transform:rotate(180deg);}
+  .rev-body{display:none;padding:4px 12px 12px;}
+  .rev-block.open .rev-body{display:block;}
+  .rev-sub{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px;display:flex;align-items:center;gap:5px;}
+  .rev-sub b{color:var(--text);}
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
@@ -957,28 +970,58 @@ function reverseFormation(codes) {
     : [...codes].reverse();
 }
 
-// Render formation with all reversal segments into a container.
+// Render formation with reversal stations into a container (NTES style):
+// first leg strip, then one highlighted collapsible block per reversal
+// station showing Arrival and Departure formations at that station.
 // No reversals → single strip, same as before.
-function renderFormationSegments(container, parsedList, revStations, fromStation, toStation) {
+function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll) {
   if (!revStations || !revStations.length) {
     renderTrainStrip(container, parsedList);
     return;
   }
   container.classList.remove('train-strip');
   container.innerHTML = '';
-  const points = [fromStation || 'ORIGIN', ...revStations, toStation || 'DESTINATION'];
+
+  // First leg — the formation as entered
+  const firstHd = document.createElement('div');
+  firstHd.className = 'seg-hd';
+  firstHd.textContent = `${fromStation || 'ORIGIN'} → ${revStations[0]}`;
+  container.appendChild(firstHd);
+  const firstStrip = document.createElement('div');
+  firstStrip.className = 'strip';
+  renderTrainStrip(firstStrip, parsedList);
+  container.appendChild(firstStrip);
+
+  // One highlighted, collapsible block per reversal station
   let codes = parsedList;
-  for (let i = 0; i < points.length - 1; i++) {
-    if (i > 0) codes = reverseFormation(codes);
-    const hd = document.createElement('div');
-    hd.className = 'seg-hd';
-    hd.innerHTML = `${points[i]} → ${points[i + 1]}${i > 0 ? `<span class="seg-rev">🔄 reversed at ${points[i]}</span>` : ''}`;
-    const strip = document.createElement('div');
-    strip.className = 'strip';
-    renderTrainStrip(strip, codes);
-    container.appendChild(hd);
-    container.appendChild(strip);
-  }
+  revStations.forEach((stn, i) => {
+    const before = codes;
+    codes = reverseFormation(codes);
+    const nextPoint = revStations[i + 1] || toStation || 'DESTINATION';
+
+    const block = document.createElement('div');
+    block.className = 'rev-block' + (expandAll ? ' open' : '');
+    block.innerHTML = `
+      <div class="rev-bar">
+        <span class="rev-star">🔄</span>
+        <span>${stn} — REVERSAL STATION</span>
+        <span class="rev-chev">▼</span>
+      </div>
+      <div class="rev-body">
+        <div class="rev-sub">Arrival at <b>${stn}</b></div>
+        <div class="strip _rv-arr"></div>
+        <div class="rev-sub">Departure from <b>${stn}</b> (towards ${nextPoint})</div>
+        <div class="strip _rv-dep"></div>
+      </div>
+    `;
+    renderTrainStrip(block.querySelector('._rv-arr'), before);
+    renderTrainStrip(block.querySelector('._rv-dep'), codes);
+    block.querySelector('.rev-bar').addEventListener('click', (e) => {
+      e.stopPropagation();
+      block.classList.toggle('open');
+    });
+    container.appendChild(block);
+  });
 }
 
 function showChipEditDialog(index, codes, onSave) {
@@ -1292,7 +1335,7 @@ async function populateShareCapture(d) {
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
   const _rev = await getReversalStations(d.trainNo);
-  renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation);
+  renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation, true);
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
