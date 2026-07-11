@@ -136,7 +136,7 @@
   .ti-chev{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .18s ease;}
   .train-item.open .ti-chev{transform:rotate(180deg);}
   .train-item-body{max-height:0;overflow:hidden;transition:max-height .32s ease;}
-  .train-item.open .train-item-body{max-height:1400px;}
+  .train-item.open .train-item-body{max-height:8000px;}
   .inline-card{padding:14px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;gap:12px;}
   .inline-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
   .inline-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
@@ -192,20 +192,20 @@
   .tcoach.tghost{opacity:.45;}
   .tcoach svg{display:block;}
   /* type colours (same classes as chips, distinct per type) */
-  .tcoach.eng {--tc1:#4B5568;--tc2:#333B4A;}
-  .tcoach.end {--tc1:#C0556A;--tc2:#8E3B4B;}  /* SLR/SLRD — dark rose */
-  .tcoach.pwr {--tc1:#A94458;--tc2:#7C2F3F;}  /* LPR/EOG — maroon */
-  .tcoach.gen {--tc1:#6FB94E;--tc2:#4A8A30;}  /* GEN — green */
-  .tcoach.sl  {--tc1:#F49A3C;--tc2:#BF6F1E;}  /* Sleeper — orange */
-  .tcoach.ac3 {--tc1:#4A90E2;--tc2:#2D66B0;}  /* AC 3-tier — blue */
-  .tcoach.ac3e{--tc1:#8E6FD8;--tc2:#664BA8;}  /* AC 3 economy — violet */
-  .tcoach.ac2 {--tc1:#2BA8A0;--tc2:#1B7A74;}  /* AC 2-tier — teal */
-  .tcoach.ac1 {--tc1:#5D5FC7;--tc2:#3F4196;}  /* First AC — indigo */
-  .tcoach.cc  {--tc1:#E5739E;--tc2:#B04A73;}  /* Chair car — pink */
-  .tcoach.ec  {--tc1:#B44FC9;--tc2:#83368F;}  /* Executive CC — magenta */
-  .tcoach.d2s {--tc1:#3B9BD1;--tc2:#27709A;}  /* 2S — sky */
-  .tcoach.pc  {--tc1:#B98A4A;--tc2:#87622F;}  /* Pantry — brown */
-  .tcoach.unk {--tc1:#64748B;--tc2:#475366;}
+  .tcoach.eng {--tc1:#5B6579;--tc2:#414A5C;}
+  .tcoach.end {--tc1:#DB7C90;--tc2:#B25468;}  /* SLR/SLRD — rose */
+  .tcoach.pwr {--tc1:#C96A7D;--tc2:#A24A5D;}  /* LPR/EOG — maroon */
+  .tcoach.gen {--tc1:#8FCC71;--tc2:#66A648;}  /* GEN — green */
+  .tcoach.sl  {--tc1:#F8B366;--tc2:#D68B3A;}  /* Sleeper — orange */
+  .tcoach.ac3 {--tc1:#74A9EC;--tc2:#4A82C8;}  /* AC 3-tier — blue */
+  .tcoach.ac3e{--tc1:#AB92E3;--tc2:#8168C2;}  /* AC 3 economy — violet */
+  .tcoach.ac2 {--tc1:#55C2BA;--tc2:#329A93;}  /* AC 2-tier — teal */
+  .tcoach.ac1 {--tc1:#8385DB;--tc2:#5C5EB8;}  /* First AC — indigo */
+  .tcoach.cc  {--tc1:#EF98B8;--tc2:#C96A90;}  /* Chair car — pink */
+  .tcoach.ec  {--tc1:#C97BDB;--tc2:#A052B4;}  /* Executive CC — magenta */
+  .tcoach.d2s {--tc1:#6BB6E1;--tc2:#3F8DBB;}  /* 2S — sky */
+  .tcoach.pc  {--tc1:#CFA76E;--tc2:#A87F45;}  /* Pantry — brown */
+  .tcoach.unk {--tc1:#8A99AF;--tc2:#647289;}
   /* reversal segments */
   .seg-hd{font-size:11px;font-weight:800;font-family:var(--mono);letter-spacing:.06em;color:var(--amber);margin:10px 0 2px;display:flex;align-items:center;gap:6px;}
   .seg-hd:first-child{margin-top:0;}
@@ -229,6 +229,18 @@
   .rev-sub b{color:#fff;}
   .rev-sub.arr{background:#64748B;}
   .rev-sub.dep{background:var(--amber);}
+  /* phones: fit 5 coaches per row */
+  @media (max-width:480px){
+    .train-strip{gap:12px 5px;}
+    .t-body{width:56px;height:33px;gap:3px;padding-top:5px;border-radius:6px 6px 4px 4px;}
+    .t-win{width:8px;height:10px;}
+    .t-door{width:6px;height:18px;}
+    .t-wheels{width:44px;}
+    .t-wheel{width:9px;height:9px;border-width:2px;}
+    .t-lbl{font-size:13px;}
+    .t-pos{font-size:10px;}
+    .tcoach svg{width:61px;height:auto;}
+  }
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
