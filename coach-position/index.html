@@ -744,6 +744,10 @@ db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 // ─── App state ────────────────────────────────────────────────────────────────
 let currentUser = null;
 let activeTab = 'all';
+// Resolves once the push-permission prompt has settled (granted/denied/skipped),
+// so the install banner never overlaps it with a second native-feeling prompt.
+let _pushInitResolve;
+const _pushInitSettled = new Promise(r => { _pushInitResolve = r; });
 // Multi-select (share multiple trains as one text message)
 let selectMode = false;
 const selectedTrains = new Set();
@@ -1479,7 +1483,17 @@ async function populateShareCapture(d) {
 }
 
 // ─── Push notifications ───────────────────────────────────────────────────────
+let _pushInitStarted = false;
 async function initPushNotifications() {
+  if (_pushInitStarted) return; // avoid double-resolving/duplicate prompts across call sites
+  _pushInitStarted = true;
+  try {
+    await _initPushNotificationsImpl();
+  } finally {
+    _pushInitResolve();
+  }
+}
+async function _initPushNotificationsImpl() {
   if (!messaging || !('Notification' in window)) {
     console.warn('[push] not supported on this browser/context (messaging=' + !!messaging + ')');
     return;
@@ -2477,13 +2491,20 @@ if ('serviceWorker' in navigator) {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   if (isStandalone) return; // already installed
 
+  // Never overlap with the native notification-permission prompt — wait for it
+  // to settle first (capped, in case the user leaves that dialog open a while).
+  const afterPushPrompt = Promise.race([
+    _pushInitSettled,
+    new Promise(r => setTimeout(r, 8000)),
+  ]);
+
   let _installPrompt = null;
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     _installPrompt = e;
     if (!sessionStorage.getItem('install_dismissed')) {
-      setTimeout(() => { banner.style.display = 'flex'; }, 4000);
+      afterPushPrompt.then(() => setTimeout(() => { banner.style.display = 'flex'; }, 800));
     }
   });
 
@@ -2504,12 +2525,12 @@ if ('serviceWorker' in navigator) {
   // iOS: no beforeinstallprompt — show a manual hint instead
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   if (isIOS && !isStandalone && !localStorage.getItem('ios_install_shown')) {
-    setTimeout(() => {
+    afterPushPrompt.then(() => setTimeout(() => {
       $('installHint').textContent = 'Tap Share (⎙) → Add to Home Screen';
       $('installBtn').style.display = 'none';
       banner.style.display = 'flex';
       localStorage.setItem('ios_install_shown', '1');
-    }, 5000);
+    }, 800));
   }
 })();
 
