@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Coach Position</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<style>
+:root {
+  --bg:#F0F2F7; --surface:#fff; --s2:#E8EBF4; --line:#D3D7E6;
+  --text:#111827; --muted:#5C6475;
+  --amber:#D97706; --green:#16A34A; --red:#DC2626; --blue:#2563EB;
+  --r:8px; --mono:'Courier New',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;}
+a{color:var(--amber);}
+
+/* ── AUTH ── */
+#auth-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;}
+.auth-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:36px;width:340px;box-shadow:0 4px 24px rgba(0,0,0,.1);}
+.auth-logo{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--amber);margin-bottom:6px;text-transform:uppercase;}
+.auth-box h1{font-size:20px;font-weight:800;margin-bottom:4px;}
+.auth-box p{font-size:13px;color:var(--muted);margin-bottom:24px;}
+.auth-box label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.auth-box input{width:100%;border:1.5px solid var(--line);border-radius:7px;padding:10px 12px;font-size:14px;outline:none;margin-bottom:14px;font-family:inherit;}
+.auth-box input:focus{border-color:var(--amber);}
+#auth-err{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;}
+
+/* ── LAYOUT ── */
+#app{display:none;}
+header{background:var(--surface);border-bottom:1px solid var(--line);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:50;}
+.h-brand{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--amber);letter-spacing:.08em;}
+.h-brand em{color:var(--muted);font-style:normal;}
+.h-right{display:flex;align-items:center;gap:12px;}
+.h-user{font-size:12px;color:var(--muted);}
+
+/* ── TABS ── */
+.tab-nav{background:var(--surface);border-bottom:1px solid var(--line);display:flex;padding:0 20px;gap:2px;}
+.tnav{padding:13px 18px;font-size:13px;font-weight:600;color:var(--muted);border:none;background:transparent;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap;}
+.tnav.on{color:var(--amber);border-bottom-color:var(--amber);}
+.tnav:hover:not(.on){color:var(--text);}
+
+.tab{display:none;padding:20px;max-width:1100px;margin:0 auto;}
+.tab.on{display:block;}
+
+/* ── PANELS ── */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:16px;}
+.panel-hd{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.chip-count{background:var(--s2);border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;color:var(--muted);}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid transparent;transition:all .15s;font-family:inherit;}
+.btn:disabled{opacity:.45;pointer-events:none;}
+.btn-primary{background:var(--amber);color:#fff;border-color:var(--amber);}
+.btn-primary:hover{background:#B45309;}
+.btn-success{background:var(--green);color:#fff;border-color:var(--green);}
+.btn-danger{background:transparent;color:var(--red);border-color:var(--red);}
+.btn-danger:hover{background:var(--red);color:#fff;}
+.btn-ghost{background:var(--s2);color:var(--text);border-color:var(--line);}
+.btn-ghost:hover{border-color:var(--text);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-xs{padding:3px 7px;font-size:11px;}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:var(--s2);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:9px 11px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap;}
+td{padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:middle;}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:rgba(0,0,0,.02);}
+tbody tr{cursor:pointer;}
+
+/* ── INPUTS ── */
+input[type=text],input[type=email],input[type=time],select,textarea{border:1.5px solid var(--line);border-radius:7px;padding:9px 11px;font-size:13px;outline:none;font-family:inherit;width:100%;background:var(--surface);color:var(--text);}
+input:focus,select:focus,textarea:focus{border-color:var(--amber);}
+.fld{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
+.fld label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+.b-new{background:#DCFCE7;color:#15803D;}
+.b-updated{background:#FEF9C3;color:#A16207;}
+.b-same{background:var(--s2);color:var(--muted);}
+.b-pending{background:#FEF3C7;color:#D97706;}
+.b-approved{background:#DCFCE7;color:#16A34A;}
+.b-rejected{background:#FEE2E2;color:#DC2626;}
+
+/* ── TRAIN NO ── */
+.tno{font-family:var(--mono);font-size:12px;font-weight:700;background:rgba(217,119,6,.1);color:var(--amber);border-radius:4px;padding:2px 7px;white-space:nowrap;}
+
+/* ── SEARCH ── */
+.search-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.search-row input{max-width:280px;margin:0;}
+.search-row .spacer{flex:1;}
+
+/* ── DROP ZONE ── */
+.drop-zone{border:2px dashed var(--line);border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .15s;}
+.drop-zone:hover,.drop-zone.over{border-color:var(--amber);background:rgba(217,119,6,.03);}
+.dz-icon{font-size:40px;margin-bottom:12px;}
+.dz-title{font-size:16px;font-weight:700;margin-bottom:4px;}
+.dz-sub{font-size:12px;color:var(--muted);}
+
+/* ── STATS ROW ── */
+.stat-pills{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.spill{padding:6px 14px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid transparent;transition:all .15s;}
+.spill.s-all{background:var(--s2);color:var(--text);border-color:var(--line);}
+.spill.s-new{background:#DCFCE7;color:#15803D;}
+.spill.s-updated{background:#FEF9C3;color:#A16207;}
+.spill.s-same{background:var(--s2);color:var(--muted);}
+.spill.on{border-color:currentColor;box-shadow:0 0 0 1px currentColor;}
+.spill b{font-size:15px;display:block;line-height:1.2;}
+
+/* ── OPTIONS ROW ── */
+.opt-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:14px;}
+.opt-row label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;}
+.opt-row input[type=checkbox]{width:15px;height:15px;accent-color:var(--amber);margin:0;}
+.opt-row input[type=text]{max-width:100px;padding:7px 10px;}
+
+/* ── PROGRESS ── */
+.prog-bar{height:6px;background:var(--s2);border-radius:99px;overflow:hidden;margin:10px 0;}
+.prog-fill{height:100%;background:var(--amber);border-radius:99px;transition:width .25s;}
+
+/* ── MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:24px;overflow-y:auto;}
+.overlay.on{display:flex;}
+.modal{background:var(--surface);border-radius:12px;width:100%;max-width:580px;box-shadow:0 20px 60px rgba(0,0,0,.18);margin:auto;}
+.modal-hd{padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;}
+.modal-hd h2{font-size:15px;font-weight:700;}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:2px;}
+.modal-body{padding:20px 22px;max-height:65vh;overflow-y:auto;}
+.modal-ft{padding:14px 22px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;}
+
+/* ── REVERSAL LIST ── */
+.rev-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;min-height:20px;}
+.rev-item{display:flex;align-items:center;gap:8px;background:var(--s2);border-radius:6px;padding:7px 10px;}
+.rev-seq{font-size:10px;font-weight:700;color:var(--muted);width:16px;}
+.rev-code{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--amber);flex:1;}
+.rev-btns{display:flex;gap:2px;}
+.rev-btns button{background:none;border:none;cursor:pointer;font-size:14px;padding:2px 5px;color:var(--muted);line-height:1;border-radius:4px;}
+.rev-btns button:hover{background:var(--line);color:var(--text);}
+.rev-add{display:flex;gap:8px;align-items:center;}
+.rev-add input{flex:0 0 100px;padding:8px 10px;text-transform:uppercase;font-family:var(--mono);}
+
+/* ── DIFF ── */
+.diff-rows{font-size:11px;margin-top:6px;}
+.diff-row{display:flex;gap:6px;padding:2px 0;align-items:baseline;}
+.df{color:var(--muted);font-weight:600;min-width:90px;font-size:10px;text-transform:uppercase;}
+.do{color:var(--red);text-decoration:line-through;}
+.dn{color:var(--green);}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111;color:#fff;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;}
+#toast.show{opacity:1;}
+#toast.ok{background:var(--green);}
+#toast.err{background:var(--red);}
+
+/* ── ROUTE TABLE ── */
+.route-sm{font-size:11px;color:var(--muted);}
+
+hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">Coach Position</div>
+    <h1>Admin Sign In</h1>
+    <p>Only admin accounts can access this panel.</p>
+    <label>Email</label>
+    <input id="a-email" type="email" placeholder="admin@example.com" autocomplete="username">
+    <label>Password</label>
+    <input id="a-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doSignIn()">Sign In</button>
+    <div id="auth-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="h-brand">COACH POSITION <em>/ ADMIN</em></div>
+    <div class="h-right">
+      <span class="h-user" id="h-user"></span>
+      <button class="btn btn-ghost btn-sm" onclick="doSignOut()">Sign Out</button>
+      <a class="btn btn-ghost btn-sm" href="./index.html">← App</a>
+    </div>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tnav on" data-tab="import" onclick="switchTab('import',this)">📥 Import Trains</button>
+    <button class="tnav" data-tab="trains" onclick="switchTab('trains',this)">🚂 Trains</button>
+    <button class="tnav" data-tab="stations" onclick="switchTab('stations',this)">📍 Stations</button>
+    <button class="tnav" data-tab="users" onclick="switchTab('users',this)">👥 Users</button>
+  </nav>
+
+  <!-- ═══ IMPORT ═══ -->
+  <div id="tab-import" class="tab on">
+
+    <div class="panel">
+      <div class="panel-hd">Import from CSV</div>
+
+      <!-- Home station -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;padding:12px 14px;background:var(--s2);border-radius:8px;">
+        <span style="font-size:13px;font-weight:600;">Home Station Code:</span>
+        <input id="home-stn" type="text" placeholder="DWR" style="max-width:100px;padding:7px 10px;text-transform:uppercase;font-family:var(--mono);font-weight:700;" oninput="this.value=this.value.toUpperCase()">
+        <span style="font-size:12px;color:var(--muted)">Trains at this station will be imported with their arrival/departure times.</span>
+      </div>
+
+      <!-- Drop zone -->
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-in').click()">
+        <div class="dz-icon">📂</div>
+        <div class="dz-title">Drop CSV file here or click to browse</div>
+        <div class="dz-sub">Coach Position Train Details CSV (one row per station)</div>
+      </div>
+      <input type="file" id="file-in" accept=".csv" style="display:none" onchange="handleFile(this.files[0])">
+
+      <!-- Options -->
+      <div class="opt-row" style="margin-top:14px;">
+        <label><input type="checkbox" id="chk-origin" checked> Originating trains only (no arrival at home station)</label>
+        <label><input type="checkbox" id="chk-thru"> Include through trains (have both arrival + departure)</label>
+        <label><input type="checkbox" id="chk-term"> Include terminating trains (no departure)</label>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div id="preview-wrap" style="display:none;">
+      <div class="panel">
+        <div class="panel-hd">
+          Import Preview
+          <span class="chip-count" id="parse-count"></span>
+        </div>
+
+        <div class="stat-pills">
+          <div class="spill s-all on" id="fil-all" onclick="setFilter('all',this)"><b id="cnt-all">0</b> Total</div>
+          <div class="spill s-new" id="fil-new" onclick="setFilter('new',this)"><b id="cnt-new">0</b> New</div>
+          <div class="spill s-updated" id="fil-updated" onclick="setFilter('updated',this)"><b id="cnt-updated">0</b> Updated</div>
+          <div class="spill s-same" id="fil-same" onclick="setFilter('same',this)"><b id="cnt-same">0</b> Unchanged</div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <button class="btn btn-ghost btn-sm" onclick="selectAll(true)">Select All</button>
+          <button class="btn btn-ghost btn-sm" onclick="selectAll(false)">Deselect All</button>
+          <button class="btn btn-ghost btn-sm" onclick="selectByStatus('new')">Select New</button>
+          <button class="btn btn-ghost btn-sm" onclick="selectByStatus('updated')">Select Updated</button>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn btn-primary" id="import-btn" onclick="doImport()">Import Selected</button>
+        </div>
+
+        <div id="prog-wrap" style="display:none;">
+          <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+          <div id="prog-txt" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px;"></div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:32px;"><input type="checkbox" id="chk-all" onchange="selectAll(this.checked)"></th>
+                <th>Train</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Route</th>
+                <th>Arrival</th>
+                <th>Departure</th>
+                <th>Freq</th>
+                <th>Status</th>
+                <th>Changes</th>
+              </tr>
+            </thead>
+            <tbody id="preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TRAINS ═══ -->
+  <div id="tab-trains" class="tab">
+    <div class="panel">
+      <div class="search-row">
+        <input type="text" id="train-q" placeholder="Search train no or name…" oninput="renderTrains()">
+        <div class="spacer"></div>
+        <span class="chip-count" id="trains-count" style="font-size:13px;"></span>
+        <button class="btn btn-primary btn-sm" onclick="openTrainModal(null)">+ Add Train</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Train No</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Source → Dest</th>
+              <th>Arrival</th>
+              <th>Departure</th>
+              <th>Stoppage</th>
+              <th>PF</th>
+              <th>PRS Class</th>
+              <th>Pantry</th>
+              <th>Reversal?</th>
+              <th>CP</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="trains-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STATIONS ═══ -->
+  <div id="tab-stations" class="tab">
+    <div class="panel">
+      <div class="search-row">
+        <input type="text" id="stn-q" placeholder="Search station code or name…" oninput="renderStations()">
+        <div class="spacer"></div>
+        <span class="chip-count" id="stns-count" style="font-size:13px;"></span>
+        <button class="btn btn-primary btn-sm" onclick="openStnModal(null)">+ Add Station</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Code</th><th>Name</th><th>Zone</th><th>Division</th><th></th></tr>
+          </thead>
+          <tbody id="stns-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ USERS ═══ -->
+  <div id="tab-users" class="tab">
+    <div class="panel">
+      <div class="search-row">
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" onclick="setUserFilter('pending')" id="uf-pending">Pending</button>
+        <button class="btn btn-ghost btn-sm" onclick="setUserFilter('approved')" id="uf-approved">Approved</button>
+        <button class="btn btn-ghost btn-sm" onclick="setUserFilter('all')" id="uf-all">All</button>
+        <span class="chip-count" id="users-count"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Staff ID</th><th>Designation</th><th>Station</th><th>Mobile</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr>
+          </thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TRAIN MODAL ═══ -->
+<div class="overlay" id="train-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2 id="train-modal-title">Train Details</h2>
+      <button class="modal-close" onclick="closeModal('train-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="frow">
+        <div class="fld"><label>Train No</label><input id="t-no" type="text" placeholder="12345"></div>
+        <div class="fld"><label>Train Name</label><input id="t-name" type="text" placeholder="SBC BGM EXP"></div>
+      </div>
+      <div class="frow3">
+        <div class="fld"><label>Type</label>
+          <select id="t-type">
+            <option>MAIL EXPRESS</option><option>SUPERFAST</option><option>PASSENGER</option>
+            <option>MEMU</option><option>DEMU</option><option>VANDE BHARAT</option><option>OTHER</option>
+          </select>
+        </div>
+        <div class="fld"><label>Frequency</label><input id="t-freq" type="text" placeholder="DAILY / Mon,Thu"></div>
+        <div class="fld"><label>Gauge</label>
+          <select id="t-gauge"><option value="BG">Broad Gauge (BG)</option><option value="MG">Metre Gauge (MG)</option></select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fld"><label>Source Name</label><input id="t-src" type="text" placeholder="BELAGAVI"></div>
+        <div class="fld"><label>Source Code</label><input id="t-srccode" type="text" placeholder="BGM" oninput="this.value=this.value.toUpperCase()"></div>
+      </div>
+      <div class="frow">
+        <div class="fld"><label>Destination Name</label><input id="t-dst" type="text" placeholder="KSR BENGALURU"></div>
+        <div class="fld"><label>Destination Code</label><input id="t-dstcode" type="text" placeholder="SBC" oninput="this.value=this.value.toUpperCase()"></div>
+      </div>
+      <div class="frow3">
+        <div class="fld"><label>Arrival at Station</label><input id="t-arr" type="text" placeholder="21:48 (blank if originating)"></div>
+        <div class="fld"><label>Departure from Station</label><input id="t-dep" type="text" placeholder="21:50"></div>
+        <div class="fld"><label>Stoppage</label><input id="t-stop" type="text" placeholder="00:05"></div>
+      </div>
+      <div class="frow3">
+        <div class="fld"><label>Platform No (PF)</label><input id="t-pf" type="text" placeholder="2"></div>
+        <div class="fld"><label>PRS Class</label><input id="t-prs" type="text" placeholder="2A,3A,SL,2S"></div>
+        <div class="fld"><label>UTS Class</label><input id="t-uts" type="text" placeholder="GEN"></div>
+      </div>
+      <div class="frow">
+        <div class="fld"><label>Pantry</label>
+          <select id="t-pantry">
+            <option value="">None</option>
+            <option value="PC">Pantry Car (PC)</option>
+            <option value="YES">Yes</option>
+          </select>
+        </div>
+        <div class="fld"></div>
+      </div>
+
+      <hr class="divider">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;">🔄 Reversal Stations <span style="font-size:11px;font-weight:400;color:var(--muted)">(in route order — ENG stays first, coaches after it flip at each)</span></div>
+      <div class="rev-list" id="rev-list"></div>
+      <div class="rev-add">
+        <input id="rev-in" type="text" placeholder="Station code e.g. UBL" maxlength="6" onkeydown="if(event.key==='Enter')addRev()">
+        <button class="btn btn-ghost btn-sm" onclick="addRev()">+ Add</button>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-danger btn-sm" id="t-del-btn" onclick="deleteTrain()">Delete Train</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('train-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTrain()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ STATION MODAL ═══ -->
+<div class="overlay" id="stn-modal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-hd">
+      <h2 id="stn-modal-title">Station</h2>
+      <button class="modal-close" onclick="closeModal('stn-modal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fld"><label>Station Code</label><input id="s-code" type="text" placeholder="DWR" oninput="this.value=this.value.toUpperCase()"></div>
+      <div class="fld"><label>Station Name</label><input id="s-name" type="text" placeholder="DHARWAR"></div>
+      <div class="frow">
+        <div class="fld"><label>Zone</label><input id="s-zone" type="text" placeholder="SWR" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="fld"><label>Division</label><input id="s-div" type="text" placeholder="UBL" oninput="this.value=this.value.toUpperCase()"></div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('stn-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStation()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── Firebase ────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyBncalmdFaWM2dB7uT8fxWFddICkDgqtY8",
+  authDomain: "coachposition.firebaseapp.com",
+  projectId: "coachposition",
+  storageBucket: "coachposition.firebasestorage.app",
+  messagingSenderId: "981014228335",
+  appId: "1:981014228335:web:c638a306bc8e9ef64a8c9a"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+db.enablePersistence().catch(() => {});
+
+// ─── State ───────────────────────────────────────────────────────
+let me = null;
+let allTrains = [];
+let allStations = [];
+let allUsers = [];
+let importRows = [];   // parsed from CSV, grouped by train
+let preview = [];      // enriched with status
+let filterStatus = 'all';
+let userFilter = 'pending';
+let editingTrainNo = null;
+let editingStnCode = null;
+
+// ─── Auth ────────────────────────────────────────────────────────
+auth.onAuthStateChanged(async user => {
+  if (!user) { showAuth(); return; }
+  try {
+    const doc = await db.collection('users').doc(user.uid).get();
+    const p = doc.data();
+    if (!p || p.role !== 'admin') {
+      showAuth('You need admin access to use this panel.');
+      await auth.signOut();
+      return;
+    }
+    me = { uid: user.uid, email: user.email, ...p };
+    document.getElementById('h-user').textContent = p.name || user.email;
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('home-stn').value = localStorage.getItem('admin_home_stn') || '';
+    init();
+  } catch(e) { showAuth(e.message); }
+});
+
+function showAuth(err = '') {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-err').textContent = err;
+}
+
+async function doSignIn() {
+  const e = document.getElementById('a-email').value.trim();
+  const p = document.getElementById('a-pass').value;
+  document.getElementById('auth-err').textContent = '';
+  try { await auth.signInWithEmailAndPassword(e, p); }
+  catch(err) { document.getElementById('auth-err').textContent = err.message; }
+}
+document.getElementById('a-pass').addEventListener('keydown', ev => { if(ev.key==='Enter') doSignIn(); });
+
+async function doSignOut() {
+  await auth.signOut();
+  location.reload();
+}
+
+// ─── Init ────────────────────────────────────────────────────────
+function init() {
+  loadTrains();
+  loadStations();
+  loadUsers();
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tnav').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('tab-' + id).classList.add('on');
+}
+
+// ─── IMPORT ──────────────────────────────────────────────────────
+function parseNameCode(str) {
+  // "BELAGAVI (BGM)" → { name: "BELAGAVI", code: "BGM" }
+  const m = str.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (m) return { name: m[1].trim(), code: m[2].trim() };
+  return { name: str.trim(), code: '' };
+}
+
+function parseType(str) {
+  // "MAIL EXPRESS (MEX)" → "MAIL EXPRESS"
+  return str.replace(/\s*\([^)]*\)\s*$/, '').trim();
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const homeStn = document.getElementById('home-stn').value.trim().toUpperCase();
+  if (!homeStn) { toast('Enter Home Station Code first', 'err'); return; }
+  localStorage.setItem('admin_home_stn', homeStn);
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try { parseCSV(e.target.result, homeStn); }
+    catch(err) { toast('Parse error: ' + err.message, 'err'); }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text, homeStn) {
+  // Split into lines, skip header row
+  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim());
+  if (lines.length < 2) { toast('Empty or invalid CSV', 'err'); return; }
+
+  // Group by Train No (col 0)
+  const grouped = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 12) continue;
+    const tno = (cols[0] || '').trim();
+    if (!/^\d{5}$/.test(tno)) continue;
+    if (!grouped[tno]) {
+      const src = parseNameCode(cols[3] || '');
+      const dst = parseNameCode(cols[4] || '');
+      grouped[tno] = {
+        trainNo: tno,
+        trainName: (cols[2] || '').trim(),
+        type: parseType(cols[6] || ''),
+        gauge: (cols[5] || 'BG').trim(),
+        frequency: (cols[7] || 'DAILY').trim(),
+        source: src.name, sourceCode: src.code,
+        destination: dst.name, destinationCode: dst.code,
+        route: [],
+        stnRow: null,
+      };
+    }
+    const stn = (cols[9] || '').trim();
+    const arr = (cols[10] || '').trim();
+    const dep = (cols[11] || '').trim();
+    const sr = parseInt(cols[8]) || 0;
+    grouped[tno].route.push({ sr, code: stn, arrival: arr || null, departure: dep || null });
+    if (stn === homeStn) grouped[tno].stnRow = { arrival: arr || null, departure: dep || null };
+  }
+
+  const chkOrigin = document.getElementById('chk-origin').checked;
+  const chkThru   = document.getElementById('chk-thru').checked;
+  const chkTerm   = document.getElementById('chk-term').checked;
+
+  importRows = [];
+  for (const tno of Object.keys(grouped)) {
+    const t = grouped[tno];
+    if (!t.stnRow) continue; // doesn't stop at home station
+
+    const hasArr = !!t.stnRow.arrival;
+    const hasDep = !!t.stnRow.departure;
+
+    const isOrigin = !hasArr && hasDep;
+    const isThru   =  hasArr && hasDep;
+    const isTerm   =  hasArr && !hasDep;
+
+    if (isOrigin && !chkOrigin) continue;
+    if (isThru   && !chkThru)   continue;
+    if (isTerm   && !chkTerm)   continue;
+
+    importRows.push({
+      trainNo: t.trainNo,
+      trainName: t.trainName,
+      type: t.type,
+      gauge: t.gauge,
+      frequency: t.frequency,
+      source: t.source, sourceCode: t.sourceCode,
+      destination: t.destination, destinationCode: t.destinationCode,
+      stdArrival: t.stnRow.arrival,
+      stdDeparture: t.stnRow.departure,
+      route: t.route,
+    });
+  }
+
+  buildPreview();
+}
+
+async function buildPreview() {
+  if (!importRows.length) { toast('No trains found for this station', 'err'); return; }
+
+  // Map existing trains
+  const existing = {};
+  allTrains.forEach(t => existing[t.trainNo] = t);
+
+  preview = importRows.map(row => {
+    const ex = existing[row.trainNo];
+    if (!ex) return { ...row, status: 'new', changes: [] };
+
+    const flds = ['trainName','type','gauge','frequency','source','sourceCode','destination','destinationCode','stdArrival','stdDeparture'];
+    const changes = flds.filter(f => (ex[f]||'') !== (row[f]||''))
+                        .map(f => ({ field: f, old: ex[f]||'—', nw: row[f]||'—' }));
+    return { ...row, status: changes.length ? 'updated' : 'same', changes };
+  });
+
+  document.getElementById('parse-count').textContent = `${preview.length} trains`;
+  document.getElementById('preview-wrap').style.display = 'block';
+  filterStatus = 'all';
+  document.querySelectorAll('.spill').forEach(s => s.classList.remove('on'));
+  document.getElementById('fil-all').classList.add('on');
+  renderPreview();
+}
+
+function renderPreview() {
+  const counts = { new:0, updated:0, same:0 };
+  preview.forEach(r => counts[r.status]++);
+  document.getElementById('cnt-all').textContent = preview.length;
+  document.getElementById('cnt-new').textContent = counts.new;
+  document.getElementById('cnt-updated').textContent = counts.updated;
+  document.getElementById('cnt-same').textContent = counts.same;
+
+  const rows = filterStatus === 'all' ? preview : preview.filter(r => r.status === filterStatus);
+  document.getElementById('preview-body').innerHTML = rows.map((r, idx) => {
+    const gi = preview.indexOf(r);
+    const diffHtml = r.changes?.map(c =>
+      `<div class="diff-row"><span class="df">${c.field}</span><span class="do">${c.old}</span><span style="margin:0 3px">→</span><span class="dn">${c.nw}</span></div>`
+    ).join('') || '';
+    return `<tr onclick="event.stopPropagation()">
+      <td><input type="checkbox" class="rc" data-gi="${gi}" ${r.status !== 'same' ? 'checked' : ''}></td>
+      <td><span class="tno">${r.trainNo}</span></td>
+      <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.trainName}</td>
+      <td style="color:var(--muted);font-size:12px;">${r.type}</td>
+      <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${r.sourceCode} → ${r.destinationCode}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${r.stdArrival||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${r.stdDeparture||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);">${r.frequency}</td>
+      <td><span class="badge b-${r.status}">${r.status}</span></td>
+      <td>${diffHtml ? `<details><summary style="cursor:pointer;font-size:11px;color:var(--muted);">View diff</summary><div class="diff-rows">${diffHtml}</div></details>` : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setFilter(s, el) {
+  filterStatus = s;
+  document.querySelectorAll('.spill').forEach(x => x.classList.remove('on'));
+  el.classList.add('on');
+  renderPreview();
+}
+
+function selectAll(v) {
+  document.querySelectorAll('.rc').forEach(c => c.checked = v);
+  document.getElementById('chk-all').checked = v;
+}
+
+function selectByStatus(s) {
+  document.querySelectorAll('.rc').forEach(c => {
+    const gi = +c.dataset.gi;
+    c.checked = preview[gi]?.status === s;
+  });
+}
+
+async function doImport() {
+  const selected = [...document.querySelectorAll('.rc:checked')].map(c => preview[+c.dataset.gi]).filter(Boolean);
+  if (!selected.length) { toast('Nothing selected', 'err'); return; }
+
+  document.getElementById('prog-wrap').style.display = 'block';
+  document.getElementById('import-btn').disabled = true;
+  const total = selected.length;
+  let done = 0, failed = 0;
+
+  const BSIZ = 400;
+  let batch = db.batch();
+  let bcount = 0;
+
+  const commit = async () => { if (bcount > 0) { await batch.commit(); batch = db.batch(); bcount = 0; } };
+
+  for (const row of selected) {
+    const ref = db.collection('trains').doc(row.trainNo);
+    const data = {
+      trainNo: row.trainNo, trainName: row.trainName,
+      type: row.type, gauge: row.gauge, frequency: row.frequency,
+      source: row.source, sourceCode: row.sourceCode,
+      destination: row.destination, destinationCode: row.destinationCode,
+      stdArrival: row.stdArrival || null,
+      stdDeparture: row.stdDeparture || null,
+    };
+    if (row.status === 'new') {
+      data.coaches = []; data.cpUpdatedAt = null; data.reversalStations = [];
+    }
+    batch.set(ref, data, { merge: true });
+    bcount++; done++;
+
+    if (bcount >= BSIZ) {
+      try { await commit(); } catch(e) { failed += bcount; }
+    }
+
+    document.getElementById('prog-fill').style.width = (done / total * 100) + '%';
+    document.getElementById('prog-txt').textContent = `${done} / ${total}`;
+  }
+
+  try {
+    await commit();
+    toast(`${done - failed} trains imported${failed ? `, ${failed} failed` : ''}`, failed ? 'err' : 'ok');
+  } catch(e) {
+    toast('Import failed: ' + e.message, 'err');
+  }
+
+  document.getElementById('import-btn').disabled = false;
+  document.getElementById('prog-wrap').style.display = 'none';
+  await loadTrains();
+  await buildPreview();
+}
+
+// Drop zone events
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  handleFile(e.dataTransfer.files[0]);
+});
+
+['chk-origin','chk-thru','chk-term'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => { if (importRows.length) buildPreview(); });
+});
+
+// ─── TRAINS ──────────────────────────────────────────────────────
+async function loadTrains() {
+  const snap = await db.collection('trains').get();
+  allTrains = snap.docs
+    .map(d => ({ trainNo: d.id, id: d.id, ...d.data() }))
+    .filter(t => /^\d{5}$/.test(t.id))
+    .sort((a, b) => (a.trainNo||'').localeCompare(b.trainNo||'', undefined, { numeric: true }));
+  renderTrains();
+}
+
+function renderTrains() {
+  const q = (document.getElementById('train-q')?.value || '').toLowerCase();
+  const rows = allTrains.filter(t => !q || t.trainNo.includes(q) || (t.trainName||'').toLowerCase().includes(q));
+  document.getElementById('trains-count').textContent = `${rows.length} trains`;
+  document.getElementById('trains-body').innerHTML = rows.map(t => `
+    <tr onclick="openTrainModal('${t.trainNo}')">
+      <td><span class="tno">${t.trainNo}</span></td>
+      <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.trainName||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap;">${t.type||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;font-family:var(--mono);">${t.sourceCode||'?'} → ${t.destinationCode||'?'}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${t.stdArrival||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${t.stdDeparture||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${t.stoppage||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;text-align:center;">${t.platform||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);">${t.prsClass||'—'}</td>
+      <td style="font-size:11px;text-align:center;">${t.pantry ? '<span style="color:var(--green);font-weight:700;">✓</span>' : '<span style="color:var(--muted);">—</span>'}</td>
+      <td>${t.reversalStations?.length
+        ? `<span style="font-family:var(--mono);font-size:11px;color:var(--amber);">${t.reversalStations.join(' → ')}</span>`
+        : '<span style="color:var(--muted);font-size:11px;">—</span>'}</td>
+      <td>${t.cpUpdatedAt
+        ? '<span style="color:var(--green);font-size:11px;font-weight:700;">✓</span>'
+        : '<span style="color:var(--muted);font-size:11px;">—</span>'}</td>
+      <td onclick="event.stopPropagation()">
+        <button class="btn btn-danger btn-xs" onclick="confirmDeleteTrain('${t.trainNo}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openTrainModal(trainNo) {
+  editingTrainNo = trainNo;
+  const t = allTrains.find(x => x.trainNo === trainNo) || {};
+  const isNew = !trainNo;
+  document.getElementById('train-modal-title').textContent = isNew ? 'Add Train' : `Edit Train ${trainNo}`;
+  document.getElementById('t-no').value = t.trainNo || '';
+  document.getElementById('t-no').disabled = !isNew;
+  document.getElementById('t-name').value = t.trainName || '';
+  document.getElementById('t-type').value = t.type || 'MAIL EXPRESS';
+  document.getElementById('t-freq').value = t.frequency || 'DAILY';
+  document.getElementById('t-gauge').value = t.gauge || 'BG';
+  document.getElementById('t-src').value = t.source || '';
+  document.getElementById('t-srccode').value = t.sourceCode || '';
+  document.getElementById('t-dst').value = t.destination || '';
+  document.getElementById('t-dstcode').value = t.destinationCode || '';
+  document.getElementById('t-arr').value = t.stdArrival || '';
+  document.getElementById('t-dep').value = t.stdDeparture || '';
+  document.getElementById('t-stop').value = t.stoppage || '';
+  document.getElementById('t-pf').value = t.platform || '';
+  document.getElementById('t-prs').value = t.prsClass || '';
+  document.getElementById('t-uts').value = t.utsClass || '';
+  document.getElementById('t-pantry').value = t.pantry || '';
+  document.getElementById('t-del-btn').style.display = isNew ? 'none' : '';
+  renderRevList(t.reversalStations || []);
+  document.getElementById('train-modal').classList.add('on');
+}
+
+function renderRevList(list) {
+  document.getElementById('rev-list').innerHTML = list.length
+    ? list.map((s, i) => `
+      <div class="rev-item">
+        <span class="rev-seq">${i+1}</span>
+        <span class="rev-code">${s}</span>
+        <div class="rev-btns">
+          <button onclick="moveRev(${i},-1)" title="Up">↑</button>
+          <button onclick="moveRev(${i},1)" title="Down">↓</button>
+          <button onclick="removeRev(${i})" title="Remove">✕</button>
+        </div>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:12px;padding:2px 0;">No reversal stations added yet</div>';
+}
+
+function getRevList() {
+  return [...document.querySelectorAll('#rev-list .rev-code')].map(el => el.textContent.trim());
+}
+
+function moveRev(i, d) {
+  const l = getRevList(); const ni = i+d;
+  if (ni < 0 || ni >= l.length) return;
+  [l[i], l[ni]] = [l[ni], l[i]]; renderRevList(l);
+}
+
+function removeRev(i) {
+  const l = getRevList(); l.splice(i,1); renderRevList(l);
+}
+
+function addRev() {
+  const inp = document.getElementById('rev-in');
+  const code = inp.value.trim().toUpperCase();
+  if (!code) return;
+  const l = getRevList();
+  if (l.includes(code)) { toast('Already in list', 'err'); return; }
+  l.push(code); renderRevList(l); inp.value = ''; inp.focus();
+}
+
+document.getElementById('rev-in').addEventListener('keydown', e => { if(e.key==='Enter') addRev(); });
+
+async function saveTrain() {
+  const no = document.getElementById('t-no').value.trim();
+  if (!no) { toast('Train number required', 'err'); return; }
+  const data = {
+    trainNo: no,
+    trainName: document.getElementById('t-name').value.trim(),
+    type: document.getElementById('t-type').value,
+    frequency: document.getElementById('t-freq').value.trim(),
+    gauge: document.getElementById('t-gauge').value,
+    source: document.getElementById('t-src').value.trim(),
+    sourceCode: document.getElementById('t-srccode').value.trim().toUpperCase(),
+    destination: document.getElementById('t-dst').value.trim(),
+    destinationCode: document.getElementById('t-dstcode').value.trim().toUpperCase(),
+    stdArrival: document.getElementById('t-arr').value.trim() || null,
+    stdDeparture: document.getElementById('t-dep').value.trim() || null,
+    stoppage: document.getElementById('t-stop').value.trim() || null,
+    platform: document.getElementById('t-pf').value.trim() || null,
+    prsClass: document.getElementById('t-prs').value.trim() || null,
+    utsClass: document.getElementById('t-uts').value.trim() || null,
+    pantry: document.getElementById('t-pantry').value || null,
+    reversalStations: getRevList(),
+  };
+  if (editingTrainNo === null) {
+    data.coaches = []; data.cpUpdatedAt = null;
+  }
+  try {
+    await db.collection('trains').doc(no).set(data, { merge: true });
+    toast('Saved', 'ok');
+    closeModal('train-modal');
+    await loadTrains();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function confirmDeleteTrain(no) {
+  if (!confirm(`Delete train ${no}? Coach position data will also be lost.`)) return;
+  await db.collection('trains').doc(no).delete();
+  allTrains = allTrains.filter(t => t.trainNo !== no);
+  renderTrains(); toast('Deleted');
+}
+
+async function deleteTrain() {
+  const no = editingTrainNo;
+  if (!no || !confirm(`Delete train ${no}?`)) return;
+  await db.collection('trains').doc(no).delete();
+  allTrains = allTrains.filter(t => t.trainNo !== no);
+  closeModal('train-modal'); renderTrains(); toast('Deleted');
+}
+
+// ─── STATIONS ────────────────────────────────────────────────────
+async function loadStations() {
+  const snap = await db.collection('stations').orderBy('code').get();
+  allStations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderStations();
+}
+
+function renderStations() {
+  const q = (document.getElementById('stn-q')?.value || '').toLowerCase();
+  const rows = allStations.filter(s => !q || s.code.toLowerCase().includes(q) || (s.name||'').toLowerCase().includes(q));
+  document.getElementById('stns-count').textContent = `${rows.length} stations`;
+  document.getElementById('stns-body').innerHTML = rows.map(s => `
+    <tr onclick="openStnModal('${s.code}')">
+      <td><span class="tno">${s.code}</span></td>
+      <td>${s.name||'—'}</td>
+      <td style="color:var(--muted);">${s.zone||'—'}</td>
+      <td style="color:var(--muted);">${s.division||'—'}</td>
+      <td onclick="event.stopPropagation()">
+        <button class="btn btn-danger btn-xs" onclick="deleteStn('${s.code}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openStnModal(code) {
+  editingStnCode = code;
+  const s = allStations.find(x => x.code === code) || {};
+  document.getElementById('stn-modal-title').textContent = code ? `Edit ${code}` : 'Add Station';
+  document.getElementById('s-code').value = s.code || '';
+  document.getElementById('s-code').disabled = !!code;
+  document.getElementById('s-name').value = s.name || '';
+  document.getElementById('s-zone').value = s.zone || '';
+  document.getElementById('s-div').value = s.division || '';
+  document.getElementById('stn-modal').classList.add('on');
+}
+
+async function saveStation() {
+  const code = document.getElementById('s-code').value.trim().toUpperCase();
+  const name = document.getElementById('s-name').value.trim();
+  if (!code || !name) { toast('Code and name required', 'err'); return; }
+  const data = { code, name, zone: document.getElementById('s-zone').value.trim().toUpperCase(), division: document.getElementById('s-div').value.trim().toUpperCase() };
+  await db.collection('stations').doc(code).set(data, { merge: true });
+  toast('Saved', 'ok');
+  closeModal('stn-modal');
+  await loadStations();
+}
+
+async function deleteStn(code) {
+  if (!confirm(`Delete station ${code}?`)) return;
+  await db.collection('stations').doc(code).delete();
+  allStations = allStations.filter(s => s.code !== code);
+  renderStations(); toast('Deleted');
+}
+
+// ─── USERS ───────────────────────────────────────────────────────
+async function loadUsers() {
+  const snap = await db.collection('users').get();
+  allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  renderUsers();
+}
+
+function setUserFilter(f) {
+  userFilter = f;
+  ['pending','approved','all'].forEach(x => {
+    document.getElementById('uf-'+x).classList.toggle('btn-primary', x===f);
+    document.getElementById('uf-'+x).classList.toggle('btn-ghost', x!==f);
+  });
+  renderUsers();
+}
+
+function renderUsers() {
+  const pending = allUsers.filter(u => u.status === 'pending').length;
+  document.getElementById('users-count').textContent = `${pending} pending`;
+  const rows = userFilter === 'all' ? allUsers : allUsers.filter(u => (u.status||'pending') === userFilter);
+  document.getElementById('users-body').innerHTML = rows.map(u => {
+    const st = u.status || 'pending';
+    const dt = u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString() : '—';
+    return `<tr>
+      <td style="font-weight:600;">${u.name||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${u.staffId||'—'}</td>
+      <td style="color:var(--muted);">${u.designation||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--amber);">${u.station||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${u.phone||'—'}</td>
+      <td style="font-size:12px;color:var(--muted);">${u.email||'—'}</td>
+      <td><span class="badge b-${st==='approved'?'approved':st==='rejected'?'rejected':'pending'}">${st}</span></td>
+      <td style="font-size:12px;color:var(--muted);">${dt}</td>
+      <td style="display:flex;gap:6px;">
+        ${st!=='approved'?`<button class="btn btn-success btn-xs" onclick="approveUser('${u.id}')">Approve</button>`:''}
+        ${st==='approved'?`<button class="btn btn-ghost btn-xs" onclick="setRole('${u.id}','admin')">→ Admin</button>`:''}
+        ${st!=='rejected'?`<button class="btn btn-danger btn-xs" onclick="rejectUser('${u.id}')">Reject</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function approveUser(uid) {
+  await db.collection('users').doc(uid).update({ status: 'approved', role: 'staff' });
+  const u = allUsers.find(u => u.id===uid); if(u){ u.status='approved'; u.role='staff'; }
+  renderUsers(); toast('Approved', 'ok');
+}
+
+async function rejectUser(uid) {
+  if (!confirm('Reject this user?')) return;
+  await db.collection('users').doc(uid).update({ status: 'rejected' });
+  const u = allUsers.find(u => u.id===uid); if(u) u.status='rejected';
+  renderUsers(); toast('Rejected');
+}
+
+async function setRole(uid, role) {
+  if (!confirm(`Make this user ${role}?`)) return;
+  await db.collection('users').doc(uid).update({ role });
+  const u = allUsers.find(u => u.id===uid); if(u) u.role=role;
+  renderUsers(); toast(`Role set to ${role}`, 'ok');
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('on'); }
+
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('on'); });
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.overlay.on').forEach(m => m.classList.remove('on'));
+});
+
+let _toastTimer;
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show' + (type ? ' '+type : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// Init user filter UI
+setUserFilter('pending');
+</script>
+</body>
+</html>

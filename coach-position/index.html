@@ -173,6 +173,40 @@
   .chip.ec   {background:#C026D3;color:#FFFFFF;}
   .chip.pc   {background:#E11D48;color:#FFFFFF;}
   .chip.unk  {background:#64748B;color:#FFFFFF;}
+
+  /* ── Train view (display strips) ── */
+  .train-strip{display:flex;flex-wrap:wrap;gap:14px 8px;align-items:flex-end;padding:4px 0;}
+  .tcoach{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;}
+  .t-pos{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:2px;line-height:1;font-family:var(--mono);}
+  .t-body{
+    position:relative;width:66px;height:36px;border-radius:7px 7px 5px 5px;
+    background:linear-gradient(180deg,var(--tc1) 0%,var(--tc1) 62%,var(--tc2) 62%);
+    border:1.5px solid var(--tc2);
+    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:6px;
+  }
+  .t-win{width:10px;height:12px;border-radius:2.5px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
+  .t-door{width:7px;height:21px;border-radius:2px;background:rgba(0,0,0,.22);}
+  .t-wheels{display:flex;justify-content:space-between;width:52px;margin-top:-4px;}
+  .t-wheel{width:10px;height:10px;border-radius:50%;background:#3A4150;border:2px solid #8B94A8;}
+  .t-lbl{font-size:15px;font-weight:900;margin-top:3px;letter-spacing:.02em;line-height:1;color:var(--text);}
+  .tcoach.tghost{opacity:.45;}
+  .tcoach svg{display:block;}
+  /* type colours (same classes as chips, distinct per type) */
+  .tcoach.eng {--tc1:#4B5568;--tc2:#333B4A;}
+  .tcoach.end {--tc1:#C0556A;--tc2:#8E3B4B;}  /* SLR/SLRD — dark rose */
+  .tcoach.pwr {--tc1:#A94458;--tc2:#7C2F3F;}  /* LPR/EOG — maroon */
+  .tcoach.gen {--tc1:#6FB94E;--tc2:#4A8A30;}  /* GEN — green */
+  .tcoach.sl  {--tc1:#F49A3C;--tc2:#BF6F1E;}  /* Sleeper — orange */
+  .tcoach.ac3 {--tc1:#4A90E2;--tc2:#2D66B0;}  /* AC 3-tier — blue */
+  .tcoach.ac3e{--tc1:#8E6FD8;--tc2:#664BA8;}  /* AC 3 economy — violet */
+  .tcoach.ac2 {--tc1:#2BA8A0;--tc2:#1B7A74;}  /* AC 2-tier — teal */
+  .tcoach.ac1 {--tc1:#5D5FC7;--tc2:#3F4196;}  /* First AC — indigo */
+  .tcoach.cc  {--tc1:#E5739E;--tc2:#B04A73;}  /* Chair car — pink */
+  .tcoach.ec  {--tc1:#B44FC9;--tc2:#83368F;}  /* Executive CC — magenta */
+  .tcoach.d2s {--tc1:#3B9BD1;--tc2:#27709A;}  /* 2S — sky */
+  .tcoach.pc  {--tc1:#B98A4A;--tc2:#87622F;}  /* Pantry — brown */
+  .tcoach.unk {--tc1:#64748B;--tc2:#475366;}
+
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
   .meta-line b{color:var(--text);}
@@ -519,8 +553,8 @@
     </div>
 
     <div>
-      <label class="field-label">Coach list (from engine end)</label>
-      <textarea id="sList" rows="2" placeholder="ENG,LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
+      <label class="field-label">Coach list (after engine — ENG is added automatically)</label>
+      <textarea id="sList" rows="2" placeholder="LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
       <p class="hint">Comma-separate. Use count prefix for repeats (2GEN) and dash for ranges (S1-S7). <button class="legend-link" id="legendLink">See standard codes →</button></p>
     </div>
     <div>
@@ -575,8 +609,8 @@
     <h3 id="cpTrainTitle">Coach Position</h3>
     <div style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:6px" id="cpTrainName"></div>
     <div>
-      <label class="field-label">Coach list (from engine end)</label>
-      <textarea id="cpList" rows="2" placeholder="ENG,SLR,S1-S8,B1-B4,A1,PC,SLRD"></textarea>
+      <label class="field-label">Coach list (after engine — ENG is added automatically)</label>
+      <textarea id="cpList" rows="2" placeholder="SLR,S1-S8,B1-B4,A1,PC,SLRD"></textarea>
       <p class="hint">Comma-separated. Ranges OK (S1-S8). Tap a chip to edit it individually.</p>
     </div>
     <div>
@@ -768,6 +802,16 @@ function parseCompressed(input) {
   return out;
 }
 
+// ENG is implicit in the editors — engine is always position 1, never typed by staff
+function stripEngRaw(raw) {
+  const toks = (raw || '').split(',').map(t => t.trim()).filter(Boolean);
+  while (toks.length && toks[0].toUpperCase() === 'ENG') toks.shift();
+  return toks.join(',');
+}
+function withEng(codes) {
+  return (codes.length && codes[0].toUpperCase() === 'ENG') ? codes : ['ENG', ...codes];
+}
+
 function classOf(code) {
   if (code === 'ENG') return 'eng';
   if (['LPR', 'VP', 'PWR', 'EOG', 'HOG'].includes(code)) return 'pwr';
@@ -802,7 +846,10 @@ function renderStrip(container, codes, onChipClick) {
   codes.forEach((code, i) => {
     const chip = document.createElement('div');
     chip.className = `chip ${classOf(code)}`;
-    if (onChipClick) chip.style.cursor = 'pointer';
+    // ENG at position 1 is fixed — not editable or removable
+    const locked = i === 0 && code.toUpperCase() === 'ENG';
+    if (onChipClick && !locked) chip.style.cursor = 'pointer';
+    if (onChipClick && locked) chip.title = 'Engine is fixed at position 1';
     const idx = document.createElement('div');
     idx.className = 'chip-index';
     idx.textContent = i + 1;
@@ -811,8 +858,76 @@ function renderStrip(container, codes, onChipClick) {
     label.textContent = code;
     chip.appendChild(idx);
     chip.appendChild(label);
-    if (onChipClick) chip.addEventListener('click', () => onChipClick(i, codes));
+    if (onChipClick && !locked) chip.addEventListener('click', () => onChipClick(i, codes));
     container.appendChild(chip);
+  });
+}
+
+// ─── Train view renderer (display only) ──────────────────────────────────────
+function engineSVG() {
+  // colours hardcoded (not CSS vars) so html2canvas share capture renders them
+  return `<svg width="72" height="43" viewBox="0 0 112 66">
+    <rect x="106" y="40" width="6" height="5" rx="1.5" fill="#39404F"/>
+    <rect x="46" y="1" width="22" height="5" rx="2" fill="#333B4A"/>
+    <rect x="74" y="2" width="14" height="4" rx="2" fill="#333B4A"/>
+    <path d="M52 2 L60 -4 L68 2" stroke="#333B4A" stroke-width="2" fill="none" transform="translate(0,6)"/>
+    <path d="M108 50 H18 Q10 50 7 43 L3 30 Q1 24 8 18 L20 8 Q23 5 29 5 h72 q7 0 7 7 Z" fill="#E9EBEF" stroke="#333B4A" stroke-width="2"/>
+    <path d="M40 5 h61 q7 0 7 7 v10 H36 Z" fill="#4B5568"/>
+    <path d="M6 40 L108 40 V50 H18 Q10 50 7 43 Z" fill="#333B4A"/>
+    <path d="M4 32 L26 32 L20 40 L6 40 Q4 37 4 34 Z" fill="#E8722C"/>
+    <path d="M8 19 L30 19 L26 26 L5 26 Z" fill="#E8722C" opacity=".92"/>
+    <path d="M16 10 L34 10 L34 24 L11 24 Q13 15 16 10 Z" fill="#AFD9EC" stroke="#333B4A" stroke-width="1.6"/>
+    <path d="M18 11 L24 11 L15 23 L12.5 23 Z" fill="#fff" opacity=".55"/>
+    <g fill="#AFD9EC" stroke="#20262f" stroke-width="1">
+      <rect x="44" y="10" width="13" height="10" rx="2"/>
+      <rect x="62" y="10" width="13" height="10" rx="2"/>
+    </g>
+    <circle cx="8" cy="30" r="3.4" fill="#FFE28A" stroke="#B98A2B" stroke-width="1.4"/>
+    <g stroke="#B9BFCB" stroke-width="1.6"><line x1="44" y1="30" x2="100" y2="30"/><line x1="44" y1="34" x2="100" y2="34"/></g>
+    <rect x="10" y="50" width="96" height="4" rx="2" fill="#2A303C"/>
+    <rect x="16" y="53" width="30" height="6" rx="3" fill="#39404F"/>
+    <rect x="66" y="53" width="30" height="6" rx="3" fill="#39404F"/>
+    <g fill="#3A4150" stroke="#8B94A8" stroke-width="2">
+      <circle cx="24" cy="59" r="5.5"/><circle cx="38" cy="59" r="5.5"/>
+      <circle cx="74" cy="59" r="5.5"/><circle cx="88" cy="59" r="5.5"/>
+    </g>
+    <g fill="#C9D1E0"><circle cx="24" cy="59" r="1.6"/><circle cx="38" cy="59" r="1.6"/><circle cx="74" cy="59" r="1.6"/><circle cx="88" cy="59" r="1.6"/></g>
+  </svg>`;
+}
+
+function renderTrainStrip(container, codes) {
+  container.classList.add('train-strip');
+  container.innerHTML = '';
+  const mk = (html) => {
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    return el.firstElementChild;
+  };
+  // Ghost engine when formation doesn't start with ENG (marks engine end)
+  if (codes.length && codes[0].toUpperCase() !== 'ENG') {
+    container.appendChild(mk(
+      `<div class="tcoach eng tghost" title="Engine end">
+        <div class="t-pos">&nbsp;</div>${engineSVG()}<div class="t-lbl">ENG</div>
+      </div>`
+    ));
+  }
+  codes.forEach((code, i) => {
+    if (code.toUpperCase() === 'ENG') {
+      container.appendChild(mk(
+        `<div class="tcoach eng">
+          <div class="t-pos">${i + 1}</div>${engineSVG()}<div class="t-lbl">ENG</div>
+        </div>`
+      ));
+      return;
+    }
+    container.appendChild(mk(
+      `<div class="tcoach ${classOf(code)}">
+        <div class="t-pos">${i + 1}</div>
+        <div class="t-body"><div class="t-win"></div><div class="t-win"></div><div class="t-door"></div><div class="t-win"></div></div>
+        <div class="t-wheels"><div class="t-wheel"></div><div class="t-wheel"></div></div>
+        <div class="t-lbl">${code}</div>
+      </div>`
+    ));
   });
 }
 
@@ -878,10 +993,10 @@ function showChipEditDialog(index, codes, onSave) {
 }
 
 function renderPreview() {
-  const codes = parseCompressed($('sList').value);
+  const codes = withEng(parseCompressed($('sList').value));
   renderStrip($('sPreview'), codes, (i, allCodes) => {
     showChipEditDialog(i, allCodes, (newCodes) => {
-      $('sList').value = newCodes.join(',');
+      $('sList').value = stripEngRaw(newCodes.join(','));
       renderPreview();
     });
   });
@@ -1126,7 +1241,7 @@ function populateShareCapture(d) {
     ? `${d.fromStation} → ${d.toStation}`
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
-  renderStrip($('rStrip'), d.parsedList || []);
+  renderTrainStrip($('rStrip'), d.parsedList || []);
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -1277,6 +1392,17 @@ async function renderTrainsList() {
       activeTab === 'fav' ? 'No favourites yet — tap ☆ to add' :
       'No trains saved yet'
     }</div>`;
+    if (filter) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'display:block;margin:0 auto 24px;';
+      btn.textContent = '+ Add coach position';
+      btn.addEventListener('click', () => {
+        if (/^\d{3,6}$/.test(filter)) { openSubmit(filter); }
+        else { openSubmit(); $('sTrainName').value = filter; }
+      });
+      wrap.appendChild(btn);
+    }
     return;
   }
 
@@ -1324,7 +1450,9 @@ async function renderTrainsList() {
             <button class="btn btn-secondary i-share">⬆ Share</button>
             ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
             <button class="btn btn-secondary i-edit">Edit</button>` : ''}
+            ${currentUser?.role === 'admin' ? `<button class="btn btn-danger i-delete">🗑</button>` : ''}
           </div>
+          ${canEdit() ? `<button class="btn btn-primary btn-block i-same" style="display:none">↻ Same coach position — save for today</button>` : ''}
         </div>
       </div>
     `;
@@ -1339,7 +1467,7 @@ async function renderTrainsList() {
         ? `(${rec.submittedByPhone.slice(-4)})`
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
-      renderStrip(item.querySelector('.i-strip'), rec.parsedList || []);
+      renderTrainStrip(item.querySelector('.i-strip'), rec.parsedList || []);
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
@@ -1357,6 +1485,10 @@ async function renderTrainsList() {
         clEl.style.display = 'none';
         clEl.innerHTML = '';
       }
+
+      // "Same CP today" — only when viewing an older date's record
+      const sameEl = item.querySelector('.i-same');
+      if (sameEl) sameEl.style.display = rec.date !== todayStr() ? '' : 'none';
     }
 
     // Initial render
@@ -1409,6 +1541,38 @@ async function renderTrainsList() {
     });
 
     if (canEdit()) {
+      // Same CP today — copy this record to today's date, stamped now
+      item.querySelector('.i-same').addEventListener('click', async () => {
+        const identity = getIdentity();
+        if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+        const today = todayStr();
+        if (cur.date === today) return;
+        if (!confirm(`Save the same coach position for today (${formatDateOnly(today)})?`)) return;
+        const key = `${cur.trainNo}_${today}`;
+        const existing = await getTrainRecord(key);
+        await saveTrainRecord(key, {
+          trainNo: cur.trainNo, trainName: cur.trainName || '', date: today,
+          rawList: cur.rawList || (cur.parsedList || []).join(','),
+          parsedList: cur.parsedList || [],
+          fromStation: cur.fromStation || '', toStation: cur.toStation || '',
+          submittedByName: identity.name,
+          submittedByEmail: identity.email || '',
+          submittedByPhone: identity.phone || '',
+          submittedByStation: identity.station || '',
+          submittedByUID: identity.uid || '',
+          updatedAt: Date.now(),
+          updateCount: (existing && existing.updateCount ? existing.updateCount : 0) + 1,
+          confirmations: []
+        });
+        db.collection('trains').doc(cur.trainNo).set(
+          { coaches: cur.parsedList || [], cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        ).catch(() => {});
+        toast('Saved for today ✓');
+        sendCpNotification(cur.trainNo, cur.trainName || '', cur.parsedList || []);
+        renderTrainsList();
+      });
+
       // Confirm
       item.querySelector('.i-confirm').addEventListener('click', async () => {
         const identity = getIdentity();
@@ -1427,6 +1591,33 @@ async function renderTrainsList() {
       // Edit
       item.querySelector('.i-edit').addEventListener('click', () => {
         openSubmit(cur.trainNo, cur.date, cur.trainName, cur.rawList, cur.fromStation, cur.toStation);
+      });
+    }
+
+    // Delete (admin only)
+    const delBtn = item.querySelector('.i-delete');
+    if (delBtn) {
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete CP record for train ${cur.trainNo} on ${cur.date}?`)) return;
+        const key = `${cur.trainNo}_${cur.date}`;
+        try {
+          await db.collection('trains').doc(key).delete();
+          // Also clear coaches from the import doc so the Trains tab chip disappears
+          db.collection('trains').doc(cur.trainNo).update({
+            coaches: firebase.firestore.FieldValue.delete(),
+            cpUpdatedAt: firebase.firestore.FieldValue.delete()
+          }).catch(() => {});
+          if (_allTrains) {
+            const t = _allTrains.find(x => String(x.no) === cur.trainNo);
+            if (t) { delete t.coaches; delete t.cpUpdatedAt; }
+          }
+          toast('CP record deleted');
+          renderTrainsList();
+          if (activeTab === 'station') renderTrainsTab();
+        } catch (err) {
+          toast('Delete failed — ' + err.message);
+        }
       });
     }
   });
@@ -1589,16 +1780,16 @@ function openCpEditor(trainNo) {
   const t = _allTrains && _allTrains.find(x => String(x.no) === _cpTrainNo);
   $('cpTrainTitle').textContent = `Coach Position — ${trainNo}`;
   $('cpTrainName').textContent = t ? (t.name || '') : '';
-  $('cpList').value = (t && t.coaches && t.coaches.length) ? t.coaches.join(',') : 'ENG';
+  $('cpList').value = stripEngRaw((t && t.coaches && t.coaches.length) ? t.coaches.join(',') : '');
   renderCpPreview();
   showOverlay('cpOverlay');
 }
 
 function renderCpPreview() {
-  const codes = parseCompressed($('cpList').value);
+  const codes = withEng(parseCompressed($('cpList').value));
   renderStrip($('cpPreview'), codes, (i, allCodes) => {
     showChipEditDialog(i, allCodes, (newCodes) => {
-      $('cpList').value = newCodes.join(',');
+      $('cpList').value = stripEngRaw(newCodes.join(','));
       renderCpPreview();
     });
   });
@@ -1608,8 +1799,8 @@ $('cpList').addEventListener('input', renderCpPreview);
 
 $('cpSaveBtn').addEventListener('click', async () => {
   if (!_cpTrainNo) return;
-  const coaches = parseCompressed($('cpList').value);
-  if (!coaches.length) { toast('Enter at least one coach'); return; }
+  const coaches = withEng(parseCompressed($('cpList').value));
+  if (coaches.length <= 1) { toast('Enter at least one coach'); return; }
   try {
     await db.collection('trains').doc(_cpTrainNo).set(
       { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
@@ -1821,7 +2012,7 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   $('sDate').value = date || todayStr();
   $('sFromStation').value = fromStation || '';
   $('sToStation').value = toStation || '';
-  $('sList').value = rawList || 'ENG';
+  $('sList').value = stripEngRaw(rawList || '');
   renderPreview();
   showOverlay('submitOverlay');
 }
@@ -1840,6 +2031,7 @@ $('sTrainNo').addEventListener('input', () => {
     // Only show copy hint when coach list is at default (new entry, not edit)
     const listVal = $('sList').value.trim();
     if (listVal && listVal !== 'ENG') return;
+    // (empty box = default now that ENG is implicit)
     const rec = await getMostRecentFormation(trainNo);
     if (!rec) return;
     $('sCopyDate').textContent = formatDateOnly(rec.date);
@@ -1849,7 +2041,7 @@ $('sTrainNo').addEventListener('input', () => {
       if (!$('sTrainName').value) $('sTrainName').value = rec.trainName || '';
       if (!$('sFromStation').value) $('sFromStation').value = rec.fromStation || '';
       if (!$('sToStation').value) $('sToStation').value = rec.toStation || '';
-      $('sList').value = rec.rawList;
+      $('sList').value = stripEngRaw(rec.rawList);
       renderPreview();
       copyBox.classList.remove('show');
       toast('Formation copied — update as needed');
@@ -1858,13 +2050,10 @@ $('sTrainNo').addEventListener('input', () => {
 });
 $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 $('sReverseBtn').addEventListener('click', () => {
-  const codes = parseCompressed($('sList').value);
+  // ENG is implicit and stays at position 1 — only coaches reverse
+  const codes = parseCompressed(stripEngRaw($('sList').value));
   if (!codes.length) return;
-  const isEng = codes[0].toUpperCase() === 'ENG';
-  const result = isEng
-    ? [codes[0], ...codes.slice(1).reverse()]
-    : codes.reverse();
-  $('sList').value = result.join(',');
+  $('sList').value = codes.reverse().join(',');
   renderPreview();
 });
 
@@ -1874,10 +2063,12 @@ $('sSaveBtn').addEventListener('click', async () => {
   const trainNo = $('sTrainNo').value.trim();
   const trainName = $('sTrainName').value.trim();
   const date = $('sDate').value || todayStr();
-  const rawList = $('sList').value.trim();
+  const rawTyped = stripEngRaw($('sList').value.trim());
   const fromStation = $('sFromStation').value.trim().toUpperCase();
   const toStation = $('sToStation').value.trim().toUpperCase();
-  if (!trainNo || !rawList) { toast('Train number and coach list required'); return; }
+  if (!trainNo || !rawTyped) { toast('Train number and coach list required'); return; }
+  // ENG is implicit at position 1 — stored records always include it
+  const rawList = 'ENG,' + rawTyped;
   const parsedList = parseCompressed(rawList);
   const key = `${trainNo}_${date}`;
   const existing = await getTrainRecord(key);
