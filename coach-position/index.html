@@ -553,8 +553,8 @@
     </div>
 
     <div>
-      <label class="field-label">Coach list (from engine end)</label>
-      <textarea id="sList" rows="2" placeholder="ENG,LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
+      <label class="field-label">Coach list (after engine — ENG is added automatically)</label>
+      <textarea id="sList" rows="2" placeholder="LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
       <p class="hint">Comma-separate. Use count prefix for repeats (2GEN) and dash for ranges (S1-S7). <button class="legend-link" id="legendLink">See standard codes →</button></p>
     </div>
     <div>
@@ -609,8 +609,8 @@
     <h3 id="cpTrainTitle">Coach Position</h3>
     <div style="font-size:12px;color:var(--muted);margin-top:-8px;margin-bottom:6px" id="cpTrainName"></div>
     <div>
-      <label class="field-label">Coach list (from engine end)</label>
-      <textarea id="cpList" rows="2" placeholder="ENG,SLR,S1-S8,B1-B4,A1,PC,SLRD"></textarea>
+      <label class="field-label">Coach list (after engine — ENG is added automatically)</label>
+      <textarea id="cpList" rows="2" placeholder="SLR,S1-S8,B1-B4,A1,PC,SLRD"></textarea>
       <p class="hint">Comma-separated. Ranges OK (S1-S8). Tap a chip to edit it individually.</p>
     </div>
     <div>
@@ -802,6 +802,16 @@ function parseCompressed(input) {
   return out;
 }
 
+// ENG is implicit in the editors — engine is always position 1, never typed by staff
+function stripEngRaw(raw) {
+  const toks = (raw || '').split(',').map(t => t.trim()).filter(Boolean);
+  while (toks.length && toks[0].toUpperCase() === 'ENG') toks.shift();
+  return toks.join(',');
+}
+function withEng(codes) {
+  return (codes.length && codes[0].toUpperCase() === 'ENG') ? codes : ['ENG', ...codes];
+}
+
 function classOf(code) {
   if (code === 'ENG') return 'eng';
   if (['LPR', 'VP', 'PWR', 'EOG', 'HOG'].includes(code)) return 'pwr';
@@ -983,10 +993,10 @@ function showChipEditDialog(index, codes, onSave) {
 }
 
 function renderPreview() {
-  const codes = parseCompressed($('sList').value);
+  const codes = withEng(parseCompressed($('sList').value));
   renderStrip($('sPreview'), codes, (i, allCodes) => {
     showChipEditDialog(i, allCodes, (newCodes) => {
-      $('sList').value = newCodes.join(',');
+      $('sList').value = stripEngRaw(newCodes.join(','));
       renderPreview();
     });
   });
@@ -1382,6 +1392,17 @@ async function renderTrainsList() {
       activeTab === 'fav' ? 'No favourites yet — tap ☆ to add' :
       'No trains saved yet'
     }</div>`;
+    if (filter) {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary';
+      btn.style.cssText = 'display:block;margin:0 auto 24px;';
+      btn.textContent = '+ Add coach position';
+      btn.addEventListener('click', () => {
+        if (/^\d{3,6}$/.test(filter)) { openSubmit(filter); }
+        else { openSubmit(); $('sTrainName').value = filter; }
+      });
+      wrap.appendChild(btn);
+    }
     return;
   }
 
@@ -1722,16 +1743,16 @@ function openCpEditor(trainNo) {
   const t = _allTrains && _allTrains.find(x => String(x.no) === _cpTrainNo);
   $('cpTrainTitle').textContent = `Coach Position — ${trainNo}`;
   $('cpTrainName').textContent = t ? (t.name || '') : '';
-  $('cpList').value = (t && t.coaches && t.coaches.length) ? t.coaches.join(',') : 'ENG';
+  $('cpList').value = stripEngRaw((t && t.coaches && t.coaches.length) ? t.coaches.join(',') : '');
   renderCpPreview();
   showOverlay('cpOverlay');
 }
 
 function renderCpPreview() {
-  const codes = parseCompressed($('cpList').value);
+  const codes = withEng(parseCompressed($('cpList').value));
   renderStrip($('cpPreview'), codes, (i, allCodes) => {
     showChipEditDialog(i, allCodes, (newCodes) => {
-      $('cpList').value = newCodes.join(',');
+      $('cpList').value = stripEngRaw(newCodes.join(','));
       renderCpPreview();
     });
   });
@@ -1741,8 +1762,8 @@ $('cpList').addEventListener('input', renderCpPreview);
 
 $('cpSaveBtn').addEventListener('click', async () => {
   if (!_cpTrainNo) return;
-  const coaches = parseCompressed($('cpList').value);
-  if (!coaches.length) { toast('Enter at least one coach'); return; }
+  const coaches = withEng(parseCompressed($('cpList').value));
+  if (coaches.length <= 1) { toast('Enter at least one coach'); return; }
   try {
     await db.collection('trains').doc(_cpTrainNo).set(
       { coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() },
@@ -1954,7 +1975,7 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   $('sDate').value = date || todayStr();
   $('sFromStation').value = fromStation || '';
   $('sToStation').value = toStation || '';
-  $('sList').value = rawList || 'ENG';
+  $('sList').value = stripEngRaw(rawList || '');
   renderPreview();
   showOverlay('submitOverlay');
 }
@@ -1973,6 +1994,7 @@ $('sTrainNo').addEventListener('input', () => {
     // Only show copy hint when coach list is at default (new entry, not edit)
     const listVal = $('sList').value.trim();
     if (listVal && listVal !== 'ENG') return;
+    // (empty box = default now that ENG is implicit)
     const rec = await getMostRecentFormation(trainNo);
     if (!rec) return;
     $('sCopyDate').textContent = formatDateOnly(rec.date);
@@ -1982,7 +2004,7 @@ $('sTrainNo').addEventListener('input', () => {
       if (!$('sTrainName').value) $('sTrainName').value = rec.trainName || '';
       if (!$('sFromStation').value) $('sFromStation').value = rec.fromStation || '';
       if (!$('sToStation').value) $('sToStation').value = rec.toStation || '';
-      $('sList').value = rec.rawList;
+      $('sList').value = stripEngRaw(rec.rawList);
       renderPreview();
       copyBox.classList.remove('show');
       toast('Formation copied — update as needed');
@@ -1991,13 +2013,10 @@ $('sTrainNo').addEventListener('input', () => {
 });
 $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
 $('sReverseBtn').addEventListener('click', () => {
-  const codes = parseCompressed($('sList').value);
+  // ENG is implicit and stays at position 1 — only coaches reverse
+  const codes = parseCompressed(stripEngRaw($('sList').value));
   if (!codes.length) return;
-  const isEng = codes[0].toUpperCase() === 'ENG';
-  const result = isEng
-    ? [codes[0], ...codes.slice(1).reverse()]
-    : codes.reverse();
-  $('sList').value = result.join(',');
+  $('sList').value = codes.reverse().join(',');
   renderPreview();
 });
 
@@ -2007,10 +2026,12 @@ $('sSaveBtn').addEventListener('click', async () => {
   const trainNo = $('sTrainNo').value.trim();
   const trainName = $('sTrainName').value.trim();
   const date = $('sDate').value || todayStr();
-  const rawList = $('sList').value.trim();
+  const rawTyped = stripEngRaw($('sList').value.trim());
   const fromStation = $('sFromStation').value.trim().toUpperCase();
   const toStation = $('sToStation').value.trim().toUpperCase();
-  if (!trainNo || !rawList) { toast('Train number and coach list required'); return; }
+  if (!trainNo || !rawTyped) { toast('Train number and coach list required'); return; }
+  // ENG is implicit at position 1 — stored records always include it
+  const rawList = 'ENG,' + rawTyped;
   const parsedList = parseCompressed(rawList);
   const key = `${trainNo}_${date}`;
   const existing = await getTrainRecord(key);
