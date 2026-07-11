@@ -297,10 +297,14 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
               <th>Train No</th>
               <th>Name</th>
               <th>Type</th>
-              <th>Route</th>
+              <th>Source → Dest</th>
               <th>Arrival</th>
               <th>Departure</th>
-              <th>Reversals</th>
+              <th>Stoppage</th>
+              <th>PF</th>
+              <th>PRS Class</th>
+              <th>Pantry</th>
+              <th>Reversal?</th>
               <th>CP</th>
               <th></th>
             </tr>
@@ -385,9 +389,25 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
         <div class="fld"><label>Destination Name</label><input id="t-dst" type="text" placeholder="KSR BENGALURU"></div>
         <div class="fld"><label>Destination Code</label><input id="t-dstcode" type="text" placeholder="SBC" oninput="this.value=this.value.toUpperCase()"></div>
       </div>
-      <div class="frow">
+      <div class="frow3">
         <div class="fld"><label>Arrival at Station</label><input id="t-arr" type="text" placeholder="21:48 (blank if originating)"></div>
         <div class="fld"><label>Departure from Station</label><input id="t-dep" type="text" placeholder="21:50"></div>
+        <div class="fld"><label>Stoppage</label><input id="t-stop" type="text" placeholder="00:05"></div>
+      </div>
+      <div class="frow3">
+        <div class="fld"><label>Platform No (PF)</label><input id="t-pf" type="text" placeholder="2"></div>
+        <div class="fld"><label>PRS Class</label><input id="t-prs" type="text" placeholder="2A,3A,SL,2S"></div>
+        <div class="fld"><label>UTS Class</label><input id="t-uts" type="text" placeholder="GEN"></div>
+      </div>
+      <div class="frow">
+        <div class="fld"><label>Pantry</label>
+          <select id="t-pantry">
+            <option value="">None</option>
+            <option value="PC">Pantry Car (PC)</option>
+            <option value="YES">Yes</option>
+          </select>
+        </div>
+        <div class="fld"></div>
       </div>
 
       <hr class="divider">
@@ -550,7 +570,7 @@ function parseCSV(text, homeStn) {
     const cols = lines[i].split(',');
     if (cols.length < 12) continue;
     const tno = (cols[0] || '').trim();
-    if (!tno || isNaN(tno)) continue;
+    if (!/^\d{5}$/.test(tno)) continue;
     if (!grouped[tno]) {
       const src = parseNameCode(cols[3] || '');
       const dst = parseNameCode(cols[4] || '');
@@ -753,9 +773,9 @@ dz.addEventListener('drop', e => {
 async function loadTrains() {
   const snap = await db.collection('trains').get();
   allTrains = snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(t => !t.id.includes('_'))
-    .sort((a, b) => a.trainNo > b.trainNo ? 1 : -1);
+    .map(d => ({ trainNo: d.id, id: d.id, ...d.data() }))
+    .filter(t => /^\d{5}$/.test(t.id))
+    .sort((a, b) => (a.trainNo||'').localeCompare(b.trainNo||'', undefined, { numeric: true }));
   renderTrains();
 }
 
@@ -766,11 +786,15 @@ function renderTrains() {
   document.getElementById('trains-body').innerHTML = rows.map(t => `
     <tr onclick="openTrainModal('${t.trainNo}')">
       <td><span class="tno">${t.trainNo}</span></td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.trainName||'—'}</td>
-      <td style="font-size:12px;color:var(--muted);">${t.type||'—'}</td>
-      <td style="font-size:12px;white-space:nowrap;">${t.sourceCode||'?'} → ${t.destinationCode||'?'}</td>
+      <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.trainName||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap;">${t.type||'—'}</td>
+      <td style="font-size:11px;white-space:nowrap;font-family:var(--mono);">${t.sourceCode||'?'} → ${t.destinationCode||'?'}</td>
       <td style="font-family:var(--mono);font-size:12px;">${t.stdArrival||'—'}</td>
       <td style="font-family:var(--mono);font-size:12px;">${t.stdDeparture||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--muted);">${t.stoppage||'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;text-align:center;">${t.platform||'—'}</td>
+      <td style="font-size:11px;color:var(--muted);">${t.prsClass||'—'}</td>
+      <td style="font-size:11px;text-align:center;">${t.pantry ? '<span style="color:var(--green);font-weight:700;">✓</span>' : '<span style="color:var(--muted);">—</span>'}</td>
       <td>${t.reversalStations?.length
         ? `<span style="font-family:var(--mono);font-size:11px;color:var(--amber);">${t.reversalStations.join(' → ')}</span>`
         : '<span style="color:var(--muted);font-size:11px;">—</span>'}</td>
@@ -801,6 +825,11 @@ function openTrainModal(trainNo) {
   document.getElementById('t-dstcode').value = t.destinationCode || '';
   document.getElementById('t-arr').value = t.stdArrival || '';
   document.getElementById('t-dep').value = t.stdDeparture || '';
+  document.getElementById('t-stop').value = t.stoppage || '';
+  document.getElementById('t-pf').value = t.platform || '';
+  document.getElementById('t-prs').value = t.prsClass || '';
+  document.getElementById('t-uts').value = t.utsClass || '';
+  document.getElementById('t-pantry').value = t.pantry || '';
   document.getElementById('t-del-btn').style.display = isNew ? 'none' : '';
   renderRevList(t.reversalStations || []);
   document.getElementById('train-modal').classList.add('on');
@@ -861,6 +890,11 @@ async function saveTrain() {
     destinationCode: document.getElementById('t-dstcode').value.trim().toUpperCase(),
     stdArrival: document.getElementById('t-arr').value.trim() || null,
     stdDeparture: document.getElementById('t-dep').value.trim() || null,
+    stoppage: document.getElementById('t-stop').value.trim() || null,
+    platform: document.getElementById('t-pf').value.trim() || null,
+    prsClass: document.getElementById('t-prs').value.trim() || null,
+    utsClass: document.getElementById('t-uts').value.trim() || null,
+    pantry: document.getElementById('t-pantry').value || null,
     reversalStations: getRevList(),
   };
   if (editingTrainNo === null) {
