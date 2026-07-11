@@ -179,18 +179,18 @@
   .tcoach{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;}
   .t-pos{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:2px;line-height:1;font-family:var(--mono);}
   .t-body{
-    position:relative;width:66px;height:29px;border-radius:7px 7px 5px 5px;
+    position:relative;width:66px;height:23px;border-radius:6px 6px 4px 4px;
     background:linear-gradient(180deg,var(--tc1) 0%,var(--tc1) 62%,var(--tc2) 62%);
     border:1.5px solid var(--tc2);
-    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:5px;
+    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:4px;
   }
-  .t-win{width:10px;height:9px;border-radius:2.5px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
-  .t-door{width:7px;height:16px;border-radius:2px;background:rgba(0,0,0,.22);}
+  .t-win{width:10px;height:7px;border-radius:2px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
+  .t-door{width:7px;height:12px;border-radius:2px;background:rgba(0,0,0,.22);}
   .t-wheels{display:flex;justify-content:space-between;width:52px;margin-top:-4px;}
   .t-wheel{width:10px;height:10px;border-radius:50%;background:#3A4150;border:2px solid #8B94A8;}
   .t-lbl{font-size:15px;font-weight:900;margin-top:3px;letter-spacing:.02em;line-height:1;color:var(--text);}
   .tcoach.tghost{opacity:.45;}
-  .tcoach svg{display:block;width:64px;height:auto;}
+  .tcoach svg{display:block;width:56px;height:auto;}
   /* type colours (same classes as chips, distinct per type) */
   .tcoach.eng {--tc1:#5B6579;--tc2:#414A5C;}
   .tcoach.end {--tc1:#DB7C90;--tc2:#B25468;}  /* SLR/SLRD — rose */
@@ -232,14 +232,14 @@
   /* phones: fit 5 coaches per row */
   @media (max-width:480px){
     .train-strip{gap:12px 5px;}
-    .t-body{width:56px;height:25px;gap:3px;padding-top:4px;border-radius:6px 6px 4px 4px;}
-    .t-win{width:8px;height:8px;}
-    .t-door{width:6px;height:13px;}
+    .t-body{width:56px;height:20px;gap:3px;padding-top:3px;border-radius:5px 5px 4px 4px;}
+    .t-win{width:8px;height:6px;}
+    .t-door{width:6px;height:10px;}
     .t-wheels{width:44px;}
     .t-wheel{width:9px;height:9px;border-width:2px;}
     .t-lbl{font-size:13px;}
     .t-pos{font-size:10px;}
-    .tcoach svg{width:56px;height:auto;}
+    .tcoach svg{width:49px;height:auto;}
   }
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
