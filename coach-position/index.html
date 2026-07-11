@@ -83,6 +83,29 @@
   }
   .tab.active{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
   .list-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .select-toggle{
+    background:transparent;border:1.5px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:12px;font-weight:700;padding:4px 11px;cursor:pointer;
+  }
+  .select-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
+
+  /* Multi-select checkboxes on train items */
+  .sel-check{display:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700;}
+  body.select-mode .sel-check{display:flex;}
+  body.select-mode .star-btn{display:none;}
+  .train-item-head.sel-on .sel-check{background:var(--amber);border-color:var(--amber);}
+
+  /* Floating share-selected bar */
+  #selectBar{
+    position:fixed;left:0;right:0;bottom:0;z-index:60;
+    background:var(--surface);border-top:1px solid var(--line);
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    display:none;align-items:center;gap:10px;
+    box-shadow:0 -4px 16px rgba(0,0,0,.08);
+  }
+  #selectBar.show{display:flex;}
+  #selectBar .sel-count{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
+  #selectBar .btn{padding:10px 14px;font-size:13px;}
   /* Station search tab */
   .station-bar{display:none;gap:8px;align-items:center;padding:0 0 4px;}
   .station-bar.visible{display:flex;}
@@ -460,6 +483,7 @@
       <button class="tab active" id="tabAll">All</button>
       <button class="tab" id="tabFav">★ Favourites</button>
       <button class="tab" id="tabStation">🚆 Trains</button>
+      <button class="select-toggle" id="selectToggle">☑ Select</button>
       <span class="list-count" id="listCount"></span>
     </div>
     <div class="station-bar" id="stationBar">
@@ -475,6 +499,13 @@
 
   <div class="fab">
     <button class="btn btn-primary" id="fabAdd">+ Add / Update a train</button>
+  </div>
+
+  <div id="selectBar">
+    <span class="sel-count" id="selCount">0 selected</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-ghost" id="selCancelBtn">Cancel</button>
+    <button class="btn btn-primary" id="selShareBtn">⬆ Share list</button>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -713,6 +744,10 @@ db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 // ─── App state ────────────────────────────────────────────────────────────────
 let currentUser = null;
 let activeTab = 'all';
+// Multi-select (share multiple trains as one text message)
+let selectMode = false;
+const selectedTrains = new Set();
+const _selectableTrainData = {}; // trainNo -> {trainName, fromStation, toStation}
 // Resolves after the first onAuthStateChanged fires AND the Firestore profile is loaded.
 let _authReadyResolve;
 const _authReady = new Promise(r => { _authReadyResolve = r; });
@@ -1151,6 +1186,57 @@ function toggleFavourite(trainNo) {
   return !isFav;
 }
 
+// ─── Multi-select (share several trains as one text message) ─────────────────
+function setSelectMode(on) {
+  selectMode = on;
+  document.body.classList.toggle('select-mode', on);
+  $('selectToggle').classList.toggle('on', on);
+  if (!on) { selectedTrains.clear(); }
+  updateSelectBar();
+  renderTrainsList();
+}
+
+function toggleTrainSelected(trainNo, headEl) {
+  const on = selectedTrains.has(trainNo);
+  if (on) selectedTrains.delete(trainNo); else selectedTrains.add(trainNo);
+  headEl.classList.toggle('sel-on', !on);
+  const check = headEl.querySelector('.sel-check');
+  if (check) check.textContent = !on ? '✓' : '';
+  updateSelectBar();
+}
+
+function updateSelectBar() {
+  const n = selectedTrains.size;
+  $('selCount').textContent = `${n} selected`;
+  $('selectBar').classList.toggle('show', selectMode && n > 0);
+}
+
+$('selectToggle').addEventListener('click', () => setSelectMode(!selectMode));
+$('selCancelBtn').addEventListener('click', () => setSelectMode(false));
+
+$('selShareBtn').addEventListener('click', async () => {
+  const trains = [...selectedTrains];
+  if (!trains.length) return;
+  const lines = trains.map(no => {
+    const d = _selectableTrainData[no] || {};
+    const route = (d.fromStation && d.toStation) ? ` (${d.fromStation} → ${d.toStation})` : '';
+    return `${no}${d.trainName ? ' — ' + d.trainName : ''}${route}`;
+  });
+  const text = `🚆 Coach Position — check these trains:\n\n${lines.join('\n')}\n\nLive coach positions:\nhttps://coachformation.netlify.app`;
+
+  if (navigator.share) {
+    try { await navigator.share({ text }); setSelectMode(false); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied — paste it into WhatsApp');
+  } catch {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+  setSelectMode(false);
+});
+
 // ─── Identity / auth helpers ──────────────────────────────────────────────────
 function getIdentity() {
   if (!currentUser || currentUser.role === 'guest') return null;
@@ -1550,10 +1636,13 @@ async function renderTrainsList() {
       ? `${cur.fromStation} → ${cur.toStation}`
       : cur.fromStation || cur.toStation || '';
 
+    _selectableTrainData[cur.trainNo] = { trainName: cur.trainName || '', fromStation: cur.fromStation || '', toStation: cur.toStation || '' };
+
     const item = document.createElement('div');
     item.className = 'train-item';
     item.innerHTML = `
-      <div class="train-item-head">
+      <div class="train-item-head${selectedTrains.has(cur.trainNo) ? ' sel-on' : ''}">
+        <span class="sel-check">${selectedTrains.has(cur.trainNo) ? '✓' : ''}</span>
         <button class="star-btn${isFav ? ' starred' : ''}" data-train="${cur.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
         <div class="tno-badge">${cur.trainNo}</div>
         <div class="train-item-meta">
@@ -1665,9 +1754,13 @@ async function renderTrainsList() {
       if (activeTab === 'fav' && !isNowFav) renderTrainsList();
     });
 
-    // Expand / collapse
+    // Expand / collapse (or toggle selection, in select mode)
     item.querySelector('.train-item-head').addEventListener('click', (e) => {
       if (e.target.closest('.star-btn')) return;
+      if (selectMode) {
+        toggleTrainSelected(cur.trainNo, e.currentTarget);
+        return;
+      }
       const wasOpen = item.classList.contains('open');
       document.querySelectorAll('.train-item.open').forEach(el => el.classList.remove('open'));
       if (!wasOpen) {
@@ -1773,6 +1866,7 @@ $('tabAll').addEventListener('click', () => {
   $('stationBar').classList.remove('visible');
   $('listSearch').style.display = '';
   $('listSearch').placeholder = 'Search train number or name…';
+  $('selectToggle').style.display = '';
   renderTrainsList();
 });
 $('tabFav').addEventListener('click', () => {
@@ -1783,9 +1877,14 @@ $('tabFav').addEventListener('click', () => {
   $('stationBar').classList.remove('visible');
   $('listSearch').style.display = '';
   $('listSearch').placeholder = 'Search train number or name…';
+  $('selectToggle').style.display = '';
   renderTrainsList();
 });
-$('tabStation').addEventListener('click', openTrainsTab);
+$('tabStation').addEventListener('click', () => {
+  setSelectMode(false);
+  $('selectToggle').style.display = 'none';
+  openTrainsTab();
+});
 $('stationCodeInput').addEventListener('input', () => { if (activeTab === 'station') renderTrainsTab(); });
 $('listSearch').addEventListener('input', renderTrainsList);
 
