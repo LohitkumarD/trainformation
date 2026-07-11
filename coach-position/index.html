@@ -273,11 +273,18 @@
   .preview-strip .chip{cursor:pointer;}
   .preview-strip .chip:active{opacity:.75;}
   .share-offscreen{
-    position:fixed;left:-9999px;top:0;width:340px;
+    position:fixed;left:-9999px;top:0;width:360px;
     background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
-    padding:16px;display:flex;flex-direction:column;gap:12px;
+    padding:0 0 12px;display:flex;flex-direction:column;gap:10px;overflow:hidden;
   }
-  .sc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .sc-banner{background:var(--amber);color:#fff;padding:12px 16px 13px;display:flex;flex-direction:column;gap:2px;}
+  .sc-banner .sc-label{color:#FFE8C7;margin-bottom:3px;}
+  .sc-banner-row{display:flex;align-items:baseline;gap:10px;}
+  .sc-bno{font-family:var(--mono);font-weight:800;font-size:27px;color:#fff;letter-spacing:.02em;}
+  .sc-bdate{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:#FFE8C7;}
+  .sc-bname{font-size:14px;font-weight:700;color:#fff;}
+  .sc-broute{font-family:var(--mono);font-size:13px;font-weight:700;color:#FFE8C7;letter-spacing:.04em;}
+  .sc-body{padding:0 14px;display:flex;flex-direction:column;gap:10px;}
   .sc-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
   .sc-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);margin-top:3px;}
 
@@ -465,21 +472,23 @@
 
 <!-- Off-screen share capture (populated before html2canvas) -->
 <div id="shareCapture" class="share-offscreen">
-  <div class="sc-label">COACH POSITION</div>
-  <div class="sc-head">
-    <div>
-      <div class="tno" id="rTrainNo"></div>
-      <div class="tname" id="rTrainName"></div>
-      <div class="sc-route" id="rRoute"></div>
+  <div class="sc-banner">
+    <div class="sc-label">COACH POSITION</div>
+    <div class="sc-banner-row">
+      <span class="sc-bno" id="rTrainNo"></span>
+      <span class="sc-bdate" id="rDate"></span>
     </div>
-    <div class="inline-date" id="rDate"></div>
+    <div class="sc-bname" id="rTrainName"></div>
+    <div class="sc-broute" id="rRoute"></div>
   </div>
-  <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
-  <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
-  <div class="confirm-line" id="rConfirmLine"></div>
-  <div class="share-footer" id="shareGenAt" style="display:none"></div>
-  <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
-  <div class="share-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
+  <div class="sc-body">
+    <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
+    <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
+    <div class="confirm-line" id="rConfirmLine"></div>
+    <div class="share-footer" id="shareGenAt" style="display:none"></div>
+    <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
+    <div class="share-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
+  </div>
 </div>
 
 <!-- Auth overlay (initial sign-in, shown before anything else) -->
