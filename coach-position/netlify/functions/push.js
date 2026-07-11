@@ -146,7 +146,10 @@ exports.handler = async (event) => {
       entries = allTokens.map(t => ({ docName: null, token: t }));
     }
 
-    if (!entries.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent: 0 }) };
+    if (!entries.length) {
+      await logNotification(accessToken, nid, { kind, title, body, trainNo, sent: 0, failed: 0, total: 0 });
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent: 0, failed: 0, total: 0, nid }) };
+    }
 
     // Send in parallel batches of 50
     const BATCH = 50;
