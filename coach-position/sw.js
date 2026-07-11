@@ -14,7 +14,16 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
+console.log('[sw] loaded, cache = coach-position-v57');
+
+// Fires for every push the browser delivers, before Firebase's own handling —
+// confirms whether the push even reaches this worker at all.
+self.addEventListener('push', (event) => {
+  console.log('[sw] raw push event received', event.data ? event.data.text() : '(no payload)');
+});
+
 messaging.onBackgroundMessage((payload) => {
+  console.log('[sw] onBackgroundMessage fired', payload);
   const notif = payload.notification || {};
   self.registration.showNotification(notif.title || 'Coach Position', {
     body: notif.body || '',
@@ -38,7 +47,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v56';
+const CACHE = 'coach-position-v57';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -2464,6 +2464,7 @@ auth.onAuthStateChanged(async (firebaseUser) => {
 // Foreground push messages (app is open — show as toast)
 if (messaging) {
   messaging.onMessage((payload) => {
+    console.log('[push] onMessage fired (foreground)', payload);
     const notif = payload.notification || {};
     toast(`${notif.title || ''}${notif.body ? ' — ' + notif.body : ''}`);
   });
