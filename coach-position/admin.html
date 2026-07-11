@@ -692,6 +692,18 @@ function parseCSV(text, homeStn) {
 async function buildPreview() {
   if (!importRows.length) { toast('No trains found for this station', 'err'); return; }
 
+  // Drop duplicate train numbers within the parsed file — keep first occurrence only
+  const seen = new Set();
+  const deduped = [];
+  let dupCount = 0;
+  for (const row of importRows) {
+    if (seen.has(row.trainNo)) { dupCount++; continue; }
+    seen.add(row.trainNo);
+    deduped.push(row);
+  }
+  importRows = deduped;
+  if (dupCount) toast(`Skipped ${dupCount} duplicate train${dupCount > 1 ? 's' : ''} in file`, 'err');
+
   // Map existing trains
   const existing = {};
   allTrains.forEach(t => existing[t.trainNo] = t);
