@@ -198,6 +198,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
     <button class="tnav" data-tab="trains" onclick="switchTab('trains',this)">🚂 Trains</button>
     <button class="tnav" data-tab="stations" onclick="switchTab('stations',this)">📍 Stations</button>
     <button class="tnav" data-tab="users" onclick="switchTab('users',this)">👥 Users</button>
+    <button class="tnav" data-tab="notifs" onclick="switchTab('notifs',this)">🔔 Notifications</button>
   </nav>
 
   <!-- ═══ IMPORT ═══ -->
@@ -351,6 +352,33 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
             <tr><th>Name</th><th>Staff ID</th><th>Designation</th><th>Station</th><th>Mobile</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr>
           </thead>
           <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ NOTIFICATIONS ═══ -->
+  <div id="tab-notifs" class="tab">
+    <div class="panel">
+      <div class="panel-hd">Push Reach</div>
+      <div class="stat-pills" style="margin-bottom:0;">
+        <div class="spill s-all"><b id="notif-sub-count">–</b> Subscribed devices</div>
+        <div class="spill s-all"><b id="notif-admin-count">–</b> Admin devices</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="panel-hd" style="margin:0;">Recent Notifications</div>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadNotifs()">↻ Refresh</button>
+        <span class="chip-count" id="notifs-count"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Sent</th><th>Type</th><th>Title</th><th>Message</th><th>Train</th><th>Reached</th><th>Failed</th><th>Opened</th></tr>
+          </thead>
+          <tbody id="notifs-body"></tbody>
         </table>
       </div>
     </div>
@@ -530,6 +558,7 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   btn.classList.add('on');
   document.getElementById('tab-' + id).classList.add('on');
+  if (id === 'notifs' && !document.getElementById('notif-sub-count').dataset.loaded) loadNotifs();
 }
 
 // ─── IMPORT ──────────────────────────────────────────────────────
@@ -1113,6 +1142,51 @@ async function setRole(uid, role) {
   await db.collection('users').doc(uid).update({ role });
   const u = allUsers.find(u => u.id===uid); if(u) u.role=role;
   renderUsers(); toast(`Role set to ${role}`, 'ok');
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────────────────
+const NOTIF_KIND_LABEL = {
+  cp_update: 'CP Update', admin: 'Admin Alert', broadcast: 'Broadcast', direct: 'Direct',
+};
+const NOTIF_KIND_BADGE = {
+  cp_update: 'b-approved', admin: 'b-pending', broadcast: 'b-updated', direct: 'b-same',
+};
+
+async function loadNotifs() {
+  document.getElementById('notif-sub-count').dataset.loaded = '1';
+  try {
+    const [subSnap, adminSnap, logSnap] = await Promise.all([
+      db.collection('fcm_tokens').get(),
+      db.collection('admin_fcm_tokens').get(),
+      db.collection('notification_log').orderBy('sentAt', 'desc').limit(100).get(),
+    ]);
+    document.getElementById('notif-sub-count').textContent = subSnap.size;
+    document.getElementById('notif-admin-count').textContent = adminSnap.size;
+
+    const rows = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('notifs-count').textContent = `${rows.length} shown`;
+    document.getElementById('notifs-body').innerHTML = rows.length ? rows.map(r => {
+      const when = r.sentAt?.toDate ? r.sentAt.toDate().toLocaleString() : '—';
+      const kind = r.kind || 'direct';
+      const total = r.total || 0;
+      const sent = r.sent || 0;
+      const failed = r.failed || 0;
+      const opens = r.openCount || 0;
+      const reachPct = total ? Math.round(sent / total * 100) : 0;
+      return `<tr>
+        <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${when}</td>
+        <td><span class="badge ${NOTIF_KIND_BADGE[kind]||'b-same'}">${NOTIF_KIND_LABEL[kind]||kind}</span></td>
+        <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;">${r.title||'—'}</td>
+        <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px;">${r.body||'—'}</td>
+        <td>${r.trainNo ? `<span class="tno">${r.trainNo}</span>` : '—'}</td>
+        <td style="font-family:var(--mono);font-size:12px;">${sent}/${total} <span style="color:var(--muted)">(${reachPct}%)</span></td>
+        <td style="font-family:var(--mono);font-size:12px;color:${failed?'var(--red)':'var(--muted)'};">${failed}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:${opens?'var(--green)':'var(--muted)'};font-weight:${opens?700:400};">${opens}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;">No notifications logged yet</td></tr>';
+  } catch (e) {
+    document.getElementById('notifs-body').innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+  }
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────

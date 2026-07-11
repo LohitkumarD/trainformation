@@ -1529,6 +1529,8 @@ function sendCpNotification(trainNo, trainName, coaches) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         broadcast: true,
+        kind: 'cp_update',
+        trainNo,
         title: `CP: ${trainNo}${trainName ? ' – ' + trainName.split(' ').slice(0, 3).join(' ') : ''}`,
         body: summary || 'Coach position updated'
       })
@@ -1542,7 +1544,7 @@ function sendAdminNotification(title, body) {
     fetch('/.netlify/functions/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'admin', title, body })
+      body: JSON.stringify({ target: 'admin', kind: 'admin', title, body })
     }).catch(() => {});
   } catch (_) {}
 }
@@ -1554,10 +1556,25 @@ async function sendPush(token, title, body) {
     await fetch('/.netlify/functions/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, title, body }),
+      body: JSON.stringify({ token, kind: 'direct', title, body }),
     });
   } catch (_) {}
 }
+
+// Mark a notification as opened when the app is launched from its link (?nid=…)
+(function recordNotificationOpen() {
+  try {
+    const nid = new URLSearchParams(location.search).get('nid');
+    if (!nid) return;
+    db.collection('notification_log').doc(nid).update({
+      openCount: firebase.firestore.FieldValue.increment(1),
+      lastOpenedAt: Date.now(),
+    }).catch(() => {});
+    const url = new URL(location.href);
+    url.searchParams.delete('nid');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  } catch (_) {}
+})();
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
 function staleBadge(isoDate) {
