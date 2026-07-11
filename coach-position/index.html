@@ -83,6 +83,29 @@
   }
   .tab.active{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
   .list-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .select-toggle{
+    background:transparent;border:1.5px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:12px;font-weight:700;padding:4px 11px;cursor:pointer;
+  }
+  .select-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
+
+  /* Multi-select checkboxes on train items */
+  .sel-check{display:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700;}
+  body.select-mode .sel-check{display:flex;}
+  body.select-mode .star-btn{display:none;}
+  .train-item-head.sel-on .sel-check{background:var(--amber);border-color:var(--amber);}
+
+  /* Floating share-selected bar */
+  #selectBar{
+    position:fixed;left:0;right:0;bottom:0;z-index:60;
+    background:var(--surface);border-top:1px solid var(--line);
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    display:none;align-items:center;gap:10px;
+    box-shadow:0 -4px 16px rgba(0,0,0,.08);
+  }
+  #selectBar.show{display:flex;}
+  #selectBar .sel-count{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
+  #selectBar .btn{padding:10px 14px;font-size:13px;}
   /* Station search tab */
   .station-bar{display:none;gap:8px;align-items:center;padding:0 0 4px;}
   .station-bar.visible{display:flex;}
@@ -136,7 +159,7 @@
   .ti-chev{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .18s ease;}
   .train-item.open .ti-chev{transform:rotate(180deg);}
   .train-item-body{max-height:0;overflow:hidden;transition:max-height .32s ease;}
-  .train-item.open .train-item-body{max-height:1400px;}
+  .train-item.open .train-item-body{max-height:8000px;}
   .inline-card{padding:14px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;gap:12px;}
   .inline-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
   .inline-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
@@ -179,33 +202,68 @@
   .tcoach{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;}
   .t-pos{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:2px;line-height:1;font-family:var(--mono);}
   .t-body{
-    position:relative;width:66px;height:36px;border-radius:7px 7px 5px 5px;
+    position:relative;width:66px;height:23px;border-radius:6px 6px 4px 4px;
     background:linear-gradient(180deg,var(--tc1) 0%,var(--tc1) 62%,var(--tc2) 62%);
     border:1.5px solid var(--tc2);
-    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:6px;
+    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:4px;
   }
-  .t-win{width:10px;height:12px;border-radius:2.5px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
-  .t-door{width:7px;height:21px;border-radius:2px;background:rgba(0,0,0,.22);}
+  .t-win{width:10px;height:7px;border-radius:2px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
+  .t-door{width:7px;height:12px;border-radius:2px;background:rgba(0,0,0,.22);}
   .t-wheels{display:flex;justify-content:space-between;width:52px;margin-top:-4px;}
   .t-wheel{width:10px;height:10px;border-radius:50%;background:#3A4150;border:2px solid #8B94A8;}
   .t-lbl{font-size:15px;font-weight:900;margin-top:3px;letter-spacing:.02em;line-height:1;color:var(--text);}
   .tcoach.tghost{opacity:.45;}
-  .tcoach svg{display:block;}
+  .tcoach svg{display:block;width:56px;height:auto;}
   /* type colours (same classes as chips, distinct per type) */
-  .tcoach.eng {--tc1:#4B5568;--tc2:#333B4A;}
-  .tcoach.end {--tc1:#C0556A;--tc2:#8E3B4B;}  /* SLR/SLRD — dark rose */
-  .tcoach.pwr {--tc1:#A94458;--tc2:#7C2F3F;}  /* LPR/EOG — maroon */
-  .tcoach.gen {--tc1:#6FB94E;--tc2:#4A8A30;}  /* GEN — green */
-  .tcoach.sl  {--tc1:#F49A3C;--tc2:#BF6F1E;}  /* Sleeper — orange */
-  .tcoach.ac3 {--tc1:#4A90E2;--tc2:#2D66B0;}  /* AC 3-tier — blue */
-  .tcoach.ac3e{--tc1:#8E6FD8;--tc2:#664BA8;}  /* AC 3 economy — violet */
-  .tcoach.ac2 {--tc1:#2BA8A0;--tc2:#1B7A74;}  /* AC 2-tier — teal */
-  .tcoach.ac1 {--tc1:#5D5FC7;--tc2:#3F4196;}  /* First AC — indigo */
-  .tcoach.cc  {--tc1:#E5739E;--tc2:#B04A73;}  /* Chair car — pink */
-  .tcoach.ec  {--tc1:#B44FC9;--tc2:#83368F;}  /* Executive CC — magenta */
-  .tcoach.d2s {--tc1:#3B9BD1;--tc2:#27709A;}  /* 2S — sky */
-  .tcoach.pc  {--tc1:#B98A4A;--tc2:#87622F;}  /* Pantry — brown */
-  .tcoach.unk {--tc1:#64748B;--tc2:#475366;}
+  .tcoach.eng {--tc1:#5B6579;--tc2:#414A5C;}
+  .tcoach.end {--tc1:#DB7C90;--tc2:#B25468;}  /* SLR/SLRD — rose */
+  .tcoach.pwr {--tc1:#C96A7D;--tc2:#A24A5D;}  /* LPR/EOG — maroon */
+  .tcoach.gen {--tc1:#8FCC71;--tc2:#66A648;}  /* GEN — green */
+  .tcoach.sl  {--tc1:#F8B366;--tc2:#D68B3A;}  /* Sleeper — orange */
+  .tcoach.ac3 {--tc1:#74A9EC;--tc2:#4A82C8;}  /* AC 3-tier — blue */
+  .tcoach.ac3e{--tc1:#AB92E3;--tc2:#8168C2;}  /* AC 3 economy — violet */
+  .tcoach.ac2 {--tc1:#55C2BA;--tc2:#329A93;}  /* AC 2-tier — teal */
+  .tcoach.ac1 {--tc1:#8385DB;--tc2:#5C5EB8;}  /* First AC — indigo */
+  .tcoach.cc  {--tc1:#EF98B8;--tc2:#C96A90;}  /* Chair car — pink */
+  .tcoach.ec  {--tc1:#C97BDB;--tc2:#A052B4;}  /* Executive CC — magenta */
+  .tcoach.d2s {--tc1:#6BB6E1;--tc2:#3F8DBB;}  /* 2S — sky */
+  .tcoach.pc  {--tc1:#CFA76E;--tc2:#A87F45;}  /* Pantry — brown */
+  .tcoach.unk {--tc1:#8A99AF;--tc2:#647289;}
+  /* reversal segments */
+  .seg-hd{font-size:11px;font-weight:800;font-family:var(--mono);letter-spacing:.06em;color:var(--amber);margin:10px 0 2px;display:flex;align-items:center;gap:6px;}
+  .seg-hd:first-child{margin-top:0;}
+  /* reversal station block (collapsible, highlighted) */
+  .rev-block{border:1.5px solid rgba(217,119,6,.45);border-radius:10px;overflow:hidden;margin:10px 0 0;background:var(--surface);}
+  .rev-bar{
+    background:linear-gradient(90deg,rgba(217,119,6,.16),rgba(217,119,6,.07));
+    padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+    font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--amber);letter-spacing:.05em;
+  }
+  .rev-bar .rev-star{font-size:15px;}
+  .rev-bar .rev-chev{margin-left:auto;transition:transform .18s ease;font-size:12px;}
+  .rev-block.open .rev-bar .rev-chev{transform:rotate(180deg);}
+  .rev-body{display:none;padding:4px 12px 12px;}
+  .rev-block.open .rev-body{display:block;}
+  .rev-sub{
+    display:inline-flex;align-items:center;gap:5px;user-select:none;
+    font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    color:#fff;border-radius:7px;padding:5px 12px;margin:12px 0 6px;
+  }
+  .rev-sub b{color:#fff;}
+  .rev-sub.arr{background:#64748B;}
+  .rev-sub.dep{background:var(--amber);}
+  /* phones: fit 5 coaches per row */
+  @media (max-width:480px){
+    .train-strip{gap:12px 5px;}
+    .t-body{width:56px;height:20px;gap:3px;padding-top:3px;border-radius:5px 5px 4px 4px;}
+    .t-win{width:8px;height:6px;}
+    .t-door{width:6px;height:10px;}
+    .t-wheels{width:44px;}
+    .t-wheel{width:9px;height:9px;border-width:2px;}
+    .t-lbl{font-size:13px;}
+    .t-pos{font-size:10px;}
+    .tcoach svg{width:49px;height:auto;}
+  }
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
@@ -226,6 +284,17 @@
   .btn-row{display:flex;gap:10px;}
   .btn-row .btn{flex:1;}
 
+  /* CP card action row */
+  .card-actions{gap:8px;align-items:stretch;}
+  .card-actions .btn{flex:1;padding:11px 6px;font-size:13.5px;font-weight:700;border-radius:9px;white-space:nowrap;}
+  .card-actions .i-confirm{background:rgba(22,163,74,.09);color:var(--green);border:1.5px solid var(--green);}
+  .card-actions .i-confirm:active{background:rgba(22,163,74,.18);}
+  .card-actions .i-delete{
+    flex:0 0 42px;padding:0;font-size:15px;border-radius:9px;
+    background:transparent;color:var(--red);border:1.5px solid rgba(220,38,38,.45);
+  }
+  .card-actions .i-delete:active{background:rgba(220,38,38,.1);}
+
   .preview-strip .chip{min-width:34px;height:38px;border-radius:5px;}
   .preview-strip .chip-index{font-size:8px;}
   .preview-strip .chip-code{font-size:10px;}
@@ -238,11 +307,18 @@
   .preview-strip .chip{cursor:pointer;}
   .preview-strip .chip:active{opacity:.75;}
   .share-offscreen{
-    position:fixed;left:-9999px;top:0;width:340px;
+    position:fixed;left:-9999px;top:0;width:360px;
     background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
-    padding:16px;display:flex;flex-direction:column;gap:12px;
+    padding:0 0 12px;display:flex;flex-direction:column;gap:10px;overflow:hidden;
   }
-  .sc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+  .sc-banner{background:var(--amber);color:#fff;padding:12px 16px 13px;display:flex;flex-direction:column;gap:2px;}
+  .sc-banner .sc-label{color:#FFE8C7;margin-bottom:3px;}
+  .sc-banner-row{display:flex;align-items:baseline;gap:10px;}
+  .sc-bno{font-family:var(--mono);font-weight:800;font-size:27px;color:#fff;letter-spacing:.02em;}
+  .sc-bdate{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:#FFE8C7;}
+  .sc-bname{font-size:14px;font-weight:700;color:#fff;}
+  .sc-broute{font-family:var(--mono);font-size:13px;font-weight:700;color:#FFE8C7;letter-spacing:.04em;}
+  .sc-body{padding:0 14px;display:flex;flex-direction:column;gap:10px;}
   .sc-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
   .sc-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);margin-top:3px;}
 
@@ -294,6 +370,25 @@
     box-shadow:0 4px 12px rgba(22,163,74,.3);
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* Prominent in-app banner for pushes received while the app is open */
+  .push-banner{
+    position:fixed;top:0;left:0;right:0;z-index:200;
+    max-width:520px;margin:0 auto;
+    background:var(--amber);color:#fff;
+    padding:14px 44px 14px 16px;border-radius:0 0 14px 14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.25);
+    transform:translateY(-110%);transition:transform .3s ease;
+    cursor:pointer;
+  }
+  .push-banner.show{transform:translateY(0);}
+  .push-banner .pb-title{font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:7px;}
+  .push-banner .pb-body{font-size:13px;margin-top:3px;opacity:.95;}
+  .push-banner .pb-close{
+    position:absolute;top:10px;right:10px;background:rgba(255,255,255,.2);
+    border:none;color:#fff;font-size:15px;line-height:1;border-radius:6px;
+    padding:5px 8px;cursor:pointer;
+  }
   .section-title{font-size:13px;color:var(--muted);font-weight:600;}
 
   /* auth overlay screens */
@@ -407,6 +502,7 @@
       <button class="tab active" id="tabAll">All</button>
       <button class="tab" id="tabFav">★ Favourites</button>
       <button class="tab" id="tabStation">🚆 Trains</button>
+      <button class="select-toggle" id="selectToggle">☑ Select</button>
       <span class="list-count" id="listCount"></span>
     </div>
     <div class="station-bar" id="stationBar">
@@ -424,27 +520,41 @@
     <button class="btn btn-primary" id="fabAdd">+ Add / Update a train</button>
   </div>
 
+  <div id="selectBar">
+    <span class="sel-count" id="selCount">0 selected</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-ghost" id="selCancelBtn">Cancel</button>
+    <button class="btn btn-primary" id="selShareBtn">⬆ Share list</button>
+  </div>
+
   <div class="toast" id="toast"></div>
+  <div class="push-banner" id="pushBanner">
+    <button class="pb-close" id="pushBannerClose">✕</button>
+    <div class="pb-title">🔔 <span id="pushBannerTitle"></span></div>
+    <div class="pb-body" id="pushBannerBody"></div>
+  </div>
   <div class="app-disclaimer">⚠ Coach positions are indicative only and may change without prior notice.<br>Staff: verify before announcement · Passengers: confirm at station before boarding.</div>
 </div>
 
 <!-- Off-screen share capture (populated before html2canvas) -->
 <div id="shareCapture" class="share-offscreen">
-  <div class="sc-label">COACH POSITION</div>
-  <div class="sc-head">
-    <div>
-      <div class="tno" id="rTrainNo"></div>
-      <div class="tname" id="rTrainName"></div>
-      <div class="sc-route" id="rRoute"></div>
+  <div class="sc-banner">
+    <div class="sc-label">COACH POSITION</div>
+    <div class="sc-banner-row">
+      <span class="sc-bno" id="rTrainNo"></span>
+      <span class="sc-bdate" id="rDate"></span>
     </div>
-    <div class="inline-date" id="rDate"></div>
+    <div class="sc-bname" id="rTrainName"></div>
+    <div class="sc-broute" id="rRoute"></div>
   </div>
-  <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
-  <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
-  <div class="confirm-line" id="rConfirmLine"></div>
-  <div class="share-footer" id="shareGenAt" style="display:none"></div>
-  <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
-  <div class="share-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
+  <div class="sc-body">
+    <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
+    <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
+    <div class="confirm-line" id="rConfirmLine"></div>
+    <div class="share-footer" id="shareGenAt" style="display:none"></div>
+    <div class="share-footer" id="shareFooterBrand">Train Coach Position · coachformation.netlify.app</div>
+    <div class="share-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
+  </div>
 </div>
 
 <!-- Auth overlay (initial sign-in, shown before anything else) -->
@@ -651,13 +761,21 @@ try {
 } catch (_) {}
 
 // VAPID key — get from Firebase Console → Project Settings → Cloud Messaging → Web push certificates
-const VAPID_KEY = '_7G4M7pdJr4jKCjR5w4MayzptitOquLy7oTG1hhm4bU';
+const VAPID_KEY = 'BBAFG_Ly-eII_3zNgzdU6ZGu4i_uzgBLCGhr6bq0zmYbgl80k_8UXnhwhrJTYgGWR3MZ_My-nn5tEpMjCjUWHu8';
 
 db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
 
 // ─── App state ────────────────────────────────────────────────────────────────
 let currentUser = null;
 let activeTab = 'all';
+// Resolves once the push-permission prompt has settled (granted/denied/skipped),
+// so the install banner never overlaps it with a second native-feeling prompt.
+let _pushInitResolve;
+const _pushInitSettled = new Promise(r => { _pushInitResolve = r; });
+// Multi-select (share multiple trains as one text message)
+let selectMode = false;
+const selectedTrains = new Set();
+const _selectableTrainData = {}; // trainNo -> {trainName, fromStation, toStation}
 // Resolves after the first onAuthStateChanged fires AND the Firestore profile is loaded.
 let _authReadyResolve;
 const _authReady = new Promise(r => { _authReadyResolve = r; });
@@ -784,7 +902,8 @@ function formatDateTime(date) {
 
 // ─── Coach parser + renderer ─────────────────────────────────────────────────
 function parseCompressed(input) {
-  const tokens = (input || '').split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  // Commas AND spaces both separate coaches (pasted lists often use spaces)
+  const tokens = (input || '').split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(Boolean);
   const out = [];
   for (const tok of tokens) {
     let m = tok.match(/^(\d+)([A-Z]+\d*)$/);
@@ -804,7 +923,7 @@ function parseCompressed(input) {
 
 // ENG is implicit in the editors — engine is always position 1, never typed by staff
 function stripEngRaw(raw) {
-  const toks = (raw || '').split(',').map(t => t.trim()).filter(Boolean);
+  const toks = (raw || '').split(/[\s,]+/).map(t => t.trim()).filter(Boolean);
   while (toks.length && toks[0].toUpperCase() === 'ENG') toks.shift();
   return toks.join(',');
 }
@@ -931,6 +1050,86 @@ function renderTrainStrip(container, codes) {
   });
 }
 
+// ─── Reversal segments ────────────────────────────────────────────────────────
+// ENG never reverses — only the coaches from position 2 onwards flip at each
+// reversal station. Reversal stations are set per train in the admin panel.
+const _revCache = {};
+async function getReversalStations(trainNo) {
+  const key = String(trainNo);
+  if (_revCache[key] !== undefined) return _revCache[key];
+  try {
+    const doc = await db.collection('trains').doc(key).get();
+    const d = doc.exists ? doc.data() : null;
+    _revCache[key] = (d && Array.isArray(d.reversalStations)) ? d.reversalStations : [];
+  } catch { _revCache[key] = []; }
+  return _revCache[key];
+}
+
+function reverseFormation(codes) {
+  if (!codes.length) return codes;
+  return codes[0].toUpperCase() === 'ENG'
+    ? [codes[0], ...codes.slice(1).reverse()]
+    : [...codes].reverse();
+}
+
+// Render formation with reversal stations into a container (NTES style):
+// first leg strip, then one highlighted collapsible block per reversal
+// station showing Arrival and Departure formations at that station.
+// No reversals → single strip, same as before.
+function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll) {
+  if (!revStations || !revStations.length) {
+    renderTrainStrip(container, parsedList);
+    return;
+  }
+  container.classList.remove('train-strip');
+  container.innerHTML = '';
+
+  const stripEl = (codes) => {
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    renderTrainStrip(strip, codes);
+    return strip;
+  };
+
+  // First leg — the formation as entered
+  const firstHd = document.createElement('div');
+  firstHd.className = 'seg-hd';
+  firstHd.textContent = `${fromStation || 'ORIGIN'} → ${revStations[0]}`;
+  container.appendChild(firstHd);
+  container.appendChild(stripEl(parsedList));
+
+  // One highlighted, collapsible block per reversal station
+  let codes = parsedList;
+  revStations.forEach((stn, i) => {
+    const before = codes;
+    codes = reverseFormation(codes);
+    const nextPoint = revStations[i + 1] || toStation || 'DESTINATION';
+
+    const block = document.createElement('div');
+    block.className = 'rev-block' + (expandAll ? ' open' : '');
+    block.innerHTML = `
+      <div class="rev-bar">
+        <span class="rev-star">🔄</span>
+        <span>${stn} — REVERSAL STATION</span>
+        <span class="rev-chev">▼</span>
+      </div>
+      <div class="rev-body">
+        <div class="rev-sub arr">⬇ Arrival at <b>${stn}</b></div>
+        <div class="_rv-arr"></div>
+        <div class="rev-sub dep">⬆ Departure from <b>${stn}</b> → ${nextPoint}</div>
+        <div class="_rv-dep"></div>
+      </div>
+    `;
+    block.querySelector('._rv-arr').appendChild(stripEl(before));
+    block.querySelector('._rv-dep').appendChild(stripEl(codes));
+    block.querySelector('.rev-bar').addEventListener('click', (e) => {
+      e.stopPropagation();
+      block.classList.toggle('open');
+    });
+    container.appendChild(block);
+  });
+}
+
 function showChipEditDialog(index, codes, onSave) {
   const currentCode = codes[index];
   const overlay = document.createElement('div');
@@ -1014,6 +1213,57 @@ function toggleFavourite(trainNo) {
   localStorage.setItem('cp_favs', JSON.stringify(favs));
   return !isFav;
 }
+
+// ─── Multi-select (share several trains as one text message) ─────────────────
+function setSelectMode(on) {
+  selectMode = on;
+  document.body.classList.toggle('select-mode', on);
+  $('selectToggle').classList.toggle('on', on);
+  if (!on) { selectedTrains.clear(); }
+  updateSelectBar();
+  renderTrainsList();
+}
+
+function toggleTrainSelected(trainNo, headEl) {
+  const on = selectedTrains.has(trainNo);
+  if (on) selectedTrains.delete(trainNo); else selectedTrains.add(trainNo);
+  headEl.classList.toggle('sel-on', !on);
+  const check = headEl.querySelector('.sel-check');
+  if (check) check.textContent = !on ? '✓' : '';
+  updateSelectBar();
+}
+
+function updateSelectBar() {
+  const n = selectedTrains.size;
+  $('selCount').textContent = `${n} selected`;
+  $('selectBar').classList.toggle('show', selectMode && n > 0);
+}
+
+$('selectToggle').addEventListener('click', () => setSelectMode(!selectMode));
+$('selCancelBtn').addEventListener('click', () => setSelectMode(false));
+
+$('selShareBtn').addEventListener('click', async () => {
+  const trains = [...selectedTrains];
+  if (!trains.length) return;
+  const lines = trains.map(no => {
+    const d = _selectableTrainData[no] || {};
+    const route = (d.fromStation && d.toStation) ? ` (${d.fromStation} → ${d.toStation})` : '';
+    return `${no}${d.trainName ? ' — ' + d.trainName : ''}${route}`;
+  });
+  const text = `🚆 Coach Position — check these trains:\n\n${lines.join('\n')}\n\nLive coach positions:\nhttps://coachformation.netlify.app`;
+
+  if (navigator.share) {
+    try { await navigator.share({ text }); setSelectMode(false); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied — paste it into WhatsApp');
+  } catch {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+  setSelectMode(false);
+});
 
 // ─── Identity / auth helpers ──────────────────────────────────────────────────
 function getIdentity() {
@@ -1233,7 +1483,7 @@ $('emailRegisterBtn').addEventListener('click', async () => {
 });
 
 // ─── Share capture helper ─────────────────────────────────────────────────────
-function populateShareCapture(d) {
+async function populateShareCapture(d) {
   $('rTrainNo').textContent = d.trainNo;
   $('rTrainName').textContent = d.trainName || '';
   $('rDate').textContent = formatDateOnly(d.date);
@@ -1241,7 +1491,8 @@ function populateShareCapture(d) {
     ? `${d.fromStation} → ${d.toStation}`
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
-  renderTrainStrip($('rStrip'), d.parsedList || []);
+  const _rev = await getReversalStations(d.trainNo);
+  renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation, true);
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -1256,8 +1507,35 @@ function populateShareCapture(d) {
 }
 
 // ─── Push notifications ───────────────────────────────────────────────────────
+let _pushInitStarted = false;
 async function initPushNotifications() {
-  if (!messaging || !('Notification' in window)) return;
+  if (_pushInitStarted) return; // avoid double-resolving/duplicate prompts across call sites
+
+  // On mobile, permission granted from a plain browser tab doesn't reliably
+  // carry over to the installed PWA's own OS-level notification toggle
+  // (confirmed on Android: install → check Settings → Notifications was
+  // unchecked when we'd asked pre-install). So on mobile, don't ask at all
+  // until the app is actually running installed/standalone — desktop has
+  // no such quirk and can ask immediately.
+  const isMobile = /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isMobile && !isStandalone) {
+    _pushInitResolve(); // let the install banner proceed on its own timer
+    return;
+  }
+
+  _pushInitStarted = true;
+  try {
+    await _initPushNotificationsImpl();
+  } finally {
+    _pushInitResolve();
+  }
+}
+async function _initPushNotificationsImpl() {
+  if (!messaging || !('Notification' in window)) {
+    console.warn('[push] not supported on this browser/context (messaging=' + !!messaging + ')');
+    return;
+  }
   if (Notification.permission === 'denied') return;
   // Only ask once per device (unless already granted)
   if (Notification.permission !== 'granted' && localStorage.getItem('push_asked')) return;
@@ -1269,7 +1547,11 @@ async function initPushNotifications() {
   if (permission !== 'granted') return;
 
   try {
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+    // Explicitly bind to our one registered SW (sw.js, which now also
+    // handles FCM) — without this, getToken() may fail with
+    // "no active Service Worker" if it can't resolve one on its own.
+    const swRegistration = await navigator.serviceWorker.ready;
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
     if (!token) return;
 
     // Stable per-device ID so we can update the same doc without duplicates
@@ -1282,19 +1564,22 @@ async function initPushNotifications() {
     }
 
     // Store in broadcast collection (all users, including guests)
-    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
+      .catch(e => console.error('[push] fcm_tokens write failed:', e.message));
     localStorage.setItem('push_token', token);
 
     // If logged in, also update the user profile
     if (currentUser?.uid && currentUser.role !== 'guest') {
-      db.collection('users').doc(currentUser.uid).update({ fcmToken: token }).catch(() => {});
+      db.collection('users').doc(currentUser.uid).update({ fcmToken: token })
+        .catch(e => console.error('[push] users.fcmToken write failed:', e.message));
     }
 
     // Admins get a separate collection so we can target them specifically
     if (currentUser?.role === 'admin') {
-      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() }).catch(() => {});
+      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
+        .catch(e => console.error('[push] admin_fcm_tokens write failed:', e.message));
     }
-  } catch (e) { /* silent — localhost or blocked */ }
+  } catch (e) { console.error('[push] registration failed:', e.message); }
 }
 
 // Broadcast CP update to all subscribed users
@@ -1306,6 +1591,8 @@ function sendCpNotification(trainNo, trainName, coaches) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         broadcast: true,
+        kind: 'cp_update',
+        trainNo,
         title: `CP: ${trainNo}${trainName ? ' – ' + trainName.split(' ').slice(0, 3).join(' ') : ''}`,
         body: summary || 'Coach position updated'
       })
@@ -1319,7 +1606,7 @@ function sendAdminNotification(title, body) {
     fetch('/.netlify/functions/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'admin', title, body })
+      body: JSON.stringify({ target: 'admin', kind: 'admin', title, body })
     }).catch(() => {});
   } catch (_) {}
 }
@@ -1331,10 +1618,25 @@ async function sendPush(token, title, body) {
     await fetch('/.netlify/functions/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, title, body }),
+      body: JSON.stringify({ token, kind: 'direct', title, body }),
     });
   } catch (_) {}
 }
+
+// Mark a notification as opened when the app is launched from its link (?nid=…)
+(function recordNotificationOpen() {
+  try {
+    const nid = new URLSearchParams(location.search).get('nid');
+    if (!nid) return;
+    db.collection('notification_log').doc(nid).update({
+      openCount: firebase.firestore.FieldValue.increment(1),
+      lastOpenedAt: Date.now(),
+    }).catch(() => {});
+    const url = new URL(location.href);
+    url.searchParams.delete('nid');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  } catch (_) {}
+})();
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
 function staleBadge(isoDate) {
@@ -1413,10 +1715,13 @@ async function renderTrainsList() {
       ? `${cur.fromStation} → ${cur.toStation}`
       : cur.fromStation || cur.toStation || '';
 
+    _selectableTrainData[cur.trainNo] = { trainName: cur.trainName || '', fromStation: cur.fromStation || '', toStation: cur.toStation || '' };
+
     const item = document.createElement('div');
     item.className = 'train-item';
     item.innerHTML = `
-      <div class="train-item-head">
+      <div class="train-item-head${selectedTrains.has(cur.trainNo) ? ' sel-on' : ''}">
+        <span class="sel-check">${selectedTrains.has(cur.trainNo) ? '✓' : ''}</span>
         <button class="star-btn${isFav ? ' starred' : ''}" data-train="${cur.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
         <div class="tno-badge">${cur.trainNo}</div>
         <div class="train-item-meta">
@@ -1446,11 +1751,11 @@ async function renderTrainsList() {
           <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
           <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
           <div class="confirm-line i-cl"></div>
-          <div class="btn-row">
+          <div class="btn-row card-actions">
             <button class="btn btn-secondary i-share">⬆ Share</button>
-            ${canEdit() ? `<button class="btn btn-ghost i-confirm">✓ Confirm</button>
-            <button class="btn btn-secondary i-edit">Edit</button>` : ''}
-            ${currentUser?.role === 'admin' ? `<button class="btn btn-danger i-delete">🗑</button>` : ''}
+            ${canEdit() ? `<button class="btn i-confirm">✓ Confirm</button>
+            <button class="btn btn-secondary i-edit">✎ Edit</button>` : ''}
+            ${currentUser?.role === 'admin' ? `<button class="btn i-delete" title="Delete record">🗑</button>` : ''}
           </div>
           ${canEdit() ? `<button class="btn btn-primary btn-block i-same" style="display:none">↻ Same coach position — save for today</button>` : ''}
         </div>
@@ -1468,6 +1773,11 @@ async function renderTrainsList() {
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
       renderTrainStrip(item.querySelector('.i-strip'), rec.parsedList || []);
+      // Upgrade to multi-segment view if this train has reversal stations
+      getReversalStations(rec.trainNo).then(rev => {
+        if (!rev.length || cur !== rec) return;
+        renderFormationSegments(item.querySelector('.i-strip'), rec.parsedList || [], rev, rec.fromStation, rec.toStation);
+      });
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
@@ -1523,9 +1833,13 @@ async function renderTrainsList() {
       if (activeTab === 'fav' && !isNowFav) renderTrainsList();
     });
 
-    // Expand / collapse
+    // Expand / collapse (or toggle selection, in select mode)
     item.querySelector('.train-item-head').addEventListener('click', (e) => {
       if (e.target.closest('.star-btn')) return;
+      if (selectMode) {
+        toggleTrainSelected(cur.trainNo, e.currentTarget);
+        return;
+      }
       const wasOpen = item.classList.contains('open');
       document.querySelectorAll('.train-item.open').forEach(el => el.classList.remove('open'));
       if (!wasOpen) {
@@ -1535,8 +1849,8 @@ async function renderTrainsList() {
     });
 
     // Share
-    item.querySelector('.i-share').addEventListener('click', () => {
-      populateShareCapture(cur);
+    item.querySelector('.i-share').addEventListener('click', async () => {
+      await populateShareCapture(cur);
       shareAsImage(cur.trainNo, cur.date);
     });
 
@@ -1631,6 +1945,7 @@ $('tabAll').addEventListener('click', () => {
   $('stationBar').classList.remove('visible');
   $('listSearch').style.display = '';
   $('listSearch').placeholder = 'Search train number or name…';
+  $('selectToggle').style.display = '';
   renderTrainsList();
 });
 $('tabFav').addEventListener('click', () => {
@@ -1641,9 +1956,14 @@ $('tabFav').addEventListener('click', () => {
   $('stationBar').classList.remove('visible');
   $('listSearch').style.display = '';
   $('listSearch').placeholder = 'Search train number or name…';
+  $('selectToggle').style.display = '';
   renderTrainsList();
 });
-$('tabStation').addEventListener('click', openTrainsTab);
+$('tabStation').addEventListener('click', () => {
+  setSelectMode(false);
+  $('selectToggle').style.display = 'none';
+  openTrainsTab();
+});
 $('stationCodeInput').addEventListener('input', () => { if (activeTab === 'station') renderTrainsTab(); });
 $('listSearch').addEventListener('input', renderTrainsList);
 
@@ -2179,11 +2499,24 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 });
 
-// Foreground push messages (app is open — show as toast)
+// Foreground push messages (app is open — show a prominent banner; the old
+// 2.2-second toast was far too easy to miss)
+let _pushBannerTimer;
+function showPushBanner(title, body) {
+  $('pushBannerTitle').textContent = title || 'Coach Position';
+  $('pushBannerBody').textContent = body || '';
+  $('pushBanner').classList.add('show');
+  clearTimeout(_pushBannerTimer);
+  _pushBannerTimer = setTimeout(() => $('pushBanner').classList.remove('show'), 12000);
+}
+$('pushBanner').addEventListener('click', () => $('pushBanner').classList.remove('show'));
+$('pushBannerClose').addEventListener('click', (e) => { e.stopPropagation(); $('pushBanner').classList.remove('show'); });
+
 if (messaging) {
   messaging.onMessage((payload) => {
+    console.log('[push] onMessage fired (foreground)', payload);
     const notif = payload.notification || {};
-    toast(`${notif.title || ''}${notif.body ? ' — ' + notif.body : ''}`);
+    showPushBanner(notif.title, notif.body);
   });
 }
 
@@ -2209,13 +2542,20 @@ if ('serviceWorker' in navigator) {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   if (isStandalone) return; // already installed
 
+  // Never overlap with the native notification-permission prompt — wait for it
+  // to settle first (capped, in case the user leaves that dialog open a while).
+  const afterPushPrompt = Promise.race([
+    _pushInitSettled,
+    new Promise(r => setTimeout(r, 8000)),
+  ]);
+
   let _installPrompt = null;
 
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     _installPrompt = e;
     if (!sessionStorage.getItem('install_dismissed')) {
-      setTimeout(() => { banner.style.display = 'flex'; }, 4000);
+      afterPushPrompt.then(() => setTimeout(() => { banner.style.display = 'flex'; }, 800));
     }
   });
 
@@ -2236,12 +2576,12 @@ if ('serviceWorker' in navigator) {
   // iOS: no beforeinstallprompt — show a manual hint instead
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   if (isIOS && !isStandalone && !localStorage.getItem('ios_install_shown')) {
-    setTimeout(() => {
+    afterPushPrompt.then(() => setTimeout(() => {
       $('installHint').textContent = 'Tap Share (⎙) → Add to Home Screen';
       $('installBtn').style.display = 'none';
       banner.style.display = 'flex';
       localStorage.setItem('ios_install_shown', '1');
-    }, 5000);
+    }, 800));
   }
 })();
 

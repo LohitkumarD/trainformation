@@ -198,6 +198,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
     <button class="tnav" data-tab="trains" onclick="switchTab('trains',this)">🚂 Trains</button>
     <button class="tnav" data-tab="stations" onclick="switchTab('stations',this)">📍 Stations</button>
     <button class="tnav" data-tab="users" onclick="switchTab('users',this)">👥 Users</button>
+    <button class="tnav" data-tab="notifs" onclick="switchTab('notifs',this)">🔔 Notifications</button>
   </nav>
 
   <!-- ═══ IMPORT ═══ -->
@@ -216,10 +217,10 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
       <!-- Drop zone -->
       <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-in').click()">
         <div class="dz-icon">📂</div>
-        <div class="dz-title">Drop CSV file here or click to browse</div>
-        <div class="dz-sub">Coach Position Train Details CSV (one row per station)</div>
+        <div class="dz-title">Drop CSV or NTES .xls file here or click to browse</div>
+        <div class="dz-sub">Train Details CSV (one row per station) or NTES Train Time Table .xls export</div>
       </div>
-      <input type="file" id="file-in" accept=".csv" style="display:none" onchange="handleFile(this.files[0])">
+      <input type="file" id="file-in" accept=".csv,.xls" style="display:none" onchange="handleFile(this.files[0])">
 
       <!-- Options -->
       <div class="opt-row" style="margin-top:14px;">
@@ -351,6 +352,59 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
             <tr><th>Name</th><th>Staff ID</th><th>Designation</th><th>Station</th><th>Mobile</th><th>Email</th><th>Status</th><th>Registered</th><th></th></tr>
           </thead>
           <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ NOTIFICATIONS ═══ -->
+  <div id="tab-notifs" class="tab">
+    <div class="panel">
+      <div class="panel-hd">Send Notification</div>
+
+      <div class="opt-row" style="margin-bottom:16px;">
+        <button class="btn btn-ghost btn-sm" onclick="fillNotifTemplate('install')">📲 Install Reminder</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillNotifTemplate('check')">🚆 Check Trains</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillNotifTemplate('recent')">🔄 Recent Updates</button>
+      </div>
+
+      <div class="frow">
+        <div class="fld"><label>Title</label><input id="notif-title" type="text" placeholder="e.g. 📲 Install the app"></div>
+        <div class="fld"><label>Send to</label>
+          <select id="notif-target">
+            <option value="broadcast">All subscribed devices</option>
+            <option value="admin">Admins only</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld"><label>Message</label><textarea id="notif-body" rows="3" placeholder="e.g. Get live coach position updates — install the app for faster access."></textarea></div>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" onclick="sendCustomNotification()" id="notif-send-btn">🔔 Send Now</button>
+        <span id="notif-send-status" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">Push Reach</div>
+      <div class="stat-pills" style="margin-bottom:0;">
+        <div class="spill s-all"><b id="notif-sub-count">–</b> Subscribed devices</div>
+        <div class="spill s-all"><b id="notif-admin-count">–</b> Admin devices</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="panel-hd" style="margin:0;">Recent Notifications</div>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadNotifs()">↻ Refresh</button>
+        <span class="chip-count" id="notifs-count"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Sent</th><th>Type</th><th>Title</th><th>Message</th><th>Train</th><th>Reached</th><th>Failed</th><th>Opened</th></tr>
+          </thead>
+          <tbody id="notifs-body"></tbody>
         </table>
       </div>
     </div>
@@ -530,6 +584,7 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   btn.classList.add('on');
   document.getElementById('tab-' + id).classList.add('on');
+  if (id === 'notifs' && !document.getElementById('notif-sub-count').dataset.loaded) loadNotifs();
 }
 
 // ─── IMPORT ──────────────────────────────────────────────────────
@@ -553,10 +608,68 @@ function handleFile(file) {
 
   const reader = new FileReader();
   reader.onload = e => {
-    try { parseCSV(e.target.result, homeStn); }
+    try {
+      const txt = e.target.result;
+      // NTES .xls exports are actually HTML tables
+      if (/<table|<tr[\s>]/i.test(txt)) parseNTES(txt, homeStn);
+      else parseCSV(txt, homeStn);
+    }
     catch(err) { toast('Parse error: ' + err.message, 'err'); }
   };
   reader.readAsText(file);
+}
+
+// ─── NTES .xls (HTML table) parser ───────────────────────────────
+// Columns: 0 Sr | 1 TrainNo | 2 StartDate | 3 Name | 4 Type | 5 SrcName
+// 6 SrcCode | 7 DstName | 8 DstCode | 9 PRS | 10 UTS | 11 Pantry
+// 12 STA | 13 ETA | 14 Delay | 15 STD | 16 ETD | 17 Delay
+// 18 Stoppage(min) | 19 PF | 20 Reversal?
+function parseNTES(html, homeStn) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+
+  // Warn if the file was exported for a different station
+  const hdr = (doc.body.textContent || '').match(/\[Station:\s*([A-Z]+)\]/i);
+  if (hdr && homeStn && hdr[1].toUpperCase() !== homeStn) {
+    toast(`Note: file is for station ${hdr[1].toUpperCase()}, not ${homeStn}`, 'err');
+  }
+
+  const timeOf = s => { const m = (s || '').match(/(\d{1,2}:\d{2})/); return m ? m[1] : null; };
+  const chkOrigin = document.getElementById('chk-origin').checked;
+  const chkThru   = document.getElementById('chk-thru').checked;
+  const chkTerm   = document.getElementById('chk-term').checked;
+
+  importRows = [];
+  for (const tr of doc.querySelectorAll('tr')) {
+    const c = [...tr.querySelectorAll('td,th')].map(td => td.textContent.replace(/\u00a0/g, ' ').trim());
+    if (c.length < 21 || !/^\d{5}$/.test(c[1])) continue;
+
+    const arr = timeOf(c[12]);
+    const dep = timeOf(c[15]);
+    const isOrigin = !arr && !!dep;
+    const isThru   = !!arr && !!dep;
+    const isTerm   = !!arr && !dep;
+    if (isOrigin && !chkOrigin) continue;
+    if (isThru   && !chkThru)   continue;
+    if (isTerm   && !chkTerm)   continue;
+
+    importRows.push({
+      trainNo: c[1],
+      trainName: c[3],
+      type: c[4],
+      source: c[5], sourceCode: c[6],
+      destination: c[7], destinationCode: c[8],
+      prsClass: c[9] || null,
+      utsClass: c[10] || null,
+      pantry: c[11] || null,
+      stdArrival: arr,
+      stdDeparture: dep,
+      stoppage: c[18] ? c[18] + ' min' : null,
+      platform: (c[19] || '').replace(/\*/g, '').trim() || null,
+    });
+  }
+
+  if (!importRows.length) { toast('No trains parsed from the XLS file', 'err'); return; }
+  buildPreview();
 }
 
 function parseCSV(text, homeStn) {
@@ -634,6 +747,18 @@ function parseCSV(text, homeStn) {
 async function buildPreview() {
   if (!importRows.length) { toast('No trains found for this station', 'err'); return; }
 
+  // Drop duplicate train numbers within the parsed file — keep first occurrence only
+  const seen = new Set();
+  const deduped = [];
+  let dupCount = 0;
+  for (const row of importRows) {
+    if (seen.has(row.trainNo)) { dupCount++; continue; }
+    seen.add(row.trainNo);
+    deduped.push(row);
+  }
+  importRows = deduped;
+  if (dupCount) toast(`Skipped ${dupCount} duplicate train${dupCount > 1 ? 's' : ''} in file`, 'err');
+
   // Map existing trains
   const existing = {};
   allTrains.forEach(t => existing[t.trainNo] = t);
@@ -642,7 +767,9 @@ async function buildPreview() {
     const ex = existing[row.trainNo];
     if (!ex) return { ...row, status: 'new', changes: [] };
 
-    const flds = ['trainName','type','gauge','frequency','source','sourceCode','destination','destinationCode','stdArrival','stdDeparture'];
+    // Only compare fields the source file actually provides (CSV has gauge/frequency, NTES has prsClass/platform/etc.)
+    const flds = ['trainName','type','gauge','frequency','source','sourceCode','destination','destinationCode','stdArrival','stdDeparture','prsClass','utsClass','pantry','platform','stoppage']
+      .filter(f => row[f] !== undefined);
     const changes = flds.filter(f => (ex[f]||'') !== (row[f]||''))
                         .map(f => ({ field: f, old: ex[f]||'—', nw: row[f]||'—' }));
     return { ...row, status: changes.length ? 'updated' : 'same', changes };
@@ -678,7 +805,7 @@ function renderPreview() {
       <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${r.sourceCode} → ${r.destinationCode}</td>
       <td style="font-family:var(--mono);font-size:12px;">${r.stdArrival||'—'}</td>
       <td style="font-family:var(--mono);font-size:12px;">${r.stdDeparture||'—'}</td>
-      <td style="font-size:11px;color:var(--muted);">${r.frequency}</td>
+      <td style="font-size:11px;color:var(--muted);">${r.frequency||'—'}</td>
       <td><span class="badge b-${r.status}">${r.status}</span></td>
       <td>${diffHtml ? `<details><summary style="cursor:pointer;font-size:11px;color:var(--muted);">View diff</summary><div class="diff-rows">${diffHtml}</div></details>` : '—'}</td>
     </tr>`;
@@ -723,12 +850,16 @@ async function doImport() {
     const ref = db.collection('trains').doc(row.trainNo);
     const data = {
       trainNo: row.trainNo, trainName: row.trainName,
-      type: row.type, gauge: row.gauge, frequency: row.frequency,
+      type: row.type,
       source: row.source, sourceCode: row.sourceCode,
       destination: row.destination, destinationCode: row.destinationCode,
       stdArrival: row.stdArrival || null,
       stdDeparture: row.stdDeparture || null,
     };
+    // Optional fields — only write what the source file provides
+    ['gauge','frequency','prsClass','utsClass','pantry','platform','stoppage'].forEach(f => {
+      if (row[f] !== undefined) data[f] = row[f] || null;
+    });
     if (row.status === 'new') {
       data.coaches = []; data.cpUpdatedAt = null; data.reversalStations = [];
     }
@@ -1037,6 +1168,114 @@ async function setRole(uid, role) {
   await db.collection('users').doc(uid).update({ role });
   const u = allUsers.find(u => u.id===uid); if(u) u.role=role;
   renderUsers(); toast(`Role set to ${role}`, 'ok');
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────────────────
+const NOTIF_KIND_LABEL = {
+  cp_update: 'CP Update', admin: 'Admin Alert', broadcast: 'Broadcast', direct: 'Direct',
+};
+const NOTIF_KIND_BADGE = {
+  cp_update: 'b-approved', admin: 'b-pending', broadcast: 'b-updated', direct: 'b-same',
+};
+
+async function fillNotifTemplate(kind) {
+  const titleEl = document.getElementById('notif-title');
+  const bodyEl = document.getElementById('notif-body');
+  if (kind === 'install') {
+    titleEl.value = '📲 Install the app';
+    bodyEl.value = 'Get instant coach position updates — install Coach Position for faster access. Open coachformation.netlify.app and tap "Install".';
+  } else if (kind === 'check') {
+    titleEl.value = '🚆 Check today\'s trains';
+    bodyEl.value = 'Live coach position updates are ready — open the app to check your trains.';
+  } else if (kind === 'recent') {
+    bodyEl.value = 'Loading recent updates…';
+    try {
+      const since = new Date(Date.now() - 24 * 3600 * 1000);
+      const snap = await db.collection('trains')
+        .where('cpUpdatedAt', '>=', since)
+        .orderBy('cpUpdatedAt', 'desc')
+        .limit(6)
+        .get();
+      const nos = snap.docs.map(d => d.id);
+      titleEl.value = `🔄 ${snap.size} train${snap.size !== 1 ? 's' : ''} updated`;
+      bodyEl.value = nos.length
+        ? `Recently updated: ${nos.join(', ')}${snap.size > nos.length ? '…' : ''} — check the app for the latest coach positions.`
+        : 'No coach position updates in the last 24 hours.';
+    } catch (e) {
+      bodyEl.value = 'Check the app for the latest coach position updates.';
+    }
+  }
+}
+
+async function sendCustomNotification() {
+  const title = document.getElementById('notif-title').value.trim();
+  const body = document.getElementById('notif-body').value.trim();
+  const target = document.getElementById('notif-target').value;
+  if (!title) { toast('Title required', 'err'); return; }
+  const targetLabel = target === 'admin' ? 'admins only' : 'ALL subscribed devices';
+  if (!confirm(`Send this notification to ${targetLabel}?\n\n${title}\n${body}`)) return;
+
+  const btn = document.getElementById('notif-send-btn');
+  const status = document.getElementById('notif-send-status');
+  btn.disabled = true;
+  status.textContent = 'Sending…';
+  try {
+    const payload = { title, body, kind: 'admin' };
+    if (target === 'admin') payload.target = 'admin'; else payload.broadcast = true;
+    const res = await fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+    status.textContent = `Sent to ${data.sent}/${data.total} device${data.total===1?'':'s'}${data.failed?`, ${data.failed} failed`:''}`;
+    toast('Notification sent', 'ok');
+    document.getElementById('notif-title').value = '';
+    document.getElementById('notif-body').value = '';
+    loadNotifs();
+  } catch (e) {
+    status.textContent = '';
+    toast('Send failed: ' + e.message, 'err');
+  }
+  btn.disabled = false;
+}
+
+async function loadNotifs() {
+  document.getElementById('notif-sub-count').dataset.loaded = '1';
+  try {
+    const [subSnap, adminSnap, logSnap] = await Promise.all([
+      db.collection('fcm_tokens').get(),
+      db.collection('admin_fcm_tokens').get(),
+      db.collection('notification_log').orderBy('sentAt', 'desc').limit(100).get(),
+    ]);
+    document.getElementById('notif-sub-count').textContent = subSnap.size;
+    document.getElementById('notif-admin-count').textContent = adminSnap.size;
+
+    const rows = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    document.getElementById('notifs-count').textContent = `${rows.length} shown`;
+    document.getElementById('notifs-body').innerHTML = rows.length ? rows.map(r => {
+      const when = r.sentAt?.toDate ? r.sentAt.toDate().toLocaleString() : '—';
+      const kind = r.kind || 'direct';
+      const total = r.total || 0;
+      const sent = r.sent || 0;
+      const failed = r.failed || 0;
+      const opens = r.openCount || 0;
+      const reachPct = total ? Math.round(sent / total * 100) : 0;
+      return `<tr>
+        <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${when}</td>
+        <td><span class="badge ${NOTIF_KIND_BADGE[kind]||'b-same'}">${NOTIF_KIND_LABEL[kind]||kind}</span></td>
+        <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;">${r.title||'—'}</td>
+        <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px;">${r.body||'—'}</td>
+        <td>${r.trainNo ? `<span class="tno">${r.trainNo}</span>` : '—'}</td>
+        <td style="font-family:var(--mono);font-size:12px;">${sent}/${total} <span style="color:var(--muted)">(${reachPct}%)</span></td>
+        <td style="font-family:var(--mono);font-size:12px;color:${failed?'var(--red)':'var(--muted)'};">${failed}</td>
+        <td style="font-family:var(--mono);font-size:12px;color:${opens?'var(--green)':'var(--muted)'};font-weight:${opens?700:400};">${opens}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;">No notifications logged yet</td></tr>';
+  } catch (e) {
+    document.getElementById('notifs-body').innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+  }
 }
 
 // ─── UTILS ───────────────────────────────────────────────────────

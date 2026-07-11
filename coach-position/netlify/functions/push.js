@@ -8,7 +8,7 @@
 // POST body (broadcast):     { broadcast: true, title, body }
 //   — broadcast reads all /fcm_tokens docs from Firestore and sends to all
 
-const { createSign } = require('crypto');
+const { createSign, randomBytes } = require('crypto');
 
 const PROJECT_ID = 'coachposition';
 const FCM_ENDPOINT = `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`;
@@ -65,7 +65,7 @@ async function deleteDoc(accessToken, docName) {
   }).catch(() => {});
 }
 
-async function sendOne(accessToken, token, title, body) {
+async function sendOne(accessToken, token, title, body, nid) {
   const res = await fetch(FCM_ENDPOINT, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -75,12 +75,38 @@ async function sendOne(accessToken, token, title, body) {
         notification: { title, body: body || '' },
         webpush: {
           notification: { title, body: body || '', icon: '/icon.svg', badge: '/icon.svg', requireInteraction: false },
-          fcm_options: { link: '/' },
+          fcm_options: { link: nid ? `/?nid=${nid}` : '/' },
         },
       },
     }),
   });
   return res.json();
+}
+
+// Firestore REST field-value wrapper
+function fv(v) {
+  if (typeof v === 'number') return { integerValue: String(Math.trunc(v)) };
+  return { stringValue: String(v == null ? '' : v) };
+}
+
+async function logNotification(accessToken, nid, { kind, title, body, trainNo, sent, failed, total }) {
+  try {
+    await fetch(`${FS_BASE}/notification_log?documentId=${nid}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          kind: fv(kind || 'direct'),
+          title: fv(title),
+          body: fv(body || ''),
+          trainNo: fv(trainNo || ''),
+          sentAt: { timestampValue: new Date().toISOString() },
+          sent: fv(sent), failed: fv(failed), total: fv(total),
+          openCount: fv(0),
+        },
+      }),
+    });
+  } catch (_) { /* logging is best-effort */ }
 }
 
 const CORS = {
@@ -100,8 +126,11 @@ exports.handler = async (event) => {
   try { sa = JSON.parse(saRaw); payload = JSON.parse(event.body || '{}'); }
   catch (e) { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
-  const { token, tokens, broadcast, title, body } = payload;
+  const { token, tokens, broadcast, title, body, trainNo } = payload;
   if (!title) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'title required' }) };
+
+  const nid = randomBytes(9).toString('hex');
+  const kind = payload.kind || (broadcast ? 'broadcast' : payload.target === 'admin' ? 'admin' : 'direct');
 
   try {
     const accessToken = await getAccessToken(sa);
@@ -117,7 +146,10 @@ exports.handler = async (event) => {
       entries = allTokens.map(t => ({ docName: null, token: t }));
     }
 
-    if (!entries.length) return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent: 0 }) };
+    if (!entries.length) {
+      await logNotification(accessToken, nid, { kind, title, body, trainNo, sent: 0, failed: 0, total: 0 });
+      return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent: 0, failed: 0, total: 0, nid }) };
+    }
 
     // Send in parallel batches of 50
     const BATCH = 50;
@@ -125,7 +157,7 @@ exports.handler = async (event) => {
     for (let i = 0; i < entries.length; i += BATCH) {
       const batch = entries.slice(i, i + BATCH);
       const results = await Promise.allSettled(
-        batch.map(e => sendOne(accessToken, e.token, title, body))
+        batch.map(e => sendOne(accessToken, e.token, title, body, nid))
       );
       for (let j = 0; j < results.length; j++) {
         const r = results[j];
@@ -145,7 +177,9 @@ exports.handler = async (event) => {
       }
     }
 
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent, failed, total: entries.length }) };
+    await logNotification(accessToken, nid, { kind, title, body, trainNo, sent, failed, total: entries.length });
+
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent, failed, total: entries.length, nid }) };
   } catch (e) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: e.message }) };
   }
