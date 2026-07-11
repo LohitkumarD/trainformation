@@ -828,7 +828,8 @@ function formatDateTime(date) {
 
 // ─── Coach parser + renderer ─────────────────────────────────────────────────
 function parseCompressed(input) {
-  const tokens = (input || '').split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  // Commas AND spaces both separate coaches (pasted lists often use spaces)
+  const tokens = (input || '').split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(Boolean);
   const out = [];
   for (const tok of tokens) {
     let m = tok.match(/^(\d+)([A-Z]+\d*)$/);
@@ -848,7 +849,7 @@ function parseCompressed(input) {
 
 // ENG is implicit in the editors — engine is always position 1, never typed by staff
 function stripEngRaw(raw) {
-  const toks = (raw || '').split(',').map(t => t.trim()).filter(Boolean);
+  const toks = (raw || '').split(/[\s,]+/).map(t => t.trim()).filter(Boolean);
   while (toks.length && toks[0].toUpperCase() === 'ENG') toks.shift();
   return toks.join(',');
 }
