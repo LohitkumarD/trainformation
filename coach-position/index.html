@@ -1495,7 +1495,11 @@ async function initPushNotifications() {
   if (permission !== 'granted') return;
 
   try {
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+    // Explicitly bind to our one registered SW (sw.js, which now also
+    // handles FCM) — without this, getToken() may fail with
+    // "no active Service Worker" if it can't resolve one on its own.
+    const swRegistration = await navigator.serviceWorker.ready;
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
     if (!token) return;
 
     // Stable per-device ID so we can update the same doc without duplicates
