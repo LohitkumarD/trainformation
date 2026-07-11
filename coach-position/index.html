@@ -221,8 +221,14 @@
   .rev-block.open .rev-bar .rev-chev{transform:rotate(180deg);}
   .rev-body{display:none;padding:4px 12px 12px;}
   .rev-block.open .rev-body{display:block;}
-  .rev-sub{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 4px;display:flex;align-items:center;gap:5px;}
-  .rev-sub b{color:var(--text);}
+  .rev-sub{
+    display:inline-flex;align-items:center;gap:5px;user-select:none;
+    font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    color:#fff;border-radius:7px;padding:5px 12px;margin:12px 0 6px;
+  }
+  .rev-sub b{color:#fff;}
+  .rev-sub.arr{background:#64748B;}
+  .rev-sub.dep{background:var(--amber);}
 
   .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
@@ -1012,9 +1018,9 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
         <span class="rev-chev">▼</span>
       </div>
       <div class="rev-body">
-        <div class="rev-sub">Arrival at <b>${stn}</b></div>
+        <div class="rev-sub arr">⬇ Arrival at <b>${stn}</b></div>
         <div class="_rv-arr"></div>
-        <div class="rev-sub">Departure from <b>${stn}</b> (towards ${nextPoint})</div>
+        <div class="rev-sub dep">⬆ Departure from <b>${stn}</b> → ${nextPoint}</div>
         <div class="_rv-dep"></div>
       </div>
     `;
