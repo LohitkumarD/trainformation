@@ -14,7 +14,7 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
-console.log('[sw] loaded, cache = coach-position-v57');
+console.log('[sw] loaded, cache = coach-position-v58');
 
 // Fires for every push the browser delivers, before Firebase's own handling —
 // confirms whether the push even reaches this worker at all.
@@ -22,19 +22,15 @@ self.addEventListener('push', (event) => {
   console.log('[sw] raw push event received', event.data ? event.data.text() : '(no payload)');
 });
 
-messaging.onBackgroundMessage((payload) => {
-  console.log('[sw] onBackgroundMessage fired', payload);
-  const notif = payload.notification || {};
-  self.registration.showNotification(notif.title || 'Coach Position', {
-    body: notif.body || '',
-    icon: '/icon.svg',
-    badge: '/icon.svg',
-    tag: 'coach-position-push',
-    renotify: true,
-    data: { url: self.location.origin }
-  });
-});
+// NOTE: no onBackgroundMessage/showNotification here on purpose. For messages
+// carrying a `notification` payload (all of ours), the FCM SDK auto-displays
+// the system notification itself and its own notificationclick handler opens
+// fcmOptions.link (the /?nid=… open-tracking URL). A manual showNotification
+// here produced a DUPLICATE notification for every push — verified via a CDP
+// push-delivery harness (registration.getNotifications() returned 2 entries).
 
+// Fallback click handler for any non-FCM notification (the SDK stops
+// propagation for its own notifications before this runs).
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
@@ -47,7 +43,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v57';
+const CACHE = 'coach-position-v58';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {

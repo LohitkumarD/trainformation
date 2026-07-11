@@ -370,6 +370,25 @@
     box-shadow:0 4px 12px rgba(22,163,74,.3);
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* Prominent in-app banner for pushes received while the app is open */
+  .push-banner{
+    position:fixed;top:0;left:0;right:0;z-index:200;
+    max-width:520px;margin:0 auto;
+    background:var(--amber);color:#fff;
+    padding:14px 44px 14px 16px;border-radius:0 0 14px 14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.25);
+    transform:translateY(-110%);transition:transform .3s ease;
+    cursor:pointer;
+  }
+  .push-banner.show{transform:translateY(0);}
+  .push-banner .pb-title{font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:7px;}
+  .push-banner .pb-body{font-size:13px;margin-top:3px;opacity:.95;}
+  .push-banner .pb-close{
+    position:absolute;top:10px;right:10px;background:rgba(255,255,255,.2);
+    border:none;color:#fff;font-size:15px;line-height:1;border-radius:6px;
+    padding:5px 8px;cursor:pointer;
+  }
   .section-title{font-size:13px;color:var(--muted);font-weight:600;}
 
   /* auth overlay screens */
@@ -509,6 +528,11 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <div class="push-banner" id="pushBanner">
+    <button class="pb-close" id="pushBannerClose">✕</button>
+    <div class="pb-title">🔔 <span id="pushBannerTitle"></span></div>
+    <div class="pb-body" id="pushBannerBody"></div>
+  </div>
   <div class="app-disclaimer">⚠ Coach positions are indicative only and may change without prior notice.<br>Staff: verify before announcement · Passengers: confirm at station before boarding.</div>
 </div>
 
@@ -2475,12 +2499,24 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 });
 
-// Foreground push messages (app is open — show as toast)
+// Foreground push messages (app is open — show a prominent banner; the old
+// 2.2-second toast was far too easy to miss)
+let _pushBannerTimer;
+function showPushBanner(title, body) {
+  $('pushBannerTitle').textContent = title || 'Coach Position';
+  $('pushBannerBody').textContent = body || '';
+  $('pushBanner').classList.add('show');
+  clearTimeout(_pushBannerTimer);
+  _pushBannerTimer = setTimeout(() => $('pushBanner').classList.remove('show'), 12000);
+}
+$('pushBanner').addEventListener('click', () => $('pushBanner').classList.remove('show'));
+$('pushBannerClose').addEventListener('click', (e) => { e.stopPropagation(); $('pushBanner').classList.remove('show'); });
+
 if (messaging) {
   messaging.onMessage((payload) => {
     console.log('[push] onMessage fired (foreground)', payload);
     const notif = payload.notification || {};
-    toast(`${notif.title || ''}${notif.body ? ' — ' + notif.body : ''}`);
+    showPushBanner(notif.title, notif.body);
   });
 }
 
