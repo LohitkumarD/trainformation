@@ -360,6 +360,32 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
   <!-- ═══ NOTIFICATIONS ═══ -->
   <div id="tab-notifs" class="tab">
     <div class="panel">
+      <div class="panel-hd">Send Notification</div>
+
+      <div class="opt-row" style="margin-bottom:16px;">
+        <button class="btn btn-ghost btn-sm" onclick="fillNotifTemplate('install')">📲 Install Reminder</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillNotifTemplate('check')">🚆 Check Trains</button>
+        <button class="btn btn-ghost btn-sm" onclick="fillNotifTemplate('recent')">🔄 Recent Updates</button>
+      </div>
+
+      <div class="frow">
+        <div class="fld"><label>Title</label><input id="notif-title" type="text" placeholder="e.g. 📲 Install the app"></div>
+        <div class="fld"><label>Send to</label>
+          <select id="notif-target">
+            <option value="broadcast">All subscribed devices</option>
+            <option value="admin">Admins only</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld"><label>Message</label><textarea id="notif-body" rows="3" placeholder="e.g. Get live coach position updates — install the app for faster access."></textarea></div>
+
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" onclick="sendCustomNotification()" id="notif-send-btn">🔔 Send Now</button>
+        <span id="notif-send-status" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-hd">Push Reach</div>
       <div class="stat-pills" style="margin-bottom:0;">
         <div class="spill s-all"><b id="notif-sub-count">–</b> Subscribed devices</div>
@@ -1151,6 +1177,69 @@ const NOTIF_KIND_LABEL = {
 const NOTIF_KIND_BADGE = {
   cp_update: 'b-approved', admin: 'b-pending', broadcast: 'b-updated', direct: 'b-same',
 };
+
+async function fillNotifTemplate(kind) {
+  const titleEl = document.getElementById('notif-title');
+  const bodyEl = document.getElementById('notif-body');
+  if (kind === 'install') {
+    titleEl.value = '📲 Install the app';
+    bodyEl.value = 'Get instant coach position updates — install Coach Position for faster access. Open coachformation.netlify.app and tap "Install".';
+  } else if (kind === 'check') {
+    titleEl.value = '🚆 Check today\'s trains';
+    bodyEl.value = 'Live coach position updates are ready — open the app to check your trains.';
+  } else if (kind === 'recent') {
+    bodyEl.value = 'Loading recent updates…';
+    try {
+      const since = new Date(Date.now() - 24 * 3600 * 1000);
+      const snap = await db.collection('trains')
+        .where('cpUpdatedAt', '>=', since)
+        .orderBy('cpUpdatedAt', 'desc')
+        .limit(6)
+        .get();
+      const nos = snap.docs.map(d => d.id);
+      titleEl.value = `🔄 ${snap.size} train${snap.size !== 1 ? 's' : ''} updated`;
+      bodyEl.value = nos.length
+        ? `Recently updated: ${nos.join(', ')}${snap.size > nos.length ? '…' : ''} — check the app for the latest coach positions.`
+        : 'No coach position updates in the last 24 hours.';
+    } catch (e) {
+      bodyEl.value = 'Check the app for the latest coach position updates.';
+    }
+  }
+}
+
+async function sendCustomNotification() {
+  const title = document.getElementById('notif-title').value.trim();
+  const body = document.getElementById('notif-body').value.trim();
+  const target = document.getElementById('notif-target').value;
+  if (!title) { toast('Title required', 'err'); return; }
+  const targetLabel = target === 'admin' ? 'admins only' : 'ALL subscribed devices';
+  if (!confirm(`Send this notification to ${targetLabel}?\n\n${title}\n${body}`)) return;
+
+  const btn = document.getElementById('notif-send-btn');
+  const status = document.getElementById('notif-send-status');
+  btn.disabled = true;
+  status.textContent = 'Sending…';
+  try {
+    const payload = { title, body, kind: 'admin' };
+    if (target === 'admin') payload.target = 'admin'; else payload.broadcast = true;
+    const res = await fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    status.textContent = `Sent to ${data.sent}/${data.total} device${data.total===1?'':'s'}${data.failed?`, ${data.failed} failed`:''}`;
+    toast('Notification sent', 'ok');
+    document.getElementById('notif-title').value = '';
+    document.getElementById('notif-body').value = '';
+    loadNotifs();
+  } catch (e) {
+    status.textContent = '';
+    toast('Send failed: ' + e.message, 'err');
+  }
+  btn.disabled = false;
+}
 
 async function loadNotifs() {
   document.getElementById('notif-sub-count').dataset.loaded = '1';
