@@ -836,7 +836,10 @@ function renderStrip(container, codes, onChipClick) {
   codes.forEach((code, i) => {
     const chip = document.createElement('div');
     chip.className = `chip ${classOf(code)}`;
-    if (onChipClick) chip.style.cursor = 'pointer';
+    // ENG at position 1 is fixed — not editable or removable
+    const locked = i === 0 && code.toUpperCase() === 'ENG';
+    if (onChipClick && !locked) chip.style.cursor = 'pointer';
+    if (onChipClick && locked) chip.title = 'Engine is fixed at position 1';
     const idx = document.createElement('div');
     idx.className = 'chip-index';
     idx.textContent = i + 1;
@@ -845,7 +848,7 @@ function renderStrip(container, codes, onChipClick) {
     label.textContent = code;
     chip.appendChild(idx);
     chip.appendChild(label);
-    if (onChipClick) chip.addEventListener('click', () => onChipClick(i, codes));
+    if (onChipClick && !locked) chip.addEventListener('click', () => onChipClick(i, codes));
     container.appendChild(chip);
   });
 }
