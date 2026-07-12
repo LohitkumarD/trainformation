@@ -615,6 +615,14 @@
       <input id="idPhone" inputmode="numeric" placeholder="e.g. 9876543210">
     </div>
     <button class="btn btn-primary btn-block" id="idSaveBtn">Save</button>
+    <div style="border-top:1px solid var(--line);padding-top:12px;">
+      <label class="field-label">Notifications</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+        <span id="notifStatusLabel" style="font-size:13px;flex:1;color:var(--muted);">—</span>
+        <button class="btn btn-secondary" id="enableNotifBtn" style="display:none;">🔔 Enable</button>
+      </div>
+      <p class="hint" id="notifStatusHint" style="display:none;"></p>
+    </div>
     <div id="pendingNotice" class="pending-notice" style="display:none">
       ⏳ Your account is pending admin approval. You can view coach positions but cannot add or edit until an admin approves you.
     </div>
@@ -1319,6 +1327,7 @@ $('meBtn').addEventListener('click', () => {
     $('idPhone').value = currentUser.phone || '';
     $('pendingNotice').style.display = currentUser.role === 'pending' ? 'block' : 'none';
     $('adminPanelBtn').style.display = currentUser.role === 'admin' ? 'flex' : 'none';
+    refreshNotifStatus();
     showOverlay('identityOverlay');
   }
 });
@@ -1545,42 +1554,97 @@ async function _initPushNotificationsImpl() {
     : await Notification.requestPermission();
   localStorage.setItem('push_asked', '1');
   if (permission !== 'granted') return;
-
-  try {
-    // Explicitly bind to our one registered SW (sw.js, which now also
-    // handles FCM) — without this, getToken() may fail with
-    // "no active Service Worker" if it can't resolve one on its own.
-    const swRegistration = await navigator.serviceWorker.ready;
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
-    if (!token) return;
-
-    // Stable per-device ID so we can update the same doc without duplicates
-    let deviceId = localStorage.getItem('device_id');
-    if (!deviceId) {
-      deviceId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem('device_id', deviceId);
-    }
-
-    // Store in broadcast collection (all users, including guests)
-    db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
-      .catch(e => console.error('[push] fcm_tokens write failed:', e.message));
-    localStorage.setItem('push_token', token);
-
-    // If logged in, also update the user profile
-    if (currentUser?.uid && currentUser.role !== 'guest') {
-      db.collection('users').doc(currentUser.uid).update({ fcmToken: token })
-        .catch(e => console.error('[push] users.fcmToken write failed:', e.message));
-    }
-
-    // Admins get a separate collection so we can target them specifically
-    if (currentUser?.role === 'admin') {
-      db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
-        .catch(e => console.error('[push] admin_fcm_tokens write failed:', e.message));
-    }
-  } catch (e) { console.error('[push] registration failed:', e.message); }
+  await registerPushToken();
 }
+
+// Gets an FCM token for this device and saves it. Shared by the automatic
+// flow (_initPushNotificationsImpl, gated by "ask once") and the explicit
+// "Enable" button in the profile sheet (always attempts, no gating).
+async function registerPushToken() {
+  if (!messaging) throw new Error('Push not supported in this browser/context');
+  // Explicitly bind to our one registered SW (sw.js, which now also
+  // handles FCM) — without this, getToken() may fail with
+  // "no active Service Worker" if it can't resolve one on its own.
+  const swRegistration = await navigator.serviceWorker.ready;
+  const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
+  if (!token) throw new Error('Could not obtain a push token');
+
+  // Stable per-device ID so we can update the same doc without duplicates
+  let deviceId = localStorage.getItem('device_id');
+  if (!deviceId) {
+    deviceId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('device_id', deviceId);
+  }
+
+  // Store in broadcast collection (all users, including guests)
+  await db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() });
+  localStorage.setItem('push_token', token);
+
+  // If logged in, also update the user profile
+  if (currentUser?.uid && currentUser.role !== 'guest') {
+    db.collection('users').doc(currentUser.uid).update({ fcmToken: token })
+      .catch(e => console.error('[push] users.fcmToken write failed:', e.message));
+  }
+
+  // Admins get a separate collection so we can target them specifically
+  if (currentUser?.role === 'admin') {
+    db.collection('admin_fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() })
+      .catch(e => console.error('[push] admin_fcm_tokens write failed:', e.message));
+  }
+  return token;
+}
+
+// ─── Notification status in profile sheet ─────────────────────────────────────
+function refreshNotifStatus() {
+  const label = $('notifStatusLabel');
+  const btn = $('enableNotifBtn');
+  const hint = $('notifStatusHint');
+  hint.style.display = 'none';
+  if (!messaging || !('Notification' in window)) {
+    label.textContent = 'Not supported on this browser';
+    btn.style.display = 'none';
+    return;
+  }
+  const isMobile = /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (Notification.permission === 'granted') {
+    label.textContent = '🔔 Enabled on this device';
+    btn.style.display = 'none';
+  } else if (Notification.permission === 'denied') {
+    label.textContent = 'Blocked';
+    btn.style.display = 'none';
+    hint.style.display = 'block';
+    hint.textContent = 'Notifications are blocked in your browser settings for this site. Open site settings to allow, then reload.';
+  } else if (isMobile && !isStandalone) {
+    label.textContent = 'Off';
+    btn.style.display = 'none';
+    hint.style.display = 'block';
+    hint.textContent = 'Install the app first (see the banner), then open it from your home screen to enable notifications.';
+  } else {
+    label.textContent = 'Off';
+    btn.style.display = 'inline-flex';
+  }
+}
+
+$('enableNotifBtn').addEventListener('click', async () => {
+  const btn = $('enableNotifBtn');
+  btn.disabled = true;
+  try {
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
+    localStorage.setItem('push_asked', '1');
+    if (permission !== 'granted') { refreshNotifStatus(); btn.disabled = false; return; }
+    await registerPushToken();
+    toast('Notifications enabled ✓');
+  } catch (e) {
+    toast('Could not enable notifications — ' + e.message);
+  }
+  btn.disabled = false;
+  refreshNotifStatus();
+});
 
 // Broadcast CP update to all subscribed users
 function sendCpNotification(trainNo, trainName, coaches) {
