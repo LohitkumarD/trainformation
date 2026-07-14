@@ -748,6 +748,17 @@
   </div>
 </div>
 
+<!-- Quick Scan — landing screen for the WhatsApp-group QR/link bridge (?scan=1) -->
+<div class="overlay" id="quickScanOverlay">
+  <div class="sheet" style="text-align:center;">
+    <button class="close" data-close="quickScanOverlay">✕</button>
+    <div style="font-size:52px;margin:6px 0 2px;">📷</div>
+    <h3 style="margin-bottom:6px;">Scan Coach Position</h3>
+    <p class="hint">Tap below and pick the same photo you were about to send in WhatsApp — the app reads it automatically.</p>
+    <button class="btn btn-primary btn-block" id="quickScanBtn" style="margin-top:16px;">📷 Select Photo</button>
+  </div>
+</div>
+
 <script>
 // ─── Firebase init ───────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -2648,6 +2659,27 @@ if ('serviceWorker' in navigator) {
     }, 800));
   }
 })();
+
+// ─── Quick Scan deep link (?scan=1) — WhatsApp-group QR/link bridge ───────────
+// Lets a QR code or link pinned in a WhatsApp group land staff directly on a
+// one-tap "select photo" screen, skipping the train list entirely.
+(async function checkQuickScanLink() {
+  if (!location.search.includes('scan=1')) return;
+  history.replaceState({}, '', location.pathname);
+
+  sessionStorage.setItem('disc_ok', '1');
+  const discEl = $('disclaimerModal');
+  if (discEl) discEl.style.display = 'none';
+
+  await _authReady;
+  if (!requireStaff()) return; // requireStaff() already shows the sign-in prompt
+  showOverlay('quickScanOverlay');
+})();
+
+$('quickScanBtn').addEventListener('click', () => {
+  hideOverlay('quickScanOverlay');
+  $('scanFileInput').click();
+});
 
 // ─── Web Share Target: process images shared from WhatsApp etc. ───────────────
 (async function checkSharedImages() {
