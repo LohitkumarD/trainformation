@@ -2585,6 +2585,13 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   renderTrainsList();
   setTimeout(initPushNotifications, 3000);
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
+
+  // Resume the quick-scan deep link once sign-in completes and approval is
+  // confirmed — so "click link → log in → scan screen" happens in one go.
+  if (sessionStorage.getItem('pending_quick_scan') && canEdit()) {
+    sessionStorage.removeItem('pending_quick_scan');
+    showOverlay('quickScanOverlay');
+  }
 });
 
 // Foreground push messages (app is open — show a prominent banner; the old
@@ -2685,7 +2692,14 @@ if ('serviceWorker' in navigator) {
   if (discEl) discEl.style.display = 'none';
 
   await _authReady;
-  if (!requireStaff()) return; // requireStaff() already shows the sign-in prompt
+  if (!requireStaff()) {
+    // Not signed in yet (or pending approval) — requireStaff() already shows
+    // the sign-in prompt / toast. Remember to resume straight to the scan
+    // screen once they finish signing in, instead of dropping them on the
+    // plain train list.
+    sessionStorage.setItem('pending_quick_scan', '1');
+    return;
+  }
   showOverlay('quickScanOverlay');
 })();
 
