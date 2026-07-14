@@ -510,6 +510,7 @@
       <button class="station-search-btn" id="scanCpBtn" title="Scan coach position from WhatsApp image" style="font-size:18px;padding:9px 13px">📷</button>
     </div>
     <input type="file" id="scanFileInput" accept="image/*" multiple style="display:none">
+    <input type="file" id="scanCameraInput" accept="image/*" capture="environment" style="display:none">
   </div>
 
   <main>
@@ -754,8 +755,11 @@
     <button class="close" data-close="quickScanOverlay">✕</button>
     <div style="font-size:52px;margin:6px 0 2px;">📷</div>
     <h3 style="margin-bottom:6px;">Scan Coach Position</h3>
-    <p class="hint">Tap below and pick the same photo you were about to send in WhatsApp — the app reads it automatically.</p>
-    <button class="btn btn-primary btn-block" id="quickScanBtn" style="margin-top:16px;">📷 Select Photo</button>
+    <p class="hint">Snap a fresh photo, or pick the same one you were about to send in WhatsApp — the app reads it automatically.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
+      <button class="btn btn-primary btn-block" id="quickScanCameraBtn">📸 Take Photo</button>
+      <button class="btn btn-secondary btn-block" id="quickScanGalleryBtn">🖼 Choose from Gallery</button>
+    </div>
   </div>
 </div>
 
@@ -2216,13 +2220,22 @@ $('cpSaveBtn').addEventListener('click', async () => {
 // ─── Trains tab — Scan WhatsApp CP images ─────────────────────────────────────
 $('scanCpBtn').addEventListener('click', () => {
   if (!requireStaff()) return;
-  $('scanFileInput').click();
+  showOverlay('quickScanOverlay');
 });
 
-$('scanFileInput').addEventListener('change', async (e) => {
+$('scanFileInput').addEventListener('change', (e) => {
   const files = [...e.target.files];
-  if (!files.length) return;
   e.target.value = '';
+  processScanFiles(files);
+});
+$('scanCameraInput').addEventListener('change', (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  processScanFiles(files);
+});
+
+async function processScanFiles(files) {
+  if (!files.length) return;
   $('scanResults').innerHTML = `<div style="text-align:center;color:var(--muted);padding:24px 0">Scanning ${files.length} image${files.length > 1 ? 's' : ''}…</div>`;
   showOverlay('scanOverlay');
 
@@ -2302,7 +2315,7 @@ $('scanFileInput').addEventListener('change', async (e) => {
   if (!html) html = '<div style="color:var(--muted);text-align:center;padding:24px 0">No trains detected in image</div>';
   $('scanResults').innerHTML = html;
   if (matched.length || unmatched.length) { renderTrainsTab(); renderTrainsList(); }
-});
+}
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -2676,7 +2689,11 @@ if ('serviceWorker' in navigator) {
   showOverlay('quickScanOverlay');
 })();
 
-$('quickScanBtn').addEventListener('click', () => {
+$('quickScanCameraBtn').addEventListener('click', () => {
+  hideOverlay('quickScanOverlay');
+  $('scanCameraInput').click();
+});
+$('quickScanGalleryBtn').addEventListener('click', () => {
   hideOverlay('quickScanOverlay');
   $('scanFileInput').click();
 });
