@@ -39,9 +39,12 @@ async function getAccessToken(sa) {
   return data.access_token;
 }
 
-// Fetch all FCM tokens from a Firestore collection (handles pagination)
+// Fetch all FCM tokens from a Firestore collection (handles pagination).
+// `registered` reflects whether the device was signed in as staff/admin at
+// the time it registered for push — lets a broadcast report who it actually
+// reached, not just how many devices.
 async function fetchAllTokens(accessToken, collection = 'fcm_tokens') {
-  const entries = []; // [{docName, token}]
+  const entries = []; // [{docName, token, registered}]
   let pageToken = '';
   do {
     const url = `${FS_BASE}/${collection}?pageSize=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`;
@@ -50,7 +53,7 @@ async function fetchAllTokens(accessToken, collection = 'fcm_tokens') {
     if (data.documents) {
       for (const doc of data.documents) {
         const t = doc.fields?.token?.stringValue;
-        if (t) entries.push({ docName: doc.name, token: t });
+        if (t) entries.push({ docName: doc.name, token: t, registered: !!doc.fields?.registered?.booleanValue });
       }
     }
     pageToken = data.nextPageToken || '';
@@ -89,7 +92,7 @@ function fv(v) {
   return { stringValue: String(v == null ? '' : v) };
 }
 
-async function logNotification(accessToken, nid, { kind, title, body, trainNo, sent, failed, total }) {
+async function logNotification(accessToken, nid, { kind, title, body, trainNo, sent, failed, total, sentRegistered, sentAnonymous }) {
   try {
     await fetch(`${FS_BASE}/notification_log?documentId=${nid}`, {
       method: 'POST',
@@ -102,6 +105,7 @@ async function logNotification(accessToken, nid, { kind, title, body, trainNo, s
           trainNo: fv(trainNo || ''),
           sentAt: { timestampValue: new Date().toISOString() },
           sent: fv(sent), failed: fv(failed), total: fv(total),
+          sentRegistered: fv(sentRegistered || 0), sentAnonymous: fv(sentAnonymous || 0),
           openCount: fv(0),
         },
       }),
@@ -135,15 +139,16 @@ exports.handler = async (event) => {
   try {
     const accessToken = await getAccessToken(sa);
 
-    let entries; // [{docName, token}]
+    let entries; // [{docName, token, registered}]
     if (broadcast) {
       entries = await fetchAllTokens(accessToken, 'fcm_tokens');
     } else if (payload.target === 'admin') {
-      entries = await fetchAllTokens(accessToken, 'admin_fcm_tokens');
+      // admin_fcm_tokens only ever holds signed-in admins
+      entries = (await fetchAllTokens(accessToken, 'admin_fcm_tokens')).map(e => ({ ...e, registered: true }));
     } else {
       const allTokens = tokens || (token ? [token] : []);
       if (!allTokens.length) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'token or tokens[] required' }) };
-      entries = allTokens.map(t => ({ docName: null, token: t }));
+      entries = allTokens.map(t => ({ docName: null, token: t, registered: null })); // targeted sends — registration status unknown here
     }
 
     if (!entries.length) {
@@ -153,7 +158,7 @@ exports.handler = async (event) => {
 
     // Send in parallel batches of 50
     const BATCH = 50;
-    let sent = 0, failed = 0;
+    let sent = 0, failed = 0, sentRegistered = 0, sentAnonymous = 0;
     for (let i = 0; i < entries.length; i += BATCH) {
       const batch = entries.slice(i, i + BATCH);
       const results = await Promise.allSettled(
@@ -170,6 +175,8 @@ exports.handler = async (event) => {
             failed++;
           } else {
             sent++;
+            if (batch[j].registered === true) sentRegistered++;
+            else if (batch[j].registered === false) sentAnonymous++;
           }
         } else {
           failed++;
@@ -177,9 +184,9 @@ exports.handler = async (event) => {
       }
     }
 
-    await logNotification(accessToken, nid, { kind, title, body, trainNo, sent, failed, total: entries.length });
+    await logNotification(accessToken, nid, { kind, title, body, trainNo, sent, failed, total: entries.length, sentRegistered, sentAnonymous });
 
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent, failed, total: entries.length, nid }) };
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ sent, failed, total: entries.length, sentRegistered, sentAnonymous, nid }) };
   } catch (e) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: e.message }) };
   }
