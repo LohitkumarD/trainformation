@@ -390,6 +390,19 @@
   .contribute-banner .cb-title{font-weight:800;font-size:14.5px;color:var(--teal);margin-bottom:5px;}
   .contribute-banner .cb-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px;}
   .contribute-banner .btn{width:100%;}
+  /* "Enable notifications" reminder — amber-themed variant of the above */
+  .remind-banner{
+    margin:14px 16px 6px;padding:16px 18px;border-radius:16px;
+    background:linear-gradient(135deg, rgba(217,119,6,.12), rgba(217,119,6,.03));
+    border:1.5px solid rgba(217,119,6,.28);text-align:center;position:relative;
+  }
+  .remind-banner .rb-title{font-weight:800;font-size:14.5px;color:var(--amber);margin-bottom:5px;}
+  .remind-banner .rb-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px;}
+  .remind-banner .btn{width:100%;}
+  .remind-banner .rb-close{
+    position:absolute;top:10px;right:10px;background:none;border:none;
+    color:var(--muted);font-size:15px;line-height:1;padding:4px;cursor:pointer;
+  }
   select{
     width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
     padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);outline:none;
@@ -552,6 +565,12 @@
     <button class="pb-close" id="pushBannerClose">✕</button>
     <div class="pb-title">🔔 <span id="pushBannerTitle"></span></div>
     <div class="pb-body" id="pushBannerBody"></div>
+  </div>
+  <div class="remind-banner" id="remindBanner" style="display:none;">
+    <button class="rb-close" id="remindBannerClose">✕</button>
+    <div class="rb-title" id="remindBannerTitle">🔔 Don't miss updates</div>
+    <div class="rb-body" id="remindBannerBody">Enable notifications to get coach position updates the moment they're posted.</div>
+    <button class="btn btn-primary" id="remindBannerEnableBtn">🔔 Enable notifications</button>
   </div>
   <div class="contribute-banner">
     <div class="cb-title">🤝 Help improve Coach Position</div>
@@ -1912,6 +1931,46 @@ async function registerPushToken() {
   }
   return token;
 }
+
+// ─── "Enable notifications" reminder banner (admin-configurable) ─────────────
+// A real push can't reach someone who never enabled notifications — this is
+// the in-app equivalent, shown once per reminder message the admin sets.
+async function checkPushReminder() {
+  if (!messaging || !('Notification' in window)) return;
+  if (Notification.permission === 'granted' || Notification.permission === 'denied') return;
+  const isMobile = /Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (isMobile && !isStandalone) return; // same install-first constraint as the auto-prompt
+
+  try {
+    const snap = await db.collection('push_reminders').doc('active').get();
+    if (!snap.exists) return;
+    const data = snap.data();
+    const updatedMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : 0;
+    const seenMs = parseInt(localStorage.getItem('push_reminder_seen_at') || '0', 10);
+    if (updatedMs && updatedMs <= seenMs) return; // already seen this exact reminder
+
+    $('remindBannerTitle').textContent = data.title || "🔔 Don't miss updates";
+    $('remindBannerBody').textContent = data.body || "Enable notifications to get coach position updates the moment they're posted.";
+    $('remindBanner').style.display = 'block';
+
+    const dismiss = () => {
+      localStorage.setItem('push_reminder_seen_at', String(updatedMs || Date.now()));
+      $('remindBanner').style.display = 'none';
+    };
+    $('remindBannerClose').onclick = dismiss;
+    $('remindBannerEnableBtn').onclick = async () => {
+      dismiss();
+      const permission = await Notification.requestPermission();
+      localStorage.setItem('push_asked', '1');
+      if (permission === 'granted') {
+        try { await registerPushToken(); toast('Notifications enabled ✓'); }
+        catch (e) { toast('Could not enable — ' + e.message); }
+      }
+    };
+  } catch (_) { /* best-effort */ }
+}
+_authReady.then(checkPushReminder);
 
 // ─── Notification status in profile sheet ─────────────────────────────────────
 function refreshNotifStatus() {
