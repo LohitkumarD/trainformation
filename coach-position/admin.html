@@ -1401,7 +1401,7 @@ async function loadUsage() {
     const snap = await db.collection('usage_logs')
       .where('timestamp', '>=', since30)
       .orderBy('timestamp', 'desc')
-      .limit(20000)
+      .limit(10000) // Firestore's hard cap on query limit
       .get();
 
     const now = Date.now();
