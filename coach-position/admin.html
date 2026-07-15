@@ -482,6 +482,22 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
         </table>
       </div>
     </div>
+    <div class="panel">
+      <div class="panel-hd">Crowdsourced requests — open now</div>
+      <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">"🙋 Ask others" taps still waiting on someone to fill in today's position.</p>
+      <div class="stat-pills" style="margin-bottom:14px;">
+        <div class="spill s-updated"><b id="usage-req-open">–</b> Open right now</div>
+        <div class="spill s-new"><b id="usage-req-fulfilled">–</b> Fulfilled · last 7 days</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Train</th><th>Asked By</th><th>Station</th><th>Asked</th></tr>
+          </thead>
+          <tbody id="usage-req-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- ═══ FEEDBACK ═══ -->
@@ -1357,10 +1373,10 @@ async function setRole(uid, role) {
 
 // ─── NOTIFICATIONS ───────────────────────────────────────────────
 const NOTIF_KIND_LABEL = {
-  cp_update: 'CP Update', admin: 'Admin Alert', broadcast: 'Broadcast', direct: 'Direct',
+  cp_update: 'CP Update', admin: 'Admin Alert', broadcast: 'Broadcast', direct: 'Direct', position_request: 'Ask Others',
 };
 const NOTIF_KIND_BADGE = {
-  cp_update: 'b-approved', admin: 'b-pending', broadcast: 'b-updated', direct: 'b-same',
+  cp_update: 'b-approved', admin: 'b-pending', broadcast: 'b-updated', direct: 'b-same', position_request: 'b-pending',
 };
 
 async function fillNotifTemplate(kind) {
@@ -1477,6 +1493,7 @@ async function loadUsage() {
   document.getElementById('usage-body').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
   document.getElementById('usage-users-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
   document.getElementById('usage-notfound-body').innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
+  document.getElementById('usage-req-body').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
   try {
     // allUsers is populated by loadUsers() on init() — reuse it instead of a
     // second fetch, so we can tell which active userIds are registered staff
@@ -1484,6 +1501,22 @@ async function loadUsage() {
     if (!allUsers.length) await loadUsers();
     const userById = {};
     allUsers.forEach(u => { userById[u.id] = u; });
+
+    const openReqSnap = await db.collection('position_requests').where('status', '==', 'open').get();
+    const openReqRows = openReqSnap.docs.map(d => ({ trainNo: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0) - (a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0));
+    document.getElementById('usage-req-open').textContent = openReqRows.length;
+    document.getElementById('usage-req-body').innerHTML = openReqRows.length
+      ? openReqRows.map(r => {
+        const when = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString() : '—';
+        return `<tr>
+          <td><span class="tno">${r.trainNo}</span></td>
+          <td>${r.requestedByName || '—'}</td>
+          <td>${r.requestedByStation || '—'}</td>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${when}</td>
+        </tr>`;
+      }).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">No open requests</td></tr>';
 
     const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000);
     // Single-field range + orderBy on the same field — no composite index needed.
@@ -1639,11 +1672,14 @@ async function loadUsage() {
         </tr>`;
       }).join('')
       : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">No friction logged in the last 7 days</td></tr>';
+
+    document.getElementById('usage-req-fulfilled').textContent = eventStats['request_fulfilled']?.count || 0;
   } catch (e) {
     document.getElementById('usage-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-users-body').innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-notfound-body').innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-friction-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+    document.getElementById('usage-req-body').innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
   }
 }
 

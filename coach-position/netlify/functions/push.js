@@ -68,7 +68,7 @@ async function deleteDoc(accessToken, docName) {
   }).catch(() => {});
 }
 
-async function sendOne(accessToken, token, title, body, nid) {
+async function sendOne(accessToken, token, title, body, link) {
   const res = await fetch(FCM_ENDPOINT, {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -78,7 +78,7 @@ async function sendOne(accessToken, token, title, body, nid) {
         notification: { title, body: body || '' },
         webpush: {
           notification: { title, body: body || '', icon: '/icon.svg', badge: '/icon.svg', requireInteraction: false },
-          fcm_options: { link: nid ? `/?nid=${nid}` : '/' },
+          fcm_options: { link: link || '/' },
         },
       },
     }),
@@ -135,6 +135,9 @@ exports.handler = async (event) => {
 
   const nid = randomBytes(9).toString('hex');
   const kind = payload.kind || (broadcast ? 'broadcast' : payload.target === 'admin' ? 'admin' : 'direct');
+  // Crowdsourced "does anyone know today's position?" pushes deep-link straight
+  // to that train's edit screen instead of the plain notification-open link.
+  const link = (kind === 'position_request' && trainNo) ? `/?reqTrain=${encodeURIComponent(trainNo)}&nid=${nid}` : `/?nid=${nid}`;
 
   try {
     const accessToken = await getAccessToken(sa);
@@ -145,6 +148,11 @@ exports.handler = async (event) => {
     } else if (payload.target === 'admin') {
       // admin_fcm_tokens only ever holds signed-in admins
       entries = (await fetchAllTokens(accessToken, 'admin_fcm_tokens')).map(e => ({ ...e, registered: true }));
+    } else if (payload.target === 'registered') {
+      // Only devices that were signed in as staff/admin when they registered
+      // for push — crowdsourced requests only make sense for people who can
+      // actually edit a coach position, so skip anonymous browsers.
+      entries = (await fetchAllTokens(accessToken, 'fcm_tokens')).filter(e => e.registered === true);
     } else {
       const allTokens = tokens || (token ? [token] : []);
       if (!allTokens.length) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'token or tokens[] required' }) };
@@ -162,7 +170,7 @@ exports.handler = async (event) => {
     for (let i = 0; i < entries.length; i += BATCH) {
       const batch = entries.slice(i, i + BATCH);
       const results = await Promise.allSettled(
-        batch.map(e => sendOne(accessToken, e.token, title, body, nid))
+        batch.map(e => sendOne(accessToken, e.token, title, body, link))
       );
       for (let j = 0; j < results.length; j++) {
         const r = results[j];
