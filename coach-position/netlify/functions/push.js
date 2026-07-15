@@ -135,9 +135,13 @@ exports.handler = async (event) => {
 
   const nid = randomBytes(9).toString('hex');
   const kind = payload.kind || (broadcast ? 'broadcast' : payload.target === 'admin' ? 'admin' : 'direct');
-  // Crowdsourced "does anyone know today's position?" pushes deep-link straight
-  // to that train's edit screen instead of the plain notification-open link.
-  const link = (kind === 'position_request' && trainNo) ? `/?reqTrain=${encodeURIComponent(trainNo)}&nid=${nid}` : `/?nid=${nid}`;
+  // Crowdsourced pushes deep-link straight to the relevant screen instead of
+  // the plain notification-open link: "can you fill this in?" pushes (an
+  // existing train with a stale position, or one missing entirely) go to the
+  // edit screen; "it's been added!" goes to that train in the list.
+  const link = (trainNo && (kind === 'position_request' || kind === 'train_request')) ? `/?reqTrain=${encodeURIComponent(trainNo)}&nid=${nid}`
+    : (trainNo && kind === 'train_added') ? `/?viewTrain=${encodeURIComponent(trainNo)}&nid=${nid}`
+    : `/?nid=${nid}`;
 
   try {
     const accessToken = await getAccessToken(sa);

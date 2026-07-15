@@ -99,5 +99,15 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if request.auth != null;
     }
+
+    // Missing-train requests — auto-created when someone searches a train
+    // number that isn't in the app at all yet. Open to guests on both create
+    // and update (a searching passenger is often not signed in, and the only
+    // "update" is a harmless searchCount bump or the auto-resolve when
+    // someone adds the train) — same trust level as usage_logs/fcm_tokens.
+    match /train_requests/{trainNo} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
