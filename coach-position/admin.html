@@ -1509,7 +1509,9 @@ async function loadUsage() {
       pending_approval: { count: 0, users: new Set() },
       login_prompt_blocked: { count: 0, users: new Set() },
       login_prompt_manual: { count: 0, users: new Set() },
+      login_failed: { count: 0, users: new Set() },
     };
+    const loginSuccessByUser = {}; // userId -> count of successful sign-ins, for comparing against login attempts
 
     snap.docs.forEach(d => {
       const r = d.data();
@@ -1554,6 +1556,14 @@ async function loadUsage() {
           const bucket = r.metadata?.reason === 'manual_click' ? 'login_prompt_manual' : 'login_prompt_blocked';
           friction[bucket].count++;
           friction[bucket].users.add(uid);
+        }
+        if (kind === 'login_failed') {
+          friction.login_failed.count++;
+          friction.login_failed.users.add(uid);
+        }
+        if (kind === 'login_succeeded') {
+          if (!loginSuccessByUser[uid]) loginSuccessByUser[uid] = 0;
+          loginSuccessByUser[uid]++;
         }
       }
     });
@@ -1612,15 +1622,22 @@ async function loadUsage() {
       pending_approval: 'Tried to edit while awaiting approval',
       login_prompt_blocked: 'Shown login screen (blocked from an action)',
       login_prompt_manual: 'Opened "Staff Login" themselves',
+      login_failed: 'Tried to sign in but it failed',
     };
+    const totalLoginSuccesses = Object.values(loginSuccessByUser).reduce((a, b) => a + b, 0);
     const frRows = Object.entries(friction).filter(([, s]) => s.count > 0);
     document.getElementById('usage-friction-body').innerHTML = frRows.length
-      ? frRows.map(([key, s]) => `
+      ? frRows.map(([key, s]) => {
+        const successNote = key === 'login_prompt_manual'
+          ? ` <span style="color:var(--muted);font-weight:400;">(${totalLoginSuccesses} of those went on to sign in successfully)</span>`
+          : '';
+        return `
         <tr>
-          <td>${FRICTION_LABELS[key]}</td>
+          <td>${FRICTION_LABELS[key]}${successNote}</td>
           <td style="font-family:var(--mono);">${s.count}</td>
           <td style="font-family:var(--mono);">${s.users.size}</td>
-        </tr>`).join('')
+        </tr>`;
+      }).join('')
       : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">No friction logged in the last 7 days</td></tr>';
   } catch (e) {
     document.getElementById('usage-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;

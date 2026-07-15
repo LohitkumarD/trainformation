@@ -936,6 +936,7 @@ async function migrateLocalIfNeeded() {
 // (write: open, read: admin) to actually persist; see firestore.rules.
 let _appOpenLogged = false; // log app_open once per page session, not per onAuthStateChanged firing
 function logUsage(eventType, metadata) {
+  if (currentUser && currentUser.role === 'admin') return; // keep admin's own testing out of the insights
   try {
     db.collection('usage_logs').add({
       eventType,
@@ -1604,9 +1605,11 @@ $('emailSignInBtn').addEventListener('click', async () => {
   setAuthWorking(true);
   try {
     await auth.signInWithEmailAndPassword(email, password);
+    logUsage('login_succeeded', { mode: 'signin' });
     hideOverlay('authOverlay');
   } catch (e) {
     console.error('Sign in error:', e.code, e.message);
+    logUsage('login_failed', { mode: 'signin', code: e.code || 'unknown' });
     const msg = e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'
               ? 'Wrong email or password'
               : e.code === 'auth/too-many-requests' ? 'Too many attempts — try later'
@@ -1625,9 +1628,11 @@ $('emailRegisterBtn').addEventListener('click', async () => {
   setAuthWorking(true);
   try {
     await auth.createUserWithEmailAndPassword(email, password);
+    logUsage('login_succeeded', { mode: 'register' });
     hideOverlay('authOverlay');
   } catch (e) {
     console.error('Register error:', e.code, e.message);
+    logUsage('login_failed', { mode: 'register', code: e.code || 'unknown' });
     const msg = e.code === 'auth/email-already-in-use' ? 'An account with this email already exists — sign in instead'
               : e.code === 'auth/weak-password' ? 'Password too weak — use at least 6 characters'
               : e.code === 'auth/invalid-email' ? 'Invalid email address'
