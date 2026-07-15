@@ -394,6 +394,19 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
         <div class="spill s-all"><b id="notif-registered-count">–</b> Registered staff</div>
         <div class="spill s-all"><b id="notif-anon-count">–</b> Anonymous / guest</div>
         <div class="spill s-all"><b id="notif-admin-count">–</b> Admin devices</div>
+        <div class="spill s-updated"><b id="notif-notsub-count">–</b> Opened app, not subscribed · 7d</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-hd">Remind people to enable notifications</div>
+      <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">A push can't reach a device that never enabled notifications — but the next time one of those people opens the app, they'll see this as an in-app banner with a one-tap "Enable" button.</p>
+      <div class="frow">
+        <div class="fld"><label>Title</label><input id="remind-title" type="text" placeholder="🔔 Don't miss updates"></div>
+      </div>
+      <div class="fld"><label>Message</label><textarea id="remind-body" rows="2" placeholder="Enable notifications to get coach position updates the moment they're posted."></textarea></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" onclick="sendPushReminder()" id="remind-send-btn">📣 Set Reminder</button>
+        <span id="remind-send-status" style="font-size:12px;color:var(--muted);"></span>
       </div>
     </div>
     <div class="panel">
@@ -1463,16 +1476,31 @@ async function sendCustomNotification() {
 async function loadNotifs() {
   document.getElementById('notif-sub-count').dataset.loaded = '1';
   try {
-    const [subSnap, adminSnap, logSnap] = await Promise.all([
+    const since7 = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const [subSnap, adminSnap, logSnap, usageSnap] = await Promise.all([
       db.collection('fcm_tokens').get(),
       db.collection('admin_fcm_tokens').get(),
       db.collection('notification_log').orderBy('sentAt', 'desc').limit(100).get(),
+      db.collection('usage_logs').where('timestamp', '>=', since7).orderBy('timestamp', 'desc').limit(10000).get(),
     ]);
     document.getElementById('notif-sub-count').textContent = subSnap.size;
     document.getElementById('notif-admin-count').textContent = adminSnap.size;
     const registeredCount = subSnap.docs.filter(d => d.data().registered === true).length;
     document.getElementById('notif-registered-count').textContent = registeredCount;
     document.getElementById('notif-anon-count').textContent = subSnap.size - registeredCount;
+
+    // Opened the app in the last 7 days but has no push token at all — a
+    // device_id (anon) or uid (signed in) that never shows up in fcm_tokens.
+    const reachableIds = new Set();
+    subSnap.docs.forEach(d => {
+      reachableIds.add(d.id);
+      const uid = d.data().uid;
+      if (uid) reachableIds.add(uid);
+    });
+    const activeIds = new Set();
+    usageSnap.docs.forEach(d => { const uid = d.data().userId; if (uid && uid !== 'anon') activeIds.add(uid); });
+    const notSubCount = [...activeIds].filter(id => !reachableIds.has(id)).length;
+    document.getElementById('notif-notsub-count').textContent = notSubCount;
 
     const rows = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     document.getElementById('notifs-count').textContent = `${rows.length} shown`;
@@ -1503,6 +1531,26 @@ async function loadNotifs() {
   } catch (e) {
     document.getElementById('notifs-body').innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
   }
+}
+
+async function sendPushReminder() {
+  const title = document.getElementById('remind-title').value.trim() || "🔔 Don't miss updates";
+  const body = document.getElementById('remind-body').value.trim() || "Enable notifications to get coach position updates the moment they're posted.";
+  const btn = document.getElementById('remind-send-btn');
+  const status = document.getElementById('remind-send-status');
+  btn.disabled = true;
+  status.textContent = 'Saving…';
+  try {
+    await db.collection('push_reminders').doc('active').set({
+      title, body, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    status.textContent = 'Set — shown next time each non-subscriber opens the app';
+    toast('Reminder set', 'ok');
+  } catch (e) {
+    status.textContent = '';
+    toast('Could not set reminder: ' + e.message, 'err');
+  }
+  btn.disabled = false;
 }
 
 // ─── USAGE ANALYTICS ───────────────────────────────────────────────

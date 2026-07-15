@@ -109,5 +109,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // "Enable notifications" in-app reminder — a single admin-editable
+    // message (doc ID "active") shown to anyone who opened the app but
+    // never enabled push, since a real push can't reach them. Public read
+    // so guests see it too; only admins can set it.
+    match /push_reminders/{id} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
   }
 }
