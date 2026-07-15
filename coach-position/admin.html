@@ -498,6 +498,22 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
         </table>
       </div>
     </div>
+    <div class="panel">
+      <div class="panel-hd">Missing trains — open requests</div>
+      <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">Trains people searched for that aren't in the app at all yet — sorted by how often they've been searched. Adding one auto-notifies everyone.</p>
+      <div class="stat-pills" style="margin-bottom:14px;">
+        <div class="spill s-updated"><b id="usage-trainreq-open">–</b> Open right now</div>
+        <div class="spill s-new"><b id="usage-trainreq-fulfilled">–</b> Added · last 7 days</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Train</th><th>Times Searched</th><th>First Searched By</th><th>Asked</th></tr>
+          </thead>
+          <tbody id="usage-trainreq-body"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- ═══ FEEDBACK ═══ -->
@@ -1374,9 +1390,11 @@ async function setRole(uid, role) {
 // ─── NOTIFICATIONS ───────────────────────────────────────────────
 const NOTIF_KIND_LABEL = {
   cp_update: 'CP Update', admin: 'Admin Alert', broadcast: 'Broadcast', direct: 'Direct', position_request: 'Ask Others',
+  train_request: 'Missing Train', train_added: 'Train Added',
 };
 const NOTIF_KIND_BADGE = {
   cp_update: 'b-approved', admin: 'b-pending', broadcast: 'b-updated', direct: 'b-same', position_request: 'b-pending',
+  train_request: 'b-rejected', train_added: 'b-approved',
 };
 
 async function fillNotifTemplate(kind) {
@@ -1494,6 +1512,7 @@ async function loadUsage() {
   document.getElementById('usage-users-body').innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
   document.getElementById('usage-notfound-body').innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
   document.getElementById('usage-req-body').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
+  document.getElementById('usage-trainreq-body').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
   try {
     // allUsers is populated by loadUsers() on init() — reuse it instead of a
     // second fetch, so we can tell which active userIds are registered staff
@@ -1517,6 +1536,22 @@ async function loadUsage() {
         </tr>`;
       }).join('')
       : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">No open requests</td></tr>';
+
+    const openTrainReqSnap = await db.collection('train_requests').where('status', '==', 'open').get();
+    const openTrainReqRows = openTrainReqSnap.docs.map(d => ({ trainNo: d.id, ...d.data() }))
+      .sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0));
+    document.getElementById('usage-trainreq-open').textContent = openTrainReqRows.length;
+    document.getElementById('usage-trainreq-body').innerHTML = openTrainReqRows.length
+      ? openTrainReqRows.map(r => {
+        const when = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString() : '—';
+        return `<tr>
+          <td><span class="tno">${r.trainNo}</span></td>
+          <td style="font-family:var(--mono);">${r.searchCount || 1}</td>
+          <td>${r.requestedByName || '—'}${r.requestedByStation ? ` (${r.requestedByStation})` : ''}</td>
+          <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${when}</td>
+        </tr>`;
+      }).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">No missing-train requests</td></tr>';
 
     const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000);
     // Single-field range + orderBy on the same field — no composite index needed.
@@ -1674,12 +1709,14 @@ async function loadUsage() {
       : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">No friction logged in the last 7 days</td></tr>';
 
     document.getElementById('usage-req-fulfilled').textContent = eventStats['request_fulfilled']?.count || 0;
+    document.getElementById('usage-trainreq-fulfilled').textContent = eventStats['train_request_fulfilled']?.count || 0;
   } catch (e) {
     document.getElementById('usage-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-users-body').innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-notfound-body').innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-friction-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-req-body').innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+    document.getElementById('usage-trainreq-body').innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
   }
 }
 

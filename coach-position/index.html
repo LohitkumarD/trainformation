@@ -75,19 +75,16 @@
     box-shadow:0 1px 3px rgba(0,0,0,.05);
   }
   .list-search:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
-  .tabs-row{display:flex;align-items:center;gap:8px;}
-  .tab{
-    background:transparent;border:2px solid var(--line);border-radius:999px;
-    color:var(--muted);font-size:13px;font-weight:600;padding:5px 14px;cursor:pointer;
+  .tabs-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .tab, .select-toggle{
+    background:transparent;border:1.5px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:13px;font-weight:600;line-height:1.3;
+    padding:6px 14px;cursor:pointer;white-space:nowrap;
     transition:all .15s ease;
   }
-  .tab.active{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
-  .list-count{font-size:12px;color:var(--muted);margin-left:auto;}
-  .select-toggle{
-    background:transparent;border:1.5px solid var(--line);border-radius:999px;
-    color:var(--muted);font-size:12px;font-weight:700;padding:4px 11px;cursor:pointer;
-  }
-  .select-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
+  .tab.active, .select-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
+  .list-meta-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .list-count{font-size:12px;color:var(--muted);white-space:nowrap;}
 
   /* Multi-select checkboxes on train items */
   .sel-check{display:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700;}
@@ -522,6 +519,8 @@
       <button class="tab active" id="tabAll">All</button>
       <button class="tab" id="tabFav">★ Favourites</button>
       <button class="tab" id="tabStation">🚆 Trains</button>
+    </div>
+    <div class="list-meta-row">
       <button class="select-toggle" id="selectToggle">☑ Select</button>
       <span class="list-count" id="listCount"></span>
     </div>
@@ -867,6 +866,19 @@ async function loadOpenRequests() {
 }
 loadOpenRequests();
 
+// Missing-train requests — auto-created when a search finds nothing at all
+// for a train number. trainNo -> open request doc.
+let openTrainRequests = {};
+async function loadOpenTrainRequests() {
+  try {
+    const snap = await db.collection('train_requests').where('status', '==', 'open').get();
+    const map = {};
+    snap.docs.forEach(d => { map[d.id] = d.data(); });
+    openTrainRequests = map;
+  } catch (_) { /* best-effort */ }
+}
+loadOpenTrainRequests();
+
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
 async function getTrainRecord(key) {
@@ -888,7 +900,10 @@ async function saveTrainRecord(key, data) {
   const store = raw ? JSON.parse(raw) : {};
   store[key] = data;
   localStorage.setItem('cp_trains', JSON.stringify(store));
-  if (data.date === todayStr()) resolvePositionRequest(data.trainNo);
+  if (data.date === todayStr()) {
+    resolvePositionRequest(data.trainNo);
+    resolveTrainRequest(data.trainNo);
+  }
 }
 
 // ─── Crowdsourced position requests — "does anyone know today's position?" ───
@@ -942,6 +957,78 @@ async function resolvePositionRequest(trainNo) {
       logUsage('request_fulfilled', { trainNo });
     }
     delete openRequests[trainNo];
+  } catch (_) { /* best-effort */ }
+}
+
+// ─── Missing-train requests — auto-triggered by a zero-result search ─────────
+// Unlike position_requests (an existing train with a stale position), this
+// covers a train the app doesn't know about at all yet.
+async function requestTrainAdd(trainNo) {
+  if (openTrainRequests[trainNo]) return; // already asked — don't re-notify on every keystroke
+  try {
+    const ref = db.collection('train_requests').doc(trainNo);
+    const snap = await ref.get();
+    if (snap.exists) {
+      openTrainRequests[trainNo] = snap.data();
+      ref.update({ searchCount: firebase.firestore.FieldValue.increment(1) }).catch(() => {});
+      if (($('listSearch').value || '').trim() === trainNo) renderTrainsList();
+      return;
+    }
+    const reqData = {
+      trainNo,
+      status: 'open',
+      searchCount: 1,
+      requestedByUid: currentUser?.uid || '',
+      requestedByName: currentUser?.name || '',
+      requestedByStation: currentUser?.station || '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    await ref.set(reqData);
+    openTrainRequests[trainNo] = reqData;
+    logUsage('train_requested', { trainNo });
+    if (($('listSearch').value || '').trim() === trainNo) renderTrainsList();
+    fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '🔍 Missing train — can you add it?',
+        body: `Someone searched for train ${trainNo} but it's not in the app yet. Add it if you know the formation.`,
+        target: 'registered',
+        kind: 'train_request',
+        trainNo,
+      }),
+    }).catch(() => {});
+  } catch (_) { /* best-effort — never let this block search */ }
+}
+
+async function resolveTrainRequest(trainNo) {
+  if (!openTrainRequests[trainNo]) return; // nothing open locally — skip the extra read
+  try {
+    const ref = db.collection('train_requests').doc(trainNo);
+    const snap = await ref.get();
+    if (snap.exists && snap.data().status === 'open') {
+      await ref.update({
+        status: 'fulfilled',
+        fulfilledByUid: currentUser?.uid || '',
+        fulfilledByName: currentUser?.name || '',
+        fulfilledAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      logUsage('train_request_fulfilled', { trainNo });
+      // This one goes to everyone, not just staff — a newly added train is
+      // good news for any passenger who was searching for it too.
+      fetch('/.netlify/functions/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: '🎉 New train added',
+          body: `Train ${trainNo} is now on Coach Position — search it now.`,
+          broadcast: true,
+          kind: 'train_added',
+          trainNo,
+        }),
+      }).catch(() => {});
+    }
+    delete openTrainRequests[trainNo];
   } catch (_) { /* best-effort */ }
 }
 
@@ -1989,6 +2076,13 @@ async function renderTrainsList() {
       activeTab === 'fav' ? 'No favourites yet — tap ☆ to add' :
       'No trains saved yet'
     }</div>`;
+    if (filter && /^\d{3,6}$/.test(filter) && openTrainRequests[filter]) {
+      const note = document.createElement('div');
+      note.className = 'request-banner';
+      note.style.cssText = 'margin:0 16px 14px;text-align:center;';
+      note.textContent = `🙋 We've let others know you're looking for train ${filter} — you'll be notified if someone adds it.`;
+      wrap.appendChild(note);
+    }
     if (filter) {
       const btn = document.createElement('button');
       btn.className = 'btn btn-primary';
@@ -2289,12 +2383,17 @@ function logSearchDebounced(query) {
   clearTimeout(_searchLogTimer);
   if (!query || !query.trim()) return;
   _searchLogTimer = setTimeout(() => {
+    const q = query.trim();
     const resultCount = _lastSearchResultCount;
+    const found = typeof resultCount === 'number' ? resultCount > 0 : null;
     logUsage('search', {
-      query: query.trim(),
+      query: q,
       resultCount: typeof resultCount === 'number' ? resultCount : null,
-      found: typeof resultCount === 'number' ? resultCount > 0 : null,
+      found,
     });
+    // A zero-result search for something that looks like a real train number
+    // means the app doesn't have it at all — let other users know.
+    if (found === false && /^\d{3,6}$/.test(q)) requestTrainAdd(q);
   }, 800);
 }
 
@@ -2997,6 +3096,31 @@ if ('serviceWorker' in navigator) {
     return;
   }
   openSubmitForTrain(trainNo);
+})();
+
+// ─── "New train added" deep link (?viewTrain=NNNNN) ──────────────────────────
+// The broadcast that fires once a requested missing train gets added — jumps
+// straight to it in the list, for anyone (guest or staff).
+(async function checkViewTrainLink() {
+  const trainNo = new URLSearchParams(location.search).get('viewTrain');
+  if (!trainNo) return;
+  history.replaceState({}, '', location.pathname);
+
+  sessionStorage.setItem('disc_ok', '1');
+  const discEl = $('disclaimerModal');
+  if (discEl) discEl.style.display = 'none';
+
+  await _authReady;
+  activeTab = 'all';
+  $('tabAll').classList.add('active');
+  $('tabFav').classList.remove('active');
+  $('tabStation').classList.remove('active');
+  $('stationBar').classList.remove('visible');
+  $('listSearch').style.display = '';
+  $('listSearch').placeholder = 'Search train number or name…';
+  $('selectToggle').style.display = '';
+  $('listSearch').value = trainNo;
+  renderTrainsList();
 })();
 
 $('quickScanCameraBtn').addEventListener('click', () => {
