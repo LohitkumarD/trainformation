@@ -199,6 +199,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
     <button class="tnav" data-tab="stations" onclick="switchTab('stations',this)">📍 Stations</button>
     <button class="tnav" data-tab="users" onclick="switchTab('users',this)">👥 Users</button>
     <button class="tnav" data-tab="notifs" onclick="switchTab('notifs',this)">🔔 Notifications</button>
+    <button class="tnav" data-tab="usage" onclick="switchTab('usage',this)">📊 Usage</button>
   </nav>
 
   <!-- ═══ IMPORT ═══ -->
@@ -405,6 +406,33 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
             <tr><th>Sent</th><th>Type</th><th>Title</th><th>Message</th><th>Train</th><th>Reached</th><th>Failed</th><th>Opened</th></tr>
           </thead>
           <tbody id="notifs-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ USAGE ═══ -->
+  <div id="tab-usage" class="tab">
+    <div class="panel">
+      <div class="panel-hd">Active Users</div>
+      <div class="stat-pills" style="margin-bottom:0;">
+        <div class="spill s-all"><b id="usage-7d">–</b> Unique users · last 7 days</div>
+        <div class="spill s-all"><b id="usage-30d">–</b> Unique users · last 30 days</div>
+        <div class="spill s-all"><b id="usage-today">–</b> Unique users · today</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="search-row">
+        <div class="panel-hd" style="margin:0;">Events — last 7 days</div>
+        <div class="spacer"></div>
+        <button class="btn btn-ghost btn-sm" onclick="loadUsage()">↻ Refresh</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Event</th><th>Count</th><th>Unique Users</th></tr>
+          </thead>
+          <tbody id="usage-body"></tbody>
         </table>
       </div>
     </div>
@@ -627,6 +655,7 @@ function switchTab(id, btn) {
   btn.classList.add('on');
   document.getElementById('tab-' + id).classList.add('on');
   if (id === 'notifs' && !document.getElementById('notif-sub-count').dataset.loaded) loadNotifs();
+  if (id === 'usage' && !document.getElementById('usage-7d').dataset.loaded) loadUsage();
 }
 
 // ─── IMPORT ──────────────────────────────────────────────────────
@@ -1359,6 +1388,63 @@ async function loadNotifs() {
     }).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px;">No notifications logged yet</td></tr>';
   } catch (e) {
     document.getElementById('notifs-body').innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+  }
+}
+
+// ─── USAGE ANALYTICS ───────────────────────────────────────────────
+async function loadUsage() {
+  document.getElementById('usage-7d').dataset.loaded = '1';
+  document.getElementById('usage-body').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
+  try {
+    const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    // Single-field range + orderBy on the same field — no composite index needed.
+    const snap = await db.collection('usage_logs')
+      .where('timestamp', '>=', since30)
+      .orderBy('timestamp', 'desc')
+      .limit(20000)
+      .get();
+
+    const now = Date.now();
+    const DAY = 24 * 3600 * 1000;
+    const since7 = now - 7 * DAY;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
+
+    const users7 = new Set(), users30 = new Set(), usersToday = new Set();
+    const eventStats = {}; // eventType -> { count, users: Set }
+
+    snap.docs.forEach(d => {
+      const r = d.data();
+      const ts = r.timestamp?.toDate ? r.timestamp.toDate().getTime() : null;
+      if (!ts) return;
+      const uid = r.userId || 'anon';
+      users30.add(uid);
+      if (ts >= since7) users7.add(uid);
+      if (ts >= todayMs) usersToday.add(uid);
+
+      if (ts >= since7) {
+        const kind = r.eventType || 'unknown';
+        if (!eventStats[kind]) eventStats[kind] = { count: 0, users: new Set() };
+        eventStats[kind].count++;
+        eventStats[kind].users.add(uid);
+      }
+    });
+
+    document.getElementById('usage-7d').textContent = users7.size;
+    document.getElementById('usage-30d').textContent = users30.size;
+    document.getElementById('usage-today').textContent = usersToday.size;
+
+    const rows = Object.entries(eventStats).sort((a, b) => b[1].count - a[1].count);
+    document.getElementById('usage-body').innerHTML = rows.length
+      ? rows.map(([type, s]) => `
+        <tr>
+          <td style="font-weight:600;">${type}</td>
+          <td style="font-family:var(--mono);">${s.count}</td>
+          <td style="font-family:var(--mono);">${s.users.size}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">No usage logged yet</td></tr>';
+  } catch (e) {
+    document.getElementById('usage-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
   }
 }
 
