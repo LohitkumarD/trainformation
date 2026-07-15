@@ -442,6 +442,10 @@
   .stale-badge.mild{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;}
   .stale-badge.old{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;}
 
+  /* crowdsourced position-request row */
+  .request-banner{font-size:12px;line-height:1.5;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:9px 12px;margin:10px 0 0;}
+  .i-request-row .btn-block{margin-top:10px;}
+
   /* date history tabs */
   .date-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:0 0 8px;overflow-x:auto;}
   .date-tab{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);color:var(--muted);cursor:pointer;background:transparent;white-space:nowrap;flex-shrink:0;font-family:var(--mono);}
@@ -850,6 +854,18 @@ const _selectableTrainData = {}; // trainNo -> {trainName, fromStation, toStatio
 // Resolves after the first onAuthStateChanged fires AND the Firestore profile is loaded.
 let _authReadyResolve;
 const _authReady = new Promise(r => { _authReadyResolve = r; });
+// Crowdsourced "does anyone know today's position?" requests — trainNo -> open request doc.
+let openRequests = {};
+async function loadOpenRequests() {
+  try {
+    const snap = await db.collection('position_requests').where('status', '==', 'open').get();
+    const map = {};
+    snap.docs.forEach(d => { map[d.id] = d.data(); });
+    openRequests = map;
+    renderTrainsList();
+  } catch (_) { /* best-effort — list still works without it */ }
+}
+loadOpenRequests();
 
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
@@ -872,6 +888,61 @@ async function saveTrainRecord(key, data) {
   const store = raw ? JSON.parse(raw) : {};
   store[key] = data;
   localStorage.setItem('cp_trains', JSON.stringify(store));
+  if (data.date === todayStr()) resolvePositionRequest(data.trainNo);
+}
+
+// ─── Crowdsourced position requests — "does anyone know today's position?" ───
+async function requestPositionHelp(trainNo) {
+  if (!currentUser || currentUser.role === 'guest') {
+    toast('Sign in to ask others — it helps everyone find out faster');
+    showLoginPrompt('request_prompt');
+    return;
+  }
+  try {
+    await db.collection('position_requests').doc(trainNo).set({
+      trainNo,
+      status: 'open',
+      requestedByUid: currentUser.uid || '',
+      requestedByName: currentUser.name || '',
+      requestedByStation: currentUser.station || '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    openRequests[trainNo] = { requestedByName: currentUser.name || '', requestedByStation: currentUser.station || '' };
+    logUsage('position_requested', { trainNo });
+    toast("Asked the community — you'll see it update once someone knows it ✓");
+    renderTrainsList();
+    fetch('/.netlify/functions/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '🙋 Coach position needed',
+        body: `Train ${trainNo} — do you know today's formation? Tap to help.`,
+        target: 'registered',
+        kind: 'position_request',
+        trainNo,
+      }),
+    }).catch(() => {});
+  } catch (e) {
+    toast('Could not send request — ' + e.message);
+  }
+}
+
+async function resolvePositionRequest(trainNo) {
+  if (!openRequests[trainNo]) return; // nothing open locally — skip the extra read
+  try {
+    const ref = db.collection('position_requests').doc(trainNo);
+    const snap = await ref.get();
+    if (snap.exists && snap.data().status === 'open') {
+      await ref.update({
+        status: 'fulfilled',
+        fulfilledByUid: currentUser?.uid || '',
+        fulfilledByName: currentUser?.name || '',
+        fulfilledAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      logUsage('request_fulfilled', { trainNo });
+    }
+    delete openRequests[trainNo];
+  } catch (_) { /* best-effort */ }
 }
 
 async function getAllTrains(filterStr) {
@@ -1975,6 +2046,7 @@ async function renderTrainsList() {
           <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
           <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
           <div class="confirm-line i-cl"></div>
+          <div class="i-request-row" style="display:none;"></div>
           <div class="btn-row card-actions">
             <button class="btn btn-secondary i-share">⬆ Share</button>
             ${canEdit() ? `<button class="btn i-confirm">✓ Confirm</button>
@@ -2023,6 +2095,23 @@ async function renderTrainsList() {
       // "Same CP today" — only when viewing an older date's record
       const sameEl = item.querySelector('.i-same');
       if (sameEl) sameEl.style.display = rec.date !== todayStr() ? '' : 'none';
+
+      // Crowdsourced request row — "does anyone know today's position?"
+      const reqRow = item.querySelector('.i-request-row');
+      const openReq = openRequests[rec.trainNo];
+      if (rec.date === todayStr()) {
+        reqRow.style.display = 'none';
+        reqRow.innerHTML = '';
+      } else if (openReq) {
+        reqRow.style.display = 'block';
+        const askedBy = openReq.requestedByName || 'Someone';
+        const stationPart = openReq.requestedByStation ? ` · ${openReq.requestedByStation}` : '';
+        reqRow.innerHTML = `<div class="request-banner">🙋 ${askedBy}${stationPart} asked for today's position — know it? Tap ✎ Edit to help out.</div>`;
+      } else {
+        reqRow.style.display = 'block';
+        reqRow.innerHTML = `<button class="btn btn-secondary btn-block i-ask-btn">🙋 Ask others — do they know today's position?</button>`;
+        reqRow.querySelector('.i-ask-btn').addEventListener('click', () => requestPositionHelp(rec.trainNo));
+      }
     }
 
     // Initial render
@@ -2772,6 +2861,13 @@ auth.onAuthStateChanged(async (firebaseUser) => {
     sessionStorage.removeItem('pending_quick_scan');
     showOverlay('quickScanOverlay');
   }
+
+  // Resume a "help others" position-request link the same way.
+  const pendingReqTrain = sessionStorage.getItem('pending_req_train');
+  if (pendingReqTrain && canEdit()) {
+    sessionStorage.removeItem('pending_req_train');
+    openSubmitForTrain(pendingReqTrain);
+  }
 });
 
 // Foreground push messages (app is open — show a prominent banner; the old
@@ -2881,6 +2977,26 @@ if ('serviceWorker' in navigator) {
     return;
   }
   showOverlay('quickScanOverlay');
+})();
+
+// ─── Coach-position request deep link (?reqTrain=NNNNN) ──────────────────────
+// Lets a "🙋 Coach position needed" push notification land a staff member
+// directly on that train's edit screen, skipping the search step.
+(async function checkRequestLink() {
+  const trainNo = new URLSearchParams(location.search).get('reqTrain');
+  if (!trainNo) return;
+  history.replaceState({}, '', location.pathname);
+
+  sessionStorage.setItem('disc_ok', '1');
+  const discEl = $('disclaimerModal');
+  if (discEl) discEl.style.display = 'none';
+
+  await _authReady;
+  if (!requireStaff()) {
+    sessionStorage.setItem('pending_req_train', trainNo);
+    return;
+  }
+  openSubmitForTrain(trainNo);
 })();
 
 $('quickScanCameraBtn').addEventListener('click', () => {

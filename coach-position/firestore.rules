@@ -88,5 +88,16 @@ service cloud.firestore {
       allow read, update: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    // Crowdsourced position requests — "does anyone know today's formation
+    // for this train?" Doc ID is the train number, so there's at most one
+    // open request per train at a time. Read is public so the "help needed"
+    // banner works for everyone; only signed-in users can ask (create) or
+    // resolve (update, done automatically when someone saves that train's
+    // position for today).
+    match /position_requests/{trainNo} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+    }
   }
 }
