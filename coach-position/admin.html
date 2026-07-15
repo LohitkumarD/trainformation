@@ -200,6 +200,7 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
     <button class="tnav" data-tab="users" onclick="switchTab('users',this)">👥 Users</button>
     <button class="tnav" data-tab="notifs" onclick="switchTab('notifs',this)">🔔 Notifications</button>
     <button class="tnav" data-tab="usage" onclick="switchTab('usage',this)">📊 Usage</button>
+    <button class="tnav" data-tab="feedback" onclick="switchTab('feedback',this)">💬 Feedback</button>
   </nav>
 
   <!-- ═══ IMPORT ═══ -->
@@ -424,6 +425,14 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
       </div>
     </div>
     <div class="panel">
+      <div class="panel-hd">App Installed?</div>
+      <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">Based on each person's most recent visit in the last 30 days — installed (opened from home screen) vs opened in a plain browser tab.</p>
+      <div class="stat-pills" style="margin-bottom:0;">
+        <div class="spill s-new"><b id="usage-installed">–</b> Installed the app</div>
+        <div class="spill s-updated"><b id="usage-not-installed">–</b> Browser only</div>
+      </div>
+    </div>
+    <div class="panel">
       <div class="search-row">
         <div class="panel-hd" style="margin:0;">Who's active — last 7 days</div>
         <div class="spacer"></div>
@@ -470,6 +479,31 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
             <tr><th>Situation</th><th>Times it happened</th><th>People affected</th></tr>
           </thead>
           <tbody id="usage-friction-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FEEDBACK ═══ -->
+  <div id="tab-feedback" class="tab">
+    <div class="panel">
+      <div class="search-row">
+        <div class="panel-hd" style="margin:0;">User Feedback — missing trains, feature ideas, bug reports</div>
+        <div class="spacer"></div>
+        <select id="fb-filter" onchange="renderFeedback()" style="max-width:160px;">
+          <option value="">All statuses</option>
+          <option value="new">New</option>
+          <option value="reviewed">Reviewed</option>
+          <option value="resolved">Resolved</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadFeedback()">↻ Refresh</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Type</th><th>Message</th><th>Train</th><th>Submitted By</th><th>Status</th></tr>
+          </thead>
+          <tbody id="feedback-body"></tbody>
         </table>
       </div>
     </div>
@@ -693,6 +727,7 @@ function switchTab(id, btn) {
   document.getElementById('tab-' + id).classList.add('on');
   if (id === 'notifs' && !document.getElementById('notif-sub-count').dataset.loaded) loadNotifs();
   if (id === 'usage' && !document.getElementById('usage-7d').dataset.loaded) loadUsage();
+  if (id === 'feedback' && !document.getElementById('feedback-body').dataset.loaded) loadFeedback();
 }
 
 // ─── IMPORT ──────────────────────────────────────────────────────
@@ -1468,6 +1503,7 @@ async function loadUsage() {
     const eventStats = {}; // eventType -> { count, users: Set }
     const perUser = {}; // userId -> { count, lastActiveMs }
     const notFoundCounts = {}; // normalized query -> { query, count }
+    const installStatus = {}; // userId -> boolean, from their most recent app_open (docs are desc-ordered)
     const friction = {
       not_signed_in: { count: 0, users: new Set() },
       pending_approval: { count: 0, users: new Set() },
@@ -1483,6 +1519,13 @@ async function loadUsage() {
       users30.add(uid);
       if (ts >= since7) users7.add(uid);
       if (ts >= todayMs) usersToday.add(uid);
+
+      // Docs are timestamp-desc, so the first app_open seen per user is
+      // their most recent — that's the install status we want to report.
+      if (r.eventType === 'app_open' && r.metadata && typeof r.metadata.installed === 'boolean'
+          && !(uid in installStatus)) {
+        installStatus[uid] = r.metadata.installed;
+      }
 
       if (ts >= since7) {
         const kind = r.eventType || 'unknown';
@@ -1518,6 +1561,10 @@ async function loadUsage() {
     document.getElementById('usage-7d').textContent = users7.size;
     document.getElementById('usage-30d').textContent = users30.size;
     document.getElementById('usage-today').textContent = usersToday.size;
+
+    const installValues = Object.values(installStatus);
+    document.getElementById('usage-installed').textContent = installValues.filter(v => v === true).length;
+    document.getElementById('usage-not-installed').textContent = installValues.filter(v => v === false).length;
 
     // Events breakdown
     const evRows = Object.entries(eventStats).sort((a, b) => b[1].count - a[1].count);
@@ -1580,6 +1627,63 @@ async function loadUsage() {
     document.getElementById('usage-users-body').innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-notfound-body').innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-friction-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+  }
+}
+
+// ─── FEEDBACK ───────────────────────────────────────────────────────
+const FEEDBACK_TYPE_LABEL = {
+  missing_train: '🚆 Missing train',
+  feature_request: '💡 Feature idea',
+  bug_report: '🐞 Bug report',
+  general_feedback: '📝 General',
+};
+const FEEDBACK_STATUS_BADGE = { new: 'b-pending', reviewed: 'b-updated', resolved: 'b-approved' };
+let allFeedback = [];
+
+async function loadFeedback() {
+  document.getElementById('feedback-body').dataset.loaded = '1';
+  document.getElementById('feedback-body').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">Loading…</td></tr>';
+  try {
+    const snap = await db.collection('feedback').orderBy('createdAt', 'desc').limit(500).get();
+    allFeedback = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderFeedback();
+  } catch (e) {
+    document.getElementById('feedback-body').innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+  }
+}
+
+function renderFeedback() {
+  const filter = document.getElementById('fb-filter').value;
+  const rows = filter ? allFeedback.filter(r => (r.status || 'new') === filter) : allFeedback;
+  document.getElementById('feedback-body').innerHTML = rows.length ? rows.map(r => {
+    const when = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleString() : '—';
+    const status = r.status || 'new';
+    const who = r.submittedByName || r.submittedByEmail || 'Unknown';
+    return `<tr>
+      <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${when}</td>
+      <td style="white-space:nowrap;">${FEEDBACK_TYPE_LABEL[r.type] || r.type}</td>
+      <td style="max-width:320px;white-space:pre-wrap;">${r.message || '—'}</td>
+      <td>${r.trainNo ? `<span class="tno">${r.trainNo}</span>` : '—'}</td>
+      <td style="font-size:12px;">${who}${r.submittedByStation ? ` (${r.submittedByStation})` : ''}</td>
+      <td>
+        <select onchange="setFeedbackStatus('${r.id}', this.value)" style="padding:4px 8px;font-size:12px;">
+          <option value="new" ${status==='new'?'selected':''}>New</option>
+          <option value="reviewed" ${status==='reviewed'?'selected':''}>Reviewed</option>
+          <option value="resolved" ${status==='resolved'?'selected':''}>Resolved</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No feedback yet</td></tr>';
+}
+
+async function setFeedbackStatus(id, status) {
+  try {
+    await db.collection('feedback').doc(id).update({ status });
+    const row = allFeedback.find(r => r.id === id);
+    if (row) row.status = status;
+    toast('Status updated', 'ok');
+  } catch (e) {
+    toast('Could not update: ' + e.message, 'err');
   }
 }
 
