@@ -384,6 +384,22 @@
   .push-banner.show{transform:translateY(0);}
   .push-banner .pb-title{font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:7px;}
   .push-banner .pb-body{font-size:13px;margin-top:3px;opacity:.95;}
+  /* Contribute / feedback call-to-action, sits right above the disclaimer */
+  .contribute-banner{
+    margin:14px 16px 6px;padding:16px 18px;border-radius:16px;
+    background:linear-gradient(135deg, rgba(14,116,144,.12), rgba(14,116,144,.03));
+    border:1.5px solid rgba(14,116,144,.28);text-align:center;
+  }
+  .contribute-banner .cb-title{font-weight:800;font-size:14.5px;color:var(--teal);margin-bottom:5px;}
+  .contribute-banner .cb-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px;}
+  .contribute-banner .btn{width:100%;}
+  select{
+    width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
+    padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);outline:none;
+  }
+  select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
+  .fld-row{margin-bottom:14px;}
+
   .push-banner .pb-close{
     position:absolute;top:10px;right:10px;background:rgba(255,255,255,.2);
     border:none;color:#fff;font-size:15px;line-height:1;border-radius:6px;
@@ -534,7 +550,39 @@
     <div class="pb-title">🔔 <span id="pushBannerTitle"></span></div>
     <div class="pb-body" id="pushBannerBody"></div>
   </div>
+  <div class="contribute-banner">
+    <div class="cb-title">🤝 Help improve Coach Position</div>
+    <div class="cb-body">Missing a train? Got a feature idea? Something not working right?<br>Your contribution helps every staff member and passenger using this app.</div>
+    <button class="btn btn-secondary" id="contributeBtn">💬 Sign in &amp; share feedback</button>
+  </div>
   <div class="app-disclaimer">⚠ Coach positions are indicative only and may change without prior notice.<br>Staff: verify before announcement · Passengers: confirm at station before boarding.</div>
+</div>
+
+<!-- Feedback / feature request / missing-train report -->
+<div class="overlay" id="feedbackOverlay">
+  <div class="sheet">
+    <button class="close" data-close="feedbackOverlay">✕</button>
+    <h3>💬 Share Feedback</h3>
+    <p class="hint">Your contribution helps everyone using this app — thank you for taking the time.</p>
+    <div class="fld-row">
+      <label class="field-label">What's this about?</label>
+      <select id="fbType">
+        <option value="missing_train">🚆 Missing train — not in the app</option>
+        <option value="feature_request">💡 Feature idea</option>
+        <option value="bug_report">🐞 Something isn't working</option>
+        <option value="general_feedback">📝 General feedback</option>
+      </select>
+    </div>
+    <div class="fld-row" id="fbTrainNoRow">
+      <label class="field-label">Train number (if known)</label>
+      <input id="fbTrainNo" type="text" inputmode="numeric" placeholder="e.g. 16536">
+    </div>
+    <div class="fld-row">
+      <label class="field-label">Tell us more</label>
+      <textarea id="fbMessage" placeholder="Describe the train, idea, issue, or feedback…"></textarea>
+    </div>
+    <button class="btn btn-primary btn-block" id="fbSubmitBtn">Submit</button>
+  </div>
 </div>
 
 <!-- Off-screen share capture (populated before html2canvas) -->
@@ -1348,10 +1396,18 @@ function updateMeLabel() {
   } else {
     $('meLabel').textContent = currentUser.name ? currentUser.name.split(' ')[0] : 'Set name';
   }
+  updateContributeBanner();
 }
 
 function updateFabVisibility() {
   $('fabAdd').style.display = canEdit() ? 'flex' : 'none';
+}
+
+function updateContributeBanner() {
+  const btn = $('contributeBtn');
+  if (!btn) return;
+  const signedIn = currentUser && currentUser.role !== 'guest';
+  btn.textContent = signedIn ? '💬 Share feedback' : '🔑 Sign in & share feedback';
 }
 
 $('meBtn').addEventListener('click', () => {
@@ -1372,6 +1428,54 @@ $('meBtn').addEventListener('click', () => {
     refreshNotifStatus();
     showOverlay('identityOverlay');
   }
+});
+
+// ─── Feedback / feature requests / missing-train reports ────────────────────
+function toggleFbTrainNoRow() {
+  $('fbTrainNoRow').style.display = $('fbType').value === 'missing_train' ? 'block' : 'none';
+}
+$('fbType').addEventListener('change', toggleFbTrainNoRow);
+
+$('contributeBtn').addEventListener('click', () => {
+  if (!currentUser || currentUser.role === 'guest') {
+    toast('Sign in to share feedback — it helps the whole community');
+    showLoginPrompt('feedback_prompt');
+    return;
+  }
+  $('fbType').value = 'missing_train';
+  $('fbTrainNo').value = '';
+  $('fbMessage').value = '';
+  toggleFbTrainNoRow();
+  showOverlay('feedbackOverlay');
+});
+
+$('fbSubmitBtn').addEventListener('click', async () => {
+  const type = $('fbType').value;
+  const message = $('fbMessage').value.trim();
+  const trainNo = $('fbTrainNo').value.trim();
+  if (!message) { toast('Please tell us a bit more'); return; }
+  const btn = $('fbSubmitBtn');
+  btn.disabled = true;
+  try {
+    await db.collection('feedback').add({
+      type,
+      message,
+      trainNo: trainNo || null,
+      submittedByName: currentUser?.name || '',
+      submittedByEmail: currentUser?.email || '',
+      submittedByPhone: currentUser?.phone || '',
+      submittedByStation: currentUser?.station || '',
+      submittedByUID: currentUser?.uid || '',
+      status: 'new',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    logUsage('feedback_submitted', { type, trainNo: trainNo || null });
+    toast('Thank you — your feedback was submitted ✓');
+    hideOverlay('feedbackOverlay');
+  } catch (e) {
+    toast('Could not submit — ' + e.message);
+  }
+  btn.disabled = false;
 });
 
 // ─── Profile save (identity overlay) ─────────────────────────────────────────
@@ -2651,7 +2755,11 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   setTimeout(initPushNotifications, 3000);
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
 
-  if (!_appOpenLogged) { _appOpenLogged = true; logUsage('app_open'); }
+  if (!_appOpenLogged) {
+    _appOpenLogged = true;
+    const isInstalled = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    logUsage('app_open', { installed: isInstalled });
+  }
 
   // Resume the quick-scan deep link once sign-in completes and approval is
   // confirmed — so "click link → log in → scan screen" happens in one go.
