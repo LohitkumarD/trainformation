@@ -882,6 +882,22 @@ async function migrateLocalIfNeeded() {
   }
 }
 
+// ─── Usage logging ──────────────────────────────────────────────────────────
+// Lightweight, fire-and-forget activity log — purely additive, never blocks
+// or throws into the caller. Requires a Firestore rule for usage_logs
+// (write: open, read: admin) to actually persist; see firestore.rules.
+let _appOpenLogged = false; // log app_open once per page session, not per onAuthStateChanged firing
+function logUsage(eventType, metadata) {
+  try {
+    db.collection('usage_logs').add({
+      eventType,
+      userId: currentUser?.uid || localStorage.getItem('device_id') || 'anon',
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      metadata: metadata || null,
+    }).catch(() => {});
+  } catch (_) { /* fire-and-forget — never let logging break the app */ }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 const todayStr = () => {
@@ -1234,6 +1250,7 @@ function toggleFavourite(trainNo) {
   if (isFav) { favs = favs.filter(f => f !== trainNo); }
   else { favs.unshift(trainNo); }
   localStorage.setItem('cp_favs', JSON.stringify(favs));
+  if (!isFav) logUsage('favourite_added', { trainNo });
   return !isFav;
 }
 
@@ -1963,6 +1980,7 @@ async function renderTrainsList() {
         ).catch(() => {});
         toast('Saved for today ✓');
         sendCpNotification(cur.trainNo, cur.trainName || '', cur.parsedList || []);
+        logUsage('confirm_today', { trainNo: cur.trainNo });
         renderTrainsList();
       });
 
@@ -1979,6 +1997,7 @@ async function renderTrainsList() {
         await saveTrainRecord(key, rec);
         applyData(rec);
         toast('Marked as confirmed');
+        logUsage('confirm_verified', { trainNo: cur.trainNo });
       });
 
       // Edit
@@ -2043,8 +2062,22 @@ $('tabStation').addEventListener('click', () => {
   $('selectToggle').style.display = 'none';
   openTrainsTab();
 });
-$('stationCodeInput').addEventListener('input', () => { if (activeTab === 'station') renderTrainsTab(); });
-$('listSearch').addEventListener('input', renderTrainsList);
+// Debounced so we log one "search" event after typing pauses, not per keystroke
+let _searchLogTimer;
+function logSearchDebounced(query) {
+  clearTimeout(_searchLogTimer);
+  if (!query || !query.trim()) return;
+  _searchLogTimer = setTimeout(() => logUsage('search', { query: query.trim() }), 800);
+}
+
+$('stationCodeInput').addEventListener('input', () => {
+  if (activeTab === 'station') renderTrainsTab();
+  logSearchDebounced($('stationCodeInput').value);
+});
+$('listSearch').addEventListener('input', () => {
+  renderTrainsList();
+  logSearchDebounced($('listSearch').value);
+});
 
 // ─── Trains tab (local Firestore database) ────────────────────────────────────
 let _allTrains = null;
@@ -2377,6 +2410,7 @@ async function openSubmitForTrain(trainNo) {
 // ─── Share as image ───────────────────────────────────────────────────────────
 async function shareAsImage(trainNo, date) {
   if (typeof html2canvas !== 'function') { toast('Image tool still loading — try again in a moment'); return; }
+  logUsage('share_image', { trainNo, date });
   const node = $('shareCapture');
   const genEl = $('shareGenAt');
   const brandEl = $('shareFooterBrand');
@@ -2585,6 +2619,8 @@ auth.onAuthStateChanged(async (firebaseUser) => {
   renderTrainsList();
   setTimeout(initPushNotifications, 3000);
   if (_authReadyResolve) { _authReadyResolve(); _authReadyResolve = null; }
+
+  if (!_appOpenLogged) { _appOpenLogged = true; logUsage('app_open'); }
 
   // Resume the quick-scan deep link once sign-in completes and approval is
   // confirmed — so "click link → log in → scan screen" happens in one go.

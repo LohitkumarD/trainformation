@@ -66,5 +66,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
       allow update: if true;
     }
+
+    // Usage analytics — fire-and-forget activity log (app_open, search,
+    // favourite_added, confirm_today, confirm_verified, share_image).
+    // Write is open since some events (app_open, search) can fire before
+    // sign-in; only admins read it back for the usage dashboard.
+    match /usage_logs/{id} {
+      allow create: if true;
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
   }
 }
