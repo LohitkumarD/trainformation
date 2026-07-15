@@ -1315,14 +1315,24 @@ function canEdit() {
   return currentUser && (currentUser.role === 'staff' || currentUser.role === 'admin');
 }
 
+// Wraps showOverlay('authOverlay') so every place the login screen appears
+// also logs it — lets the usage dashboard see how often people hit the
+// login wall vs how often they deliberately tap "Staff Login".
+function showLoginPrompt(reason) {
+  logUsage('login_prompt_shown', { reason });
+  showOverlay('authOverlay');
+}
+
 function requireStaff() {
   if (!currentUser || currentUser.role === 'guest') {
     toast('Sign in as railway staff to contribute');
-    showOverlay('authOverlay');
+    logUsage('edit_blocked', { reason: 'not_signed_in' });
+    showLoginPrompt('blocked_action');
     return false;
   }
   if (currentUser.role === 'pending') {
     toast('Your account is pending admin approval');
+    logUsage('edit_blocked', { reason: 'pending_approval' });
     return false;
   }
   return true;
@@ -1347,7 +1357,7 @@ function updateFabVisibility() {
 $('meBtn').addEventListener('click', () => {
   if (!currentUser || currentUser.role === 'guest') {
     showAuthScreen('choice');
-    showOverlay('authOverlay');
+    showLoginPrompt('manual_click');
   } else {
     $('idTitle').textContent = 'Your profile';
     $('idHint').textContent = currentUser.role === 'pending'
@@ -1610,8 +1620,16 @@ async function registerPushToken() {
     localStorage.setItem('device_id', deviceId);
   }
 
-  // Store in broadcast collection (all users, including guests)
-  await db.collection('fcm_tokens').doc(deviceId).set({ token, updatedAt: Date.now() });
+  // Store in broadcast collection (all users, including guests).
+  // uid/registered/userName let push.js report who a notification actually
+  // reached (registered staff vs an anonymous never-signed-in device).
+  await db.collection('fcm_tokens').doc(deviceId).set({
+    token,
+    updatedAt: Date.now(),
+    uid: currentUser?.uid || null,
+    registered: canEdit(),
+    userName: currentUser?.name || null,
+  });
   localStorage.setItem('push_token', token);
 
   // If logged in, also update the user profile

@@ -390,6 +390,8 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
       <div class="panel-hd">Push Reach</div>
       <div class="stat-pills" style="margin-bottom:0;">
         <div class="spill s-all"><b id="notif-sub-count">–</b> Subscribed devices</div>
+        <div class="spill s-all"><b id="notif-registered-count">–</b> Registered staff</div>
+        <div class="spill s-all"><b id="notif-anon-count">–</b> Anonymous / guest</div>
         <div class="spill s-all"><b id="notif-admin-count">–</b> Admin devices</div>
       </div>
     </div>
@@ -456,6 +458,18 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
             <tr><th>Search</th><th>Times searched</th></tr>
           </thead>
           <tbody id="usage-notfound-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-hd">Friction points — last 7 days</div>
+      <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">People who tried to do something but hit a wall — asked to edit while logged out or not-yet-approved, or shown the login screen.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Situation</th><th>Times it happened</th><th>People affected</th></tr>
+          </thead>
+          <tbody id="usage-friction-body"></tbody>
         </table>
       </div>
     </div>
@@ -1387,6 +1401,9 @@ async function loadNotifs() {
     ]);
     document.getElementById('notif-sub-count').textContent = subSnap.size;
     document.getElementById('notif-admin-count').textContent = adminSnap.size;
+    const registeredCount = subSnap.docs.filter(d => d.data().registered === true).length;
+    document.getElementById('notif-registered-count').textContent = registeredCount;
+    document.getElementById('notif-anon-count').textContent = subSnap.size - registeredCount;
 
     const rows = logSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     document.getElementById('notifs-count').textContent = `${rows.length} shown`;
@@ -1398,13 +1415,18 @@ async function loadNotifs() {
       const failed = r.failed || 0;
       const opens = r.openCount || 0;
       const reachPct = total ? Math.round(sent / total * 100) : 0;
+      const sentRegistered = r.sentRegistered || 0;
+      const sentAnonymous = r.sentAnonymous || 0;
+      const whoLine = (sentRegistered || sentAnonymous)
+        ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">${sentRegistered} registered · ${sentAnonymous} guest</div>`
+        : '';
       return `<tr>
         <td style="font-size:12px;color:var(--muted);white-space:nowrap;">${when}</td>
         <td><span class="badge ${NOTIF_KIND_BADGE[kind]||'b-same'}">${NOTIF_KIND_LABEL[kind]||kind}</span></td>
         <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;">${r.title||'—'}</td>
         <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:12px;">${r.body||'—'}</td>
         <td>${r.trainNo ? `<span class="tno">${r.trainNo}</span>` : '—'}</td>
-        <td style="font-family:var(--mono);font-size:12px;">${sent}/${total} <span style="color:var(--muted)">(${reachPct}%)</span></td>
+        <td style="font-family:var(--mono);font-size:12px;">${sent}/${total} <span style="color:var(--muted)">(${reachPct}%)</span>${whoLine}</td>
         <td style="font-family:var(--mono);font-size:12px;color:${failed?'var(--red)':'var(--muted)'};">${failed}</td>
         <td style="font-family:var(--mono);font-size:12px;color:${opens?'var(--green)':'var(--muted)'};font-weight:${opens?700:400};">${opens}</td>
       </tr>`;
@@ -1446,6 +1468,12 @@ async function loadUsage() {
     const eventStats = {}; // eventType -> { count, users: Set }
     const perUser = {}; // userId -> { count, lastActiveMs }
     const notFoundCounts = {}; // normalized query -> { query, count }
+    const friction = {
+      not_signed_in: { count: 0, users: new Set() },
+      pending_approval: { count: 0, users: new Set() },
+      login_prompt_blocked: { count: 0, users: new Set() },
+      login_prompt_manual: { count: 0, users: new Set() },
+    };
 
     snap.docs.forEach(d => {
       const r = d.data();
@@ -1472,6 +1500,17 @@ async function loadUsage() {
             if (!notFoundCounts[key]) notFoundCounts[key] = { query: r.metadata.query.trim(), count: 0 };
             notFoundCounts[key].count++;
           }
+        }
+
+        if (kind === 'edit_blocked') {
+          const reason = r.metadata?.reason === 'pending_approval' ? 'pending_approval' : 'not_signed_in';
+          friction[reason].count++;
+          friction[reason].users.add(uid);
+        }
+        if (kind === 'login_prompt_shown') {
+          const bucket = r.metadata?.reason === 'manual_click' ? 'login_prompt_manual' : 'login_prompt_blocked';
+          friction[bucket].count++;
+          friction[bucket].users.add(uid);
         }
       }
     });
@@ -1519,10 +1558,28 @@ async function loadUsage() {
           <td style="font-family:var(--mono);">${r.count}</td>
         </tr>`).join('')
       : '<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:24px;">No zero-result searches in the last 7 days</td></tr>';
+
+    // Friction points
+    const FRICTION_LABELS = {
+      not_signed_in: 'Tried to edit while logged out',
+      pending_approval: 'Tried to edit while awaiting approval',
+      login_prompt_blocked: 'Shown login screen (blocked from an action)',
+      login_prompt_manual: 'Opened "Staff Login" themselves',
+    };
+    const frRows = Object.entries(friction).filter(([, s]) => s.count > 0);
+    document.getElementById('usage-friction-body').innerHTML = frRows.length
+      ? frRows.map(([key, s]) => `
+        <tr>
+          <td>${FRICTION_LABELS[key]}</td>
+          <td style="font-family:var(--mono);">${s.count}</td>
+          <td style="font-family:var(--mono);">${s.users.size}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">No friction logged in the last 7 days</td></tr>';
   } catch (e) {
     document.getElementById('usage-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-users-body').innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-notfound-body').innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+    document.getElementById('usage-friction-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
   }
 }
 
