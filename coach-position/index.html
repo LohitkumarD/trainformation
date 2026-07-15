@@ -1782,6 +1782,7 @@ async function renderTrainsList() {
   const favs = getFavourites();
   const wrap = $('trainsList');
   $('listCount').textContent = `${list.length} train${list.length !== 1 ? 's' : ''}`;
+  _lastSearchResultCount = list.length;
   wrap.innerHTML = '';
 
   if (!list.length) {
@@ -2062,12 +2063,23 @@ $('tabStation').addEventListener('click', () => {
   $('selectToggle').style.display = 'none';
   openTrainsTab();
 });
-// Debounced so we log one "search" event after typing pauses, not per keystroke
+// Debounced so we log one "search" event after typing pauses, not per keystroke.
+// Includes the result count from the most recent render, so the admin usage
+// dashboard can surface searches that found nothing (a proxy for "why did
+// this person give up" without ever having to ask them).
 let _searchLogTimer;
+let _lastSearchResultCount = null;
 function logSearchDebounced(query) {
   clearTimeout(_searchLogTimer);
   if (!query || !query.trim()) return;
-  _searchLogTimer = setTimeout(() => logUsage('search', { query: query.trim() }), 800);
+  _searchLogTimer = setTimeout(() => {
+    const resultCount = _lastSearchResultCount;
+    logUsage('search', {
+      query: query.trim(),
+      resultCount: typeof resultCount === 'number' ? resultCount : null,
+      found: typeof resultCount === 'number' ? resultCount > 0 : null,
+    });
+  }, 800);
 }
 
 $('stationCodeInput').addEventListener('input', () => {
@@ -2155,6 +2167,7 @@ function renderTrainsTab() {
     return (a.dep || '99:99').localeCompare(b.dep || '99:99');
   });
   $('listCount').textContent = `${list.length} train${list.length !== 1 ? 's' : ''}`;
+  _lastSearchResultCount = list.length;
   if (!list.length) {
     $('trainsList').innerHTML = `<div class="trains-empty">${q ? `No trains matching "${q}"` : 'No trains — run the import script first'}</div>`;
     return;
