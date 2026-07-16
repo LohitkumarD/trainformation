@@ -496,6 +496,18 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
       </div>
     </div>
     <div class="panel">
+      <div class="panel-hd">Push registration failures — last 7 days</div>
+      <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">Someone granted notification permission but getting a working device token still failed — this is why "Reached" can stay at 0 even for people who said yes.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Where</th><th>Error</th><th>Times</th><th>People</th></tr>
+          </thead>
+          <tbody id="usage-pushfail-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel">
       <div class="panel-hd">Crowdsourced requests — open now</div>
       <p style="font-size:12px;color:var(--muted);margin:-8px 0 14px;">"🙋 Ask others" taps still waiting on someone to fill in today's position.</p>
       <div class="stat-pills" style="margin-bottom:14px;">
@@ -1628,6 +1640,7 @@ async function loadUsage() {
       login_failed: { count: 0, users: new Set() },
     };
     const loginSuccessByUser = {}; // userId -> count of successful sign-ins, for comparing against login attempts
+    const pushFailures = {}; // "context: code message" -> { context, code, message, count, users: Set }
 
     snap.docs.forEach(d => {
       const r = d.data();
@@ -1680,6 +1693,15 @@ async function loadUsage() {
         if (kind === 'login_succeeded') {
           if (!loginSuccessByUser[uid]) loginSuccessByUser[uid] = 0;
           loginSuccessByUser[uid]++;
+        }
+        if (kind === 'push_register_failed') {
+          const context = r.metadata?.context || 'unknown';
+          const code = r.metadata?.code || '—';
+          const message = r.metadata?.message || '';
+          const key = `${context}|${code}|${message}`;
+          if (!pushFailures[key]) pushFailures[key] = { context, code, message, count: 0, users: new Set() };
+          pushFailures[key].count++;
+          pushFailures[key].users.add(uid);
         }
       }
     });
@@ -1756,6 +1778,19 @@ async function loadUsage() {
       }).join('')
       : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px;">No friction logged in the last 7 days</td></tr>';
 
+    // Push registration failures
+    const CONTEXT_LABELS = { auto: 'Auto-prompt on open', manual: '"Enable" button', reminder_banner: 'Reminder banner' };
+    const pfRows = Object.values(pushFailures).sort((a, b) => b.count - a.count);
+    document.getElementById('usage-pushfail-body').innerHTML = pfRows.length
+      ? pfRows.map(r => `
+        <tr>
+          <td>${CONTEXT_LABELS[r.context] || r.context}</td>
+          <td style="font-family:var(--mono);font-size:12px;" title="${r.message.replace(/"/g, '&quot;')}">${r.code}${r.message ? ` — ${r.message.slice(0, 60)}${r.message.length > 60 ? '…' : ''}` : ''}</td>
+          <td style="font-family:var(--mono);">${r.count}</td>
+          <td style="font-family:var(--mono);">${r.users.size}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">No registration failures in the last 7 days</td></tr>';
+
     document.getElementById('usage-req-fulfilled').textContent = eventStats['request_fulfilled']?.count || 0;
     document.getElementById('usage-trainreq-fulfilled').textContent = eventStats['train_request_fulfilled']?.count || 0;
   } catch (e) {
@@ -1763,6 +1798,7 @@ async function loadUsage() {
     document.getElementById('usage-users-body').innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-notfound-body').innerHTML = `<tr><td colspan="2" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-friction-body').innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
+    document.getElementById('usage-pushfail-body').innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-req-body').innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
     document.getElementById('usage-trainreq-body').innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--red);padding:24px;">Could not load: ${e.message}</td></tr>`;
   }

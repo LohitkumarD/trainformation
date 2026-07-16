@@ -515,6 +515,16 @@
   </div>
 </div>
 
+<!-- Contribute prompt — shown once per session, right after the disclaimer -->
+<div id="contributeModal" class="disclaimer-modal" style="display:none">
+  <div class="disclaimer-box" style="border-color:rgba(14,116,144,.4);">
+    <h2 style="color:var(--teal);">🤝 HELP IMPROVE COACH POSITION</h2>
+    <p id="contributeModalBody">Missing a train? Got a feature idea? Something not working right? Your contribution helps every staff member and passenger using this app.</p>
+    <button class="btn btn-primary" id="contributeModalGoBtn" style="width:100%">💬 Share feedback</button>
+    <button class="btn btn-ghost" id="contributeModalLaterBtn" style="width:100%">Maybe later</button>
+  </div>
+</div>
+
 <div id="offlineBanner" class="offline-banner">⚡ Offline — changes will sync when reconnected</div>
 <div class="app">
 
@@ -1882,7 +1892,26 @@ async function _initPushNotificationsImpl() {
     : await Notification.requestPermission();
   localStorage.setItem('push_asked', '1');
   if (permission !== 'granted') return;
-  await registerPushToken();
+  try {
+    await registerPushToken();
+  } catch (e) {
+    console.error('[push] auto registerPushToken failed:', e);
+    logPushFailure('auto', e);
+  }
+}
+
+// Diagnostic log for failed push registrations — deliberately bypasses
+// logUsage()'s admin-exclusion, since a failure on the admin's own testing
+// device is exactly the kind of thing we need visibility into, not less of.
+function logPushFailure(context, err) {
+  try {
+    db.collection('usage_logs').add({
+      eventType: 'push_register_failed',
+      userId: currentUser?.uid || localStorage.getItem('device_id') || 'anon',
+      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+      metadata: { context, code: err?.code || null, message: String(err?.message || err).slice(0, 200) },
+    }).catch(() => {});
+  } catch (_) {}
 }
 
 // Gets an FCM token for this device and saves it. Shared by the automatic
@@ -1965,7 +1994,7 @@ async function checkPushReminder() {
       localStorage.setItem('push_asked', '1');
       if (permission === 'granted') {
         try { await registerPushToken(); toast('Notifications enabled ✓'); }
-        catch (e) { toast('Could not enable — ' + e.message); }
+        catch (e) { toast('Could not enable — ' + e.message); logPushFailure('reminder_banner', e); }
       }
     };
   } catch (_) { /* best-effort */ }
@@ -2017,6 +2046,7 @@ $('enableNotifBtn').addEventListener('click', async () => {
     toast('Notifications enabled ✓');
   } catch (e) {
     toast('Could not enable notifications — ' + e.message);
+    logPushFailure('manual', e);
   }
   btn.disabled = false;
   refreshNotifStatus();
@@ -3317,6 +3347,35 @@ $('quickScanGalleryBtn').addEventListener('click', () => {
     });
   }
 })();
+
+// ─── "Please contribute" prompt — shown once per session, same cadence as the
+// disclaimer, so every fresh visit gets a nudge without nagging mid-session.
+async function checkContributePrompt() {
+  if (sessionStorage.getItem('contrib_prompt_ok')) return;
+  await _authReady;
+  if (currentUser?.role === 'admin') return; // don't nag whoever's running/testing the app
+
+  // Let the disclaimer (if it's up) get dismissed first, so the two never stack.
+  for (let i = 0; i < 15 && $('disclaimerModal').style.display === 'flex'; i++) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+  sessionStorage.setItem('contrib_prompt_ok', '1');
+
+  const signedIn = currentUser && currentUser.role !== 'guest';
+  $('contributeModalBody').textContent = signedIn
+    ? "Missing a train? Got a feature idea? Something not working right? Your contribution helps every staff member and passenger using this app."
+    : "Sign in and help keep Coach Position accurate — report a missing train, suggest a feature, or flag something that's not working.";
+  $('contributeModalGoBtn').textContent = signedIn ? '💬 Share feedback' : '🔑 Sign in & share feedback';
+  $('contributeModal').style.display = 'flex';
+}
+$('contributeModalGoBtn').addEventListener('click', () => {
+  $('contributeModal').style.display = 'none';
+  $('contributeBtn').click(); // reuse the existing sign-in / feedback-form flow
+});
+$('contributeModalLaterBtn').addEventListener('click', () => {
+  $('contributeModal').style.display = 'none';
+});
+checkContributePrompt();
 </script>
 </body>
 </html>
