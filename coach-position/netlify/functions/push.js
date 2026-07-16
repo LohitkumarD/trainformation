@@ -50,6 +50,15 @@ async function fetchAllTokens(accessToken, collection = 'fcm_tokens') {
     const url = `${FS_BASE}/${collection}?pageSize=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await res.json();
+    // A permission/credential problem comes back as {error:{...}} with no
+    // `documents` field — treating that the same as "empty collection" is
+    // exactly how token fetches were silently returning 0 while devices
+    // genuinely had tokens registered. Surface it instead.
+    if (!res.ok || data.error) {
+      const msg = data.error?.message || `HTTP ${res.status}`;
+      console.error(`[push] fetchAllTokens(${collection}) failed:`, msg);
+      throw new Error(`Could not read ${collection}: ${msg}`);
+    }
     if (data.documents) {
       for (const doc of data.documents) {
         const t = doc.fields?.token?.stringValue;
