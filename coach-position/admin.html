@@ -115,6 +115,39 @@ input:focus,select:focus,textarea:focus{border-color:var(--amber);}
 .spill.on{border-color:currentColor;box-shadow:0 0 0 1px currentColor;}
 .spill b{font-size:15px;display:block;line-height:1.2;}
 
+/* ── DASHBOARD ── */
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
+.dash-tile{
+  background:var(--s2);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 16px;cursor:pointer;transition:all .15s;
+}
+.dash-tile:hover{border-color:var(--amber);transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.06);}
+.dash-tile.accent{background:rgba(217,119,6,.07);border-color:rgba(217,119,6,.25);}
+.dash-num{font-family:var(--mono);font-size:26px;font-weight:800;color:var(--text);line-height:1.15;font-variant-numeric:tabular-nums;}
+.dash-tile.accent .dash-num{color:var(--amber);}
+.dash-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px;}
+
+.dash-attn-row{
+  display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);cursor:pointer;
+}
+.dash-attn-row:last-child{border-bottom:none;}
+.dash-attn-row:hover{background:rgba(0,0,0,.02);}
+.dash-attn-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.dash-attn-dot.ok{background:var(--green);}
+.dash-attn-dot.warn{background:var(--amber);}
+.dash-attn-dot.alert{background:var(--red);}
+.dash-attn-text{flex:1;font-size:13px;}
+.dash-attn-count{font-family:var(--mono);font-weight:800;font-size:15px;}
+.dash-attn-count.zero{color:var(--muted);font-weight:600;}
+.dash-attn-empty{text-align:center;color:var(--muted);font-size:13px;padding:20px 0;}
+
+.dash-mini-list{display:flex;flex-direction:column;}
+.dash-mini-row{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13px;}
+.dash-mini-row:last-child{border-bottom:none;}
+.dash-mini-row .dm-label{flex:1;color:var(--text);}
+.dash-mini-row .dm-val{font-family:var(--mono);font-weight:700;color:var(--text);}
+.dash-mini-empty{text-align:center;color:var(--muted);font-size:13px;padding:16px 0;}
+
 /* ── OPTIONS ROW ── */
 .opt-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:14px;}
 .opt-row label{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;}
@@ -194,7 +227,8 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
   </header>
 
   <nav class="tab-nav">
-    <button class="tnav on" data-tab="import" onclick="switchTab('import',this)">📥 Import Trains</button>
+    <button class="tnav on" data-tab="dashboard" onclick="switchTab('dashboard',this)">🏠 Dashboard</button>
+    <button class="tnav" data-tab="import" onclick="switchTab('import',this)">📥 Import Trains</button>
     <button class="tnav" data-tab="trains" onclick="switchTab('trains',this)">🚂 Trains</button>
     <button class="tnav" data-tab="stations" onclick="switchTab('stations',this)">📍 Stations</button>
     <button class="tnav" data-tab="users" onclick="switchTab('users',this)">👥 Users</button>
@@ -203,8 +237,70 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
     <button class="tnav" data-tab="feedback" onclick="switchTab('feedback',this)">💬 Feedback</button>
   </nav>
 
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="tab-dashboard" class="tab on">
+
+    <div class="panel">
+      <div class="panel-hd" style="justify-content:space-between;">
+        <span>Overview</span>
+        <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↻ Refresh</button>
+      </div>
+      <div class="dash-grid">
+        <div class="dash-tile" onclick="document.querySelector('[data-tab=users]').click()">
+          <div class="dash-num" id="dash-users-total">–</div>
+          <div class="dash-label">Total Users</div>
+        </div>
+        <div class="dash-tile" onclick="document.querySelector('[data-tab=users]').click()">
+          <div class="dash-num" id="dash-users-approved">–</div>
+          <div class="dash-label">Approved Staff</div>
+        </div>
+        <div class="dash-tile" onclick="document.querySelector('[data-tab=trains]').click()">
+          <div class="dash-num" id="dash-trains-total">–</div>
+          <div class="dash-label">Trains Tracked</div>
+        </div>
+        <div class="dash-tile" onclick="document.querySelector('[data-tab=notifs]').click()">
+          <div class="dash-num" id="dash-push-subs">–</div>
+          <div class="dash-label">Push Subscribers</div>
+        </div>
+        <div class="dash-tile accent" onclick="document.querySelector('[data-tab=usage]').click()">
+          <div class="dash-num" id="dash-users-today">–</div>
+          <div class="dash-label">Unique Users Today</div>
+        </div>
+        <div class="dash-tile accent" onclick="document.querySelector('[data-tab=usage]').click()">
+          <div class="dash-num" id="dash-users-7d">–</div>
+          <div class="dash-label">Unique Users · 7d</div>
+        </div>
+        <div class="dash-tile accent" onclick="document.querySelector('[data-tab=usage]').click()">
+          <div class="dash-num" id="dash-opens-7d">–</div>
+          <div class="dash-label">App Opens · 7d</div>
+        </div>
+        <div class="dash-tile accent" onclick="document.querySelector('[data-tab=usage]').click()">
+          <div class="dash-num" id="dash-searches-7d">–</div>
+          <div class="dash-label">Searches · 7d</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-hd">🔔 Needs attention</div>
+      <div id="dash-attention-list"></div>
+    </div>
+
+    <div class="frow" style="align-items:start;">
+      <div class="panel">
+        <div class="panel-hd">This week</div>
+        <div class="dash-mini-list" id="dash-week-list"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-hd">🚆 Most-wanted missing trains</div>
+        <div class="dash-mini-list" id="dash-top-missing"></div>
+      </div>
+    </div>
+
+  </div>
+
   <!-- ═══ IMPORT ═══ -->
-  <div id="tab-import" class="tab on">
+  <div id="tab-import" class="tab">
 
     <div class="panel">
       <div class="panel-hd">Import from CSV</div>
@@ -775,6 +871,7 @@ function init() {
   loadTrains();
   loadStations();
   loadUsers();
+  loadDashboard();
 }
 
 function switchTab(id, btn) {
@@ -782,9 +879,105 @@ function switchTab(id, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   btn.classList.add('on');
   document.getElementById('tab-' + id).classList.add('on');
+  if (id === 'dashboard' && !document.getElementById('dash-users-total').dataset.loaded) loadDashboard();
   if (id === 'notifs' && !document.getElementById('notif-sub-count').dataset.loaded) loadNotifs();
   if (id === 'usage' && !document.getElementById('usage-7d').dataset.loaded) loadUsage();
   if (id === 'feedback' && !document.getElementById('feedback-body').dataset.loaded) loadFeedback();
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────
+async function loadDashboard() {
+  document.getElementById('dash-users-total').dataset.loaded = '1';
+  try {
+    if (!allUsers.length) await loadUsers();
+    if (!allTrains.length) await loadTrains();
+
+    const since7 = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
+
+    const [usageSnap, openTrainReqSnap, openPosReqSnap, newFeedbackSnap, tokenSnap] = await Promise.all([
+      db.collection('usage_logs').where('timestamp', '>=', since7).orderBy('timestamp', 'desc').limit(10000).get(),
+      db.collection('train_requests').where('status', '==', 'open').get(),
+      db.collection('position_requests').where('status', '==', 'open').get(),
+      db.collection('feedback').where('status', '==', 'new').get(),
+      db.collection('fcm_tokens').get(),
+    ]);
+    // Only real (5-digit) train numbers — filters out mid-typing noise like
+    // "122" or "1264" from before that rule existed.
+    const openTrainReqs = openTrainReqSnap.docs
+      .map(d => ({ trainNo: d.id, ...d.data() }))
+      .filter(r => /^\d{5}$/.test(r.trainNo));
+
+    // Single pass over the last 7 days of usage_logs — covers "today",
+    // "this week", and the failure/fulfillment counters below.
+    const users7 = new Set(), usersToday = new Set();
+    let opens7 = 0, searches7 = 0, pushFailures7 = 0, trainReqFulfilled7 = 0, posReqFulfilled7 = 0, feedbackSubmitted7 = 0, registrations7 = 0;
+    usageSnap.docs.forEach(d => {
+      const r = d.data();
+      const ts = r.timestamp?.toDate ? r.timestamp.toDate().getTime() : null;
+      if (!ts) return;
+      const uid = r.userId || 'anon';
+      users7.add(uid);
+      if (ts >= todayMs) usersToday.add(uid);
+      switch (r.eventType) {
+        case 'app_open': opens7++; break;
+        case 'search': searches7++; break;
+        case 'push_register_failed': pushFailures7++; break;
+        case 'train_request_fulfilled': trainReqFulfilled7++; break;
+        case 'request_fulfilled': posReqFulfilled7++; break;
+        case 'feedback_submitted': feedbackSubmitted7++; break;
+        case 'login_succeeded': if (r.metadata?.mode === 'register') registrations7++; break;
+      }
+    });
+
+    document.getElementById('dash-users-total').textContent = allUsers.length;
+    document.getElementById('dash-users-approved').textContent = allUsers.filter(u => u.status === 'approved').length;
+    document.getElementById('dash-trains-total').textContent = allTrains.length;
+    document.getElementById('dash-push-subs').textContent = tokenSnap.size;
+    document.getElementById('dash-users-today').textContent = usersToday.size;
+    document.getElementById('dash-users-7d').textContent = users7.size;
+    document.getElementById('dash-opens-7d').textContent = opens7;
+    document.getElementById('dash-searches-7d').textContent = searches7;
+
+    const pendingUsers = allUsers.filter(u => u.status === 'pending').length;
+    const attnItems = [
+      { label: 'User accounts awaiting approval', count: pendingUsers, tab: 'users' },
+      { label: 'Missing trains people are waiting on', count: openTrainReqs.length, tab: 'usage' },
+      { label: 'Coach positions someone asked others for', count: openPosReqSnap.size, tab: 'usage' },
+      { label: 'Push registration failures — last 7 days', count: pushFailures7, tab: 'usage' },
+      { label: 'New feedback to triage', count: newFeedbackSnap.size, tab: 'feedback' },
+    ];
+    document.getElementById('dash-attention-list').innerHTML = attnItems.map(it => `
+      <div class="dash-attn-row" onclick="document.querySelector('[data-tab=${it.tab}]').click()">
+        <span class="dash-attn-dot ${it.count ? (it.tab === 'usage' && it.label.includes('failures') ? 'alert' : 'warn') : 'ok'}"></span>
+        <span class="dash-attn-text">${it.label}</span>
+        <span class="dash-attn-count ${it.count ? '' : 'zero'}">${it.count}</span>
+      </div>`).join('');
+
+    const weekItems = [
+      { label: 'Unique users active', val: users7.size },
+      { label: 'App opens', val: opens7 },
+      { label: 'Searches', val: searches7 },
+      { label: 'New staff registrations', val: registrations7 },
+      { label: 'Missing trains added', val: trainReqFulfilled7 },
+      { label: 'Coach positions filled on request', val: posReqFulfilled7 },
+      { label: 'Feedback submitted', val: feedbackSubmitted7 },
+    ];
+    document.getElementById('dash-week-list').innerHTML = weekItems.map(it => `
+      <div class="dash-mini-row"><span class="dm-label">${it.label}</span><span class="dm-val">${it.val}</span></div>`).join('');
+
+    const topMissing = openTrainReqs
+      .slice()
+      .sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0))
+      .slice(0, 5);
+    document.getElementById('dash-top-missing').innerHTML = topMissing.length
+      ? topMissing.map(r => `
+        <div class="dash-mini-row"><span class="dm-label"><span class="tno">${r.trainNo}</span></span><span class="dm-val">${r.searchCount || 1}×</span></div>`).join('')
+      : '<div class="dash-mini-empty">No open requests — nice</div>';
+  } catch (e) {
+    document.getElementById('dash-attention-list').innerHTML = `<div class="dash-attn-empty" style="color:var(--red);">Could not load: ${e.message}</div>`;
+  }
 }
 
 // ─── IMPORT ──────────────────────────────────────────────────────
@@ -1598,7 +1791,10 @@ async function loadUsage() {
       : '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px;">No open requests</td></tr>';
 
     const openTrainReqSnap = await db.collection('train_requests').where('status', '==', 'open').get();
+    // Only real (5-digit) train numbers — older entries from before that
+    // rule existed include mid-typing noise like "122" or "1264".
     const openTrainReqRows = openTrainReqSnap.docs.map(d => ({ trainNo: d.id, ...d.data() }))
+      .filter(r => /^\d{5}$/.test(r.trainNo))
       .sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0));
     document.getElementById('usage-trainreq-open').textContent = openTrainReqRows.length;
     document.getElementById('usage-trainreq-body').innerHTML = openTrainReqRows.length

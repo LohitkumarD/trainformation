@@ -2165,7 +2165,7 @@ async function renderTrainsList() {
       activeTab === 'fav' ? 'No favourites yet — tap ☆ to add' :
       'No trains saved yet'
     }</div>`;
-    if (filter && /^\d{3,6}$/.test(filter) && openTrainRequests[filter]) {
+    if (filter && /^\d{5}$/.test(filter) && openTrainRequests[filter]) {
       const note = document.createElement('div');
       note.className = 'request-banner';
       note.style.cssText = 'margin:0 16px 14px;text-align:center;';
@@ -2480,9 +2480,11 @@ function logSearchDebounced(query) {
       resultCount: typeof resultCount === 'number' ? resultCount : null,
       found,
     });
-    // A zero-result search for something that looks like a real train number
-    // means the app doesn't have it at all — let other users know.
-    if (found === false && /^\d{3,6}$/.test(q)) requestTrainAdd(q);
+    // A zero-result search for a real (5-digit) train number means the app
+    // doesn't have it at all — let other users know. Shorter/longer digit
+    // strings are almost always a partial/mid-typing search, not a real
+    // train number, so they're ignored here to avoid noisy false requests.
+    if (found === false && /^\d{5}$/.test(q)) requestTrainAdd(q);
   }, 800);
 }
 
