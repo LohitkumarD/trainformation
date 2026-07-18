@@ -1865,9 +1865,16 @@ async function loadUsage() {
         if (ts > perUser[uid].lastActiveMs) perUser[uid].lastActiveMs = ts;
 
         if (kind === 'search' && r.metadata && r.metadata.found === false && r.metadata.query) {
-          const key = String(r.metadata.query).trim().toLowerCase();
-          if (key) {
-            if (!notFoundCounts[key]) notFoundCounts[key] = { query: r.metadata.query.trim(), count: 0 };
+          const trimmed = String(r.metadata.query).trim();
+          const key = trimmed.toLowerCase();
+          // A purely-numeric query that isn't a real 5-digit train number is
+          // almost always mid-typing noise (e.g. "122" on the way to
+          // "12285"), not someone actually looking for that number — same
+          // rule as the missing-train request trigger. Name searches (any
+          // non-numeric text) are left alone.
+          const isNumericNoise = /^\d+$/.test(trimmed) && !/^\d{5}$/.test(trimmed);
+          if (key && !isNumericNoise) {
+            if (!notFoundCounts[key]) notFoundCounts[key] = { query: trimmed, count: 0 };
             notFoundCounts[key].count++;
           }
         }
