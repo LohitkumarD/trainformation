@@ -14,7 +14,7 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
-console.log('[sw] loaded, cache = coach-position-v61');
+console.log('[sw] loaded, cache = coach-position-v62');
 
 // Fires for every push the browser delivers, before Firebase's own handling —
 // confirms whether the push even reaches this worker at all.
@@ -43,7 +43,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v61';
+const CACHE = 'coach-position-v62';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (event) => {

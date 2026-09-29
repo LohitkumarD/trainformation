@@ -230,12 +230,13 @@
   .seg-hd{font-size:11px;font-weight:800;font-family:var(--mono);letter-spacing:.06em;color:var(--amber);margin:10px 0 2px;display:flex;align-items:center;gap:6px;}
   .seg-hd:first-child{margin-top:0;}
   /* reversal station block (collapsible, highlighted) */
-  .rev-block{border:1.5px solid rgba(217,119,6,.45);border-radius:10px;overflow:hidden;margin:10px 0 0;background:var(--surface);}
+  .rev-block{--rv:#D97706;--rv-dark:#92400E;--rv-soft:#FEF3E2;border:2px solid var(--rv);border-left-width:6px;border-radius:10px;overflow:hidden;margin:10px 0 0;background:var(--surface);}
   .rev-bar{
-    background:linear-gradient(90deg,rgba(217,119,6,.16),rgba(217,119,6,.07));
+    background:var(--rv-soft);
     padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
-    font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--amber);letter-spacing:.05em;
+    font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--rv-dark);letter-spacing:.05em;
   }
+  .rev-no{display:inline-block;min-width:18px;padding:1px 5px;border-radius:9px;background:var(--rv);color:#fff;text-align:center;font-size:11px;}
   .rev-bar .rev-star{font-size:15px;}
   .rev-bar .rev-chev{margin-left:auto;transition:transform .18s ease;font-size:12px;}
   .rev-block.open .rev-bar .rev-chev{transform:rotate(180deg);}
@@ -250,8 +251,8 @@
     color:#fff;border-radius:7px;padding:5px 12px;margin:12px 0 6px;
   }
   .rev-sub b{color:#fff;}
-  .rev-sub.arr{background:#64748B;}
-  .rev-sub.dep{background:var(--amber);}
+  .rev-sub.arr{background:var(--rv-dark);}
+  .rev-sub.dep{background:var(--rv);}
   /* phones: fit 5 coaches per row */
   @media (max-width:480px){
     .train-strip{gap:12px 5px;}
@@ -306,11 +307,23 @@
   .chip-edit-box input{text-transform:uppercase;font-family:var(--mono);font-size:16px;letter-spacing:.05em;}
   .preview-strip .chip{cursor:pointer;}
   .preview-strip .chip:active{opacity:.75;}
+  /* Shared image is laid out wide (720px) so each formation takes fewer rows:
+     WhatsApp shrinks photos to ~1600px on the long side, so a tall, narrow
+     card ends up only ~300px wide and blurry. */
   .share-offscreen{
-    position:fixed;left:-9999px;top:0;width:360px;
+    position:fixed;left:-9999px;top:0;width:720px;
     background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
     padding:0 0 12px;display:flex;flex-direction:column;gap:10px;overflow:hidden;
   }
+  .share-offscreen .train-strip{gap:14px 10px;}
+  .share-offscreen .t-body{width:66px;height:23px;gap:4px;padding-top:4px;border-radius:6px 6px 4px 4px;}
+  .share-offscreen .t-win{width:10px;height:7px;}
+  .share-offscreen .t-door{width:7px;height:12px;}
+  .share-offscreen .t-wheels{width:52px;}
+  .share-offscreen .t-wheel{width:10px;height:10px;}
+  .share-offscreen .t-lbl{font-size:16px;}
+  .share-offscreen .t-pos{font-size:12px;}
+  .share-offscreen .tcoach svg{width:56px;height:auto;}
   .sc-banner{background:var(--amber);color:#fff;padding:12px 16px 13px;display:flex;flex-direction:column;gap:2px;}
   .sc-banner .sc-label{color:#FFE8C7;margin-bottom:3px;}
   .sc-banner-row{display:flex;align-items:baseline;gap:10px;}
@@ -1388,7 +1401,15 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
   container.appendChild(firstHd);
   container.appendChild(stripEl(parsedList));
 
-  // One highlighted, collapsible block per reversal station
+  // One highlighted, collapsible block per reversal station, each in its own
+  // colour so it's obvious which station a formation belongs to. Plain hex
+  // values (no color-mix) so html2canvas renders them in the shared image.
+  const REV_COLOURS = [
+    { c: '#7C3AED', dark: '#5B21B6', soft: '#F3EEFF' }, // purple
+    { c: '#0D9488', dark: '#115E59', soft: '#E6F7F5' }, // teal
+    { c: '#DB2777', dark: '#9D174D', soft: '#FDEBF3' }, // pink
+    { c: '#2563EB', dark: '#1E40AF', soft: '#E8EFFE' }, // blue
+  ];
   let codes = parsedList;
   revStations.forEach((stn, i) => {
     const before = codes;
@@ -1397,10 +1418,14 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
 
     const block = document.createElement('div');
     block.className = 'rev-block' + (expandAll ? ' open' : '');
+    const col = REV_COLOURS[i % REV_COLOURS.length];
+    block.style.setProperty('--rv', col.c);
+    block.style.setProperty('--rv-dark', col.dark);
+    block.style.setProperty('--rv-soft', col.soft);
     block.innerHTML = `
       <div class="rev-bar">
         <span class="rev-star">🔄</span>
-        <span>${stn} — REVERSAL STATION</span>
+        <span><span class="rev-no">${i + 1}</span> ${stn} — REVERSAL STATION</span>
         <span class="rev-chev">▼</span>
       </div>
       <div class="rev-body">
@@ -2871,8 +2896,14 @@ async function shareAsImage(trainNo, date) {
     // html2canvas clones the whole page — every train card and overlay —
     // which on phones with a long list takes long enough to look frozen.
     const keep = (el) => el === node || el.contains(node) || node.contains(el) || !!el.closest('head');
+    // Render at up to 3x (2160px wide) for crisp coach labels, but cap the
+    // total pixel count so tall multi-reversal cards stay within phone
+    // canvas memory limits.
+    const MAX_PX = 12e6;
+    const area = Math.max(1, node.offsetWidth * node.offsetHeight);
+    const scale = Math.max(1.5, Math.min(3, Math.sqrt(MAX_PX / area)));
     const canvas = await Promise.race([
-      html2canvas(node, { backgroundColor: '#1E2227', scale: 2, imageTimeout: 5000, logging: false, ignoreElements: el => !keep(el) }),
+      html2canvas(node, { backgroundColor: '#1E2227', scale, imageTimeout: 5000, logging: false, ignoreElements: el => !keep(el) }),
       new Promise((_, rej) => setTimeout(() => rej(new Error('render timeout')), 20000))
     ]);
     genEl.style.display = 'none';
