@@ -324,6 +324,14 @@
   .share-offscreen .t-lbl{font-size:16px;}
   .share-offscreen .t-pos{font-size:12px;}
   .share-offscreen .tcoach svg{width:56px;height:auto;}
+  .sc-bsum{font-size:13px;font-weight:700;color:#fff;background:rgba(0,0,0,.18);border-radius:6px;padding:3px 8px;margin-top:6px;align-self:flex-start;}
+  .sc-leg{border:2px solid var(--rv);border-left-width:6px;border-radius:10px;overflow:hidden;background:#fff;}
+  .sc-leg-hd{background:var(--rv-soft);padding:8px 12px;display:flex;align-items:center;gap:10px;}
+  .sc-leg-no{background:var(--rv);color:#fff;font-family:var(--mono);font-weight:800;font-size:12px;letter-spacing:.06em;border-radius:6px;padding:3px 8px;}
+  .sc-leg-route{color:var(--rv-dark);font-family:var(--mono);font-weight:800;font-size:16px;letter-spacing:.04em;}
+  .sc-leg-strip{padding:10px 12px 12px;}
+  .sc-rev{width:100%;text-align:center;margin:10px 0;}
+  .sc-rev-pill{display:inline-block;background:var(--rv);color:#fff;font-weight:800;font-size:13px;letter-spacing:.03em;border-radius:14px;padding:5px 14px;}
   .sc-banner{background:var(--amber);color:#fff;padding:12px 16px 13px;display:flex;flex-direction:column;gap:2px;}
   .sc-banner .sc-label{color:#FFE8C7;margin-bottom:3px;}
   .sc-banner-row{display:flex;align-items:baseline;gap:10px;}
@@ -655,6 +663,7 @@
     </div>
     <div class="sc-bname" id="rTrainName"></div>
     <div class="sc-broute" id="rRoute"></div>
+    <div class="sc-bsum" id="rSummary"></div>
   </div>
   <div class="sc-body">
     <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
@@ -1379,6 +1388,48 @@ function reverseFormation(codes) {
 // first leg strip, then one highlighted collapsible block per reversal
 // station showing Arrival and Departure formations at that station.
 // No reversals → single strip, same as before.
+function escapeHtml(v) {
+  return String(v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+const REV_COLOURS = [
+  { c: '#7C3AED', dark: '#5B21B6', soft: '#F3EEFF' }, // purple
+  { c: '#0D9488', dark: '#115E59', soft: '#E6F7F5' }, // teal
+  { c: '#DB2777', dark: '#9D174D', soft: '#FDEBF3' }, // pink
+  { c: '#2563EB', dark: '#1E40AF', soft: '#E8EFFE' }, // blue
+];
+const LEG0_COLOUR = { c: '#D97706', dark: '#92400E', soft: '#FEF3E2' };
+
+// Shared-image layout: one card per leg of the journey, with a "reverses at"
+// divider between legs. Unlike the in-app view it doesn't repeat the arrival
+// formation (it's identical to the previous leg), so the image stays short.
+// Leg n+1 uses reversal station n's colour, matching the in-app blocks.
+function renderShareLegs(container, parsedList, revStations, fromStation, toStation) {
+  container.classList.remove('train-strip');
+  container.innerHTML = '';
+  const stops = [fromStation || 'ORIGIN', ...revStations, toStation || 'DESTINATION'];
+  let codes = parsedList;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const col = i === 0 ? LEG0_COLOUR : REV_COLOURS[(i - 1) % REV_COLOURS.length];
+    if (i > 0) {
+      codes = reverseFormation(codes);
+      const div = document.createElement('div');
+      div.className = 'sc-rev';
+      div.style.setProperty('--rv', col.c);
+      div.innerHTML = `<span class="sc-rev-pill">🔄 Reverses at ${escapeHtml(stops[i])} · coach order flips</span>`;
+      container.appendChild(div);
+    }
+    const leg = document.createElement('div');
+    leg.className = 'sc-leg';
+    leg.style.setProperty('--rv', col.c);
+    leg.style.setProperty('--rv-dark', col.dark);
+    leg.style.setProperty('--rv-soft', col.soft);
+    leg.innerHTML = `<div class="sc-leg-hd"><span class="sc-leg-no">LEG ${i + 1}</span><span class="sc-leg-route">${escapeHtml(stops[i])} → ${escapeHtml(stops[i + 1])}</span></div><div class="sc-leg-strip"></div>`;
+    renderTrainStrip(leg.querySelector('.sc-leg-strip'), codes);
+    container.appendChild(leg);
+  }
+}
+
 function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll) {
   if (!revStations || !revStations.length) {
     renderTrainStrip(container, parsedList);
@@ -1404,12 +1455,6 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
   // One highlighted, collapsible block per reversal station, each in its own
   // colour so it's obvious which station a formation belongs to. Plain hex
   // values (no color-mix) so html2canvas renders them in the shared image.
-  const REV_COLOURS = [
-    { c: '#7C3AED', dark: '#5B21B6', soft: '#F3EEFF' }, // purple
-    { c: '#0D9488', dark: '#115E59', soft: '#E6F7F5' }, // teal
-    { c: '#DB2777', dark: '#9D174D', soft: '#FDEBF3' }, // pink
-    { c: '#2563EB', dark: '#1E40AF', soft: '#E8EFFE' }, // blue
-  ];
   let codes = parsedList;
   revStations.forEach((stn, i) => {
     const before = codes;
@@ -1884,7 +1929,12 @@ async function populateShareCapture(d) {
     getReversalStations(d.trainNo),
     new Promise(res => setTimeout(() => res([]), 3000))
   ]);
-  renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation, true);
+  const strip = $('rStrip');
+  if (_rev && _rev.length) renderShareLegs(strip, d.parsedList || [], _rev, d.fromStation, d.toStation);
+  else renderFormationSegments(strip, d.parsedList || [], _rev, d.fromStation, d.toStation, true);
+  const nCoaches = (d.parsedList || []).filter(c => String(c).toUpperCase() !== 'ENG').length;
+  $('rSummary').textContent = `${nCoaches} coaches` +
+    (_rev && _rev.length ? ` · reverses at ${_rev.join(', ')}` : '');
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
