@@ -1,0 +1,22 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      # No install step: the tests use Node's built-in runner and only
+      # require coach-position/lib.js.
+      - name: Unit tests
+        run: node --test tests/*.test.js
+      - name: Syntax check coach-position scripts
+        run: node --check coach-position/lib.js && node --check coach-position/sw.js
