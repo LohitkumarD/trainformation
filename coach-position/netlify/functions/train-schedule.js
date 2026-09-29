@@ -7,6 +7,9 @@
  *
  * Usage:
  *   ?station=RNR     →  live trains at station
+ *   ?board=RNR       →  all scheduled trains stopping at a station
+ *   ?train=17377     →  train details (route, coach position, …) — raw
+ *                       RailRadar response, used to check which fields exist
  */
 exports.handler = async (event) => {
   const CORS = {
@@ -30,16 +33,22 @@ exports.handler = async (event) => {
 
   const q = event.queryStringParameters || {};
 
-  if (!q.station) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Provide ?station=RNR' }) };
+  let url;
+  if (q.train) {
+    const no = q.train.trim();
+    if (!/^\d{5}$/.test(no)) {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid train number — use 5 digits, e.g. ?train=17377' }) };
+    }
+    url = `https://api.railradar.in/v1/trains/${no}`;
+  } else if (q.station || q.board) {
+    const code = (q.station || q.board).trim().toUpperCase();
+    if (!/^[A-Z]{2,7}$/.test(code)) {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid station code' }) };
+    }
+    url = `https://api.railradar.in/v1/stations/${encodeURIComponent(code)}/${q.board ? 'trains' : 'live'}`;
+  } else {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Provide ?station=RNR, ?board=RNR or ?train=17377' }) };
   }
-
-  const code = q.station.trim().toUpperCase();
-  if (!/^[A-Z]{2,7}$/.test(code)) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid station code' }) };
-  }
-
-  const url = `https://api.railradar.in/v1/stations/${encodeURIComponent(code)}/live`;
 
   try {
     const res = await fetch(url, {
