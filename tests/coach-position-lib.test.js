@@ -116,3 +116,16 @@ test('reversal colours are plain hex (html2canvas cannot paint color-mix etc.)',
     for (const v of [c.c, c.dark, c.soft]) assert.match(v, /^#[0-9A-F]{6}$/i);
   }
 });
+
+test('reverseFormation matches RailRadar per-station formations (real trains)', () => {
+  // Formations RailRadar reports before/after each scheduled reversal.
+  const D = (s) => s.split('-');
+  const cases = [
+    ['17392 at UBL', 'ENG-SLRD-GEN-GEN-S1-S2-S3-S4-S5-GEN-GEN-GEN-GEN-SLRD', 'ENG-SLRD-GEN-GEN-GEN-GEN-S5-S4-S3-S2-S1-GEN-GEN-SLRD'],
+    ['17377 at GDG', 'ENG-SLRD-GEN-GEN-S6-S5-S4-S3-S2-S1-B2-B1-A1-GEN-GEN-LPR', 'ENG-LPR-GEN-GEN-A1-B1-B2-S1-S2-S3-S4-S5-S6-GEN-GEN-SLRD'],
+    ['17377 at UBL', 'ENG-LPR-GEN-GEN-A1-B1-B2-S1-S2-S3-S4-S5-S6-GEN-GEN-SLRD', 'ENG-SLRD-GEN-GEN-S6-S5-S4-S3-S2-S1-B2-B1-A1-GEN-GEN-LPR'],
+  ];
+  for (const [label, before, after] of cases) {
+    assert.deepEqual(lib.reverseFormation(D(before)), D(after), label);
+  }
+});
