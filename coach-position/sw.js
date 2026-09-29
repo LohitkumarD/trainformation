@@ -14,7 +14,7 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
-console.log('[sw] loaded, cache = coach-position-v66');
+console.log('[sw] loaded, cache = coach-position-v67');
 
 // Fires for every push the browser delivers, before Firebase's own handling —
 // confirms whether the push even reaches this worker at all.
@@ -43,8 +43,8 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v66';
-const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
+const CACHE = 'coach-position-v67';
+const SHELL = ['./', './index.html', './app.css', './lib.js', './manifest.json', './icon.svg'];
 
 // Third-party scripts/fonts the app can't start without. Their URLs are
 // version-pinned, so cache-first is safe. Without these cached, going
@@ -122,9 +122,12 @@ self.addEventListener('fetch', (event) => {
 
   if (!request.url.startsWith(self.location.origin)) return;
 
-  // HTML/navigation: always prefer a fresh network copy so deploys show up
-  // immediately, falling back to cache only when offline.
-  if (request.mode === 'navigate' || request.url.endsWith('/index.html')) {
+  // HTML/navigation, plus the app's own CSS/JS that ship with it: always
+  // prefer a fresh network copy so a deploy never pairs a new index.html with
+  // an old lib.js/app.css; fall back to cache only when offline.
+  const path = new URL(request.url).pathname;
+  if (request.mode === 'navigate' || path.endsWith('/index.html') ||
+      path.endsWith('/app.css') || path.endsWith('/lib.js')) {
     event.respondWith(
       fetch(request).then((response) => {
         if (response.ok) {
