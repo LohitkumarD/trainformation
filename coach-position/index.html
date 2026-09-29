@@ -899,27 +899,55 @@ async function getReversalStations(trainNo) {
 // Reads the shared cache doc directly (fast, works offline once seen); only
 // asks the function — which refreshes the cache from RailRadar — when the
 // doc is missing or stale. One promise per key so parallel callers share it.
+// ─── Phone storage (localStorage) ─────────────────────────────────────────
+// Small JSON helpers that never throw (private mode / full storage just
+// means we fall back to the network).
+function lsGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (_) { return null; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (_) { return false; }
+}
+// RailRadar data kept on the phone: the station board(s) plus the most
+// recently opened trains (capped so storage stays small).
+const RR_LOCAL_MAX_TRAINS = 80;
+function rrLocalSave(key, data, fetchedAt) {
+  lsSet(`cp_rr:${key}`, { data, fetchedAt: fetchedAt || Date.now() });
+  if (key.startsWith('rr_trains/')) {
+    const idx = (lsGet('cp_rr_idx') || []).filter(k => k !== key);
+    idx.push(key);
+    while (idx.length > RR_LOCAL_MAX_TRAINS) { try { localStorage.removeItem(`cp_rr:${idx.shift()}`); } catch (_) {} }
+    lsSet('cp_rr_idx', idx);
+  }
+}
+
 const _rrCache = {};
 function getRailCached(collection, id, param, ttlDays) {
   const key = `${collection}/${id}`;
   if (_rrCache[key]) return _rrCache[key];
   _rrCache[key] = (async () => {
-    let stale = null;
+    const ttl = ttlDays * 86400000;
+    // 1. Phone storage — instant, no network at all while fresh
+    const local = lsGet(`cp_rr:${key}`);
+    if (local && local.data && Date.now() - Number(local.fetchedAt || 0) < ttl) return local.data;
+    let stale = local && local.data ? local.data : null;
+    // 2. Shared Firestore cache
     try {
       const snap = await getFast(db.collection(collection).doc(id));
       if (snap.exists) {
         const d = snap.data();
         const data = d.json ? JSON.parse(d.json) : null;
-        if (data && Date.now() - Number(d.fetchedAt || 0) < ttlDays * 86400000) return data;
-        stale = data;
+        if (data && Date.now() - Number(d.fetchedAt || 0) < ttl) { rrLocalSave(key, data, Number(d.fetchedAt)); return data; }
+        if (data) stale = data;
       }
     } catch (_) { /* rules not deployed yet or offline — ask the function */ }
     if (!navigator.onLine) return stale;
+    // 3. The rail-info function (refreshes the shared cache from RailRadar)
     try {
       const res = await fetch(`/.netlify/functions/rail-info?${param}=${encodeURIComponent(id)}`);
       if (res.ok) {
         const j = await res.json();
-        if (j && j.data) return j.data;
+        if (j && j.data) { rrLocalSave(key, j.data, j.fetchedAt); return j.data; }
       }
     } catch (_) { /* network — use whatever we had */ }
     return stale;
@@ -2327,6 +2355,7 @@ $('tabMyStn').addEventListener('click', () => {
 // Leaving the tab via any other tab
 document.querySelector('.tabs-row').addEventListener('click', (e) => {
   const t = e.target.closest('.tab');
+  if (t) { try { localStorage.setItem('cp_last_tab', t.id); } catch (_) {} }
   if (!t || t.id === 'tabMyStn') return;
   $('tabMyStn').classList.remove('active');
   $('myStnBar').classList.remove('visible');
@@ -2340,6 +2369,14 @@ $('myStnSet').addEventListener('click', () => {
   renderMyStation();
 });
 $('myStnInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('myStnSet').click(); });
+// Reopen on the tab used last — a station user lands straight on their list
+// (drawn instantly from this phone's saved copy).
+(function restoreLastTab() {
+  let last = '';
+  try { last = localStorage.getItem('cp_last_tab') || ''; } catch (_) {}
+  // After the whole script has run (the My station state is declared below)
+  if (last === 'tabMyStn' && getMyStation()) setTimeout(() => $('tabMyStn').click(), 0);
+})();
 
 let _myStnRenderSeq = 0;
 // Day shown in My station: -1 yesterday, 0 today, 1 tomorrow. Switching
@@ -2378,11 +2415,22 @@ async function renderMyStation() {
   }
   const day = myStnDate();
   const dayStr = isoDate(day);
-  const isToday = _myStnOffset === 0;
-  wrap.innerHTML = `<div class="trains-empty">Loading trains at ${escapeHtml(code)}…</div>`;
   // Positions are dated by journey date (day the train left its origin), so a
   // train reaching here on day 2/3 of its run was entered 1–2 days earlier.
   const recDates = [dayStr, addDays(dayStr, -1), addDays(dayStr, -2)];
+
+  // 1. Instant: draw from what this phone saved last time (station board +
+  //    positions snapshot), so reopening the app shows the list right away.
+  const snapKey = `cp_stn_snap:${code}`;
+  const snap = lsGet(snapKey);
+  const localBoard = lsGet(`cp_rr:rr_stations/${code}`);
+  if (snap && localBoard && localBoard.data) {
+    drawMyStation(seq, code, day, dayStr, localBoard.data, snap.recOn || {}, snap.latest || {});
+  } else {
+    wrap.innerHTML = `<div class="trains-empty">Loading trains at ${escapeHtml(code)}…</div>`;
+  }
+
+  // 2. Fresh data in the background; redraw only if something changed.
   const [board, latest, ...recLists] = await Promise.all([
     getStationBoard(code),
     getAllTrains('').catch(() => []),
@@ -2390,14 +2438,48 @@ async function renderMyStation() {
   ]);
   if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
   if (!board) {
-    wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
+    if (!wrap.querySelector('.stn-row')) {
+      wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
+    }
     return;
   }
+  // Keep a few days of positions (so Yesterday/Today/Tomorrow all open instantly)
   const recOn = {}; // date → trainNo → record
+  const keepFrom = addDays(todayStr(), -4);
+  Object.entries((snap && snap.recOn) || {}).forEach(([d, m]) => { if (d >= keepFrom) recOn[d] = m; });
   recDates.forEach((d, i) => { recOn[d] = {}; recLists[i].forEach(r => { recOn[d][r.trainNo] = r; }); });
+  const latestByNo = {};
+  latest.forEach(r => { if (!latestByNo[r.trainNo] || r.date > latestByNo[r.trainNo].date) latestByNo[r.trainNo] = r; });
+  // Only this station's trains go into the snapshot
+  const mine = {};
+  board.trains.forEach(t => { if (latestByNo[t.no]) mine[t.no] = latestByNo[t.no]; });
+  Object.keys(recOn).forEach(d => {
+    const m = {};
+    board.trains.forEach(t => { if (recOn[d][t.no]) m[t.no] = recOn[d][t.no]; });
+    recOn[d] = m;
+  });
+  lsSet(snapKey, { recOn, latest: mine, savedAt: Date.now() });
+  drawMyStation(seq, code, day, dayStr, board, recOn, mine);
+}
+
+// Draw (or redraw) the station list. Skips the redraw when nothing visible
+// changed, and keeps opened rows open and the scroll position when it does.
+function drawMyStation(seq, code, day, dayStr, board, recOn, latestByNo) {
+  const wrap = $('trainsList');
+  if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
+  const isToday = _myStnOffset === 0;
   const lastRec = {};
-  latest.forEach(r => { if (r.date <= dayStr) lastRec[r.trainNo] = r; });
+  Object.values(latestByNo || {}).forEach(r => { if (r.date <= dayStr) lastRec[r.trainNo] = r; });
   const list = trainsOnDate(board, day);
+  const sig = JSON.stringify([code, dayStr, list.map(t => {
+    const jd = journeyDateFor(dayStr, t.ad || t.dd || 1);
+    const r = (recOn[jd] && recOn[jd][t.no]) || lastRec[t.no];
+    return [t.no, r ? r.date + ':' + (r.updatedAt || 0) : ''];
+  })]);
+  if (wrap.dataset.sig === sig && wrap.querySelector('.stn-row')) return; // nothing new
+  const reopen = [...wrap.querySelectorAll('.stn-row.open')].map(r => r.dataset.no);
+  const scrollY = window.scrollY;
+  wrap.dataset.sig = sig;
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const minOf = (t) => { const [h, m] = String(t.a || t.d || '00:00').split(':').map(Number); return h * 60 + m; };
@@ -2417,6 +2499,7 @@ async function renderMyStation() {
       : '<span class="stn-st st-sched">Scheduled only</span>';
     const row = document.createElement('div');
     row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '');
+    row.dataset.no = t.no;
     row.dataset.search = `${t.no} ${t.name} ${t.src} ${t.dst}`.toLowerCase();
     row.innerHTML = `
       <div class="train-item-head">
@@ -2437,7 +2520,13 @@ async function renderMyStation() {
   });
   wrap.insertAdjacentHTML('beforeend', '<div class="trains-empty stn-nomatch" style="display:none"></div>');
   filterMyStationRows();
-  if (nextIdx > 0 && !$('listSearch').value.trim()) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+  if (reopen.length) {
+    // A background refresh: put the user back exactly where they were
+    reopen.forEach(no => { const h = wrap.querySelector(`.stn-row[data-no="${no}"] .train-item-head`); if (h) h.click(); });
+    window.scrollTo(0, scrollY);
+  } else if (nextIdx > 0 && !$('listSearch').value.trim()) {
+    wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+  }
 }
 
 // "Today" / "Yesterday" / "Tomorrow" / "10 Sep" (year only if not this year).
