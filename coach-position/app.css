@@ -541,3 +541,37 @@ select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);
 .day-chip{flex:1 1 0;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);border-radius:18px;padding:7px 10px;font-weight:700;font-size:13px;cursor:pointer;}
 .day-chip.active{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
 .stn-note{font-size:12px;color:#92400E;background:#FEF3C7;border-radius:8px;padding:6px 10px;margin:4px 0 8px;}
+
+/* ── List polish: one-line segmented tabs, cleaner rows ─────────────────── */
+.tabs-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex-wrap:nowrap;
+  background:var(--surface-2, #E9ECF2);border-radius:12px;padding:4px;}
+.tabs-row .tab{border:none;border-radius:9px;padding:8px 4px;font-size:12.5px;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.tabs-row .tab.active{background:var(--surface);color:var(--amber);box-shadow:0 1px 3px rgba(0,0,0,.12);}
+.list-header{gap:8px;}
+.list-meta-row .select-toggle{padding:4px 10px;font-size:12px;}
+
+.train-item{border-radius:14px;}
+.train-item-head{padding:12px 12px;gap:10px;min-height:60px;}
+.tno-badge{font-size:15px;padding:6px 9px;min-width:62px;text-align:center;}
+.train-item-meta{display:flex;flex-direction:column;gap:2px;}
+.train-item-meta .ti-name{font-size:13.5px;font-weight:600;color:var(--text);line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none;}
+.train-item-meta .ti-route{font-size:11.5px;color:var(--muted);letter-spacing:.02em;}
+.ti-when{display:flex;flex-direction:column;align-items:flex-end;gap:4px;line-height:1.2;}
+.when-chip{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;border-radius:7px;padding:3px 7px;white-space:nowrap;}
+.when-chip.today{background:#DCFCE7;color:#166534;}
+.when-chip.recent{background:#FEF3C7;color:#92400E;}
+.when-chip.old{background:#F1F5F9;color:#475569;}
+.ti-when .stale-badge{font-size:10px;}
+.ti-chev{font-size:12px;margin-left:-2px;}
+.star-btn{font-size:19px;padding:2px;}
+@media (max-width:360px){
+  .tabs-row .tab{font-size:11.5px;padding:7px 2px;}
+  .tno-badge{min-width:54px;font-size:14px;}
+}
+.train-item-meta .ti-sub{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;}
+.train-item-meta .ti-sub .ti-route{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.train-item-meta .ti-when{flex-direction:row;align-items:center;gap:5px;flex-shrink:0;}
+#trainsList > .train-item{margin-bottom:8px;}
+.when-chip.stale{background:#FEE2E2;color:#991B1B;}

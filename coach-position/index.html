@@ -72,8 +72,8 @@
     <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
     <div class="tabs-row">
       <button class="tab active" id="tabAll">All</button>
-      <button class="tab" id="tabMyStn">📍 My station</button>
-      <button class="tab" id="tabFav">★ Favourites</button>
+      <button class="tab" id="tabMyStn">📍 Station</button>
+      <button class="tab" id="tabFav">★ Saved</button>
       <button class="tab" id="tabStation">🚆 Trains</button>
     </div>
     <div class="list-meta-row">
@@ -1855,6 +1855,33 @@ async function sendPush(token, title, body) {
 })();
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
+// Compact "when" label for a list row: "Today · 19:32", "Yesterday · 17:08",
+// "28 Sep · 17:08" — the year only when it isn't this year.
+function whenChipHtml(rec) {
+  const today = todayStr();
+  const d = new Date(today);
+  d.setDate(d.getDate() - 1);
+  const yest = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const time = rec.updatedAt ? formatTime(new Date(rec.updatedAt)) : '';
+  let label, cls;
+  if (rec.date === today) { label = 'Today'; cls = 'today'; }
+  else if (rec.date === yest) { label = 'Yesterday'; cls = 'recent'; }
+  else {
+    const full = formatDateOnly(rec.date);
+    const short = rec.date.slice(0, 4) === today.slice(0, 4) ? full.replace(/ \d{4}$/, '') : full;
+    const days = Math.round((new Date(today) - new Date(rec.date)) / 86400000);
+    // One chip, not two: older entries get a warning with their age
+    return `<span class="when-chip stale" title="${days} days old">⚠ ${short} · ${days}d</span>`;
+  }
+  return `<span class="when-chip ${cls}">${label}${time ? ' · ' + time : ''}</span>`;
+}
+
+// Hide placeholder names that came in from imports ("TRAIN NAME", "-").
+function cleanTrainName(name) {
+  const n = String(name || '').trim();
+  return /^(train\s*name|-+|—|n\/?a)$/i.test(n) ? '' : n;
+}
+
 function staleBadge(isoDate) {
   const today = todayStr();
   if (isoDate >= today) return '';
@@ -1953,13 +1980,11 @@ async function renderTrainsList() {
         <button class="star-btn${isFav ? ' starred' : ''}" data-train="${cur.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
         <div class="tno-badge">${cur.trainNo}</div>
         <div class="train-item-meta">
-          ${fromTo ? `<div class="ti-route">${fromTo}</div>` : ''}
-          <div class="ti-name">${cur.trainName || '—'}</div>
-        </div>
-        <div class="ti-when">
-          <span class="ti-date">${formatDateOnly(cur.date)}</span><br>
-          <span class="ti-time">${formatTime(new Date(cur.updatedAt))}</span>
-          <span class="ti-stale">${staleBadge(cur.date)}</span>
+          <div class="ti-name">${escapeHtml(cleanTrainName(cur.trainName) || fromTo || 'Train ' + cur.trainNo)}</div>
+          <div class="ti-sub">
+            <span class="ti-route">${cleanTrainName(cur.trainName) ? escapeHtml(fromTo) : ''}</span>
+            <span class="ti-when">${whenChipHtml(cur)}</span>
+          </div>
         </div>
         <div class="ti-chev">▾</div>
       </div>
@@ -2022,9 +2047,7 @@ async function renderTrainsList() {
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
-      item.querySelector('.ti-date').textContent = formatDateOnly(rec.date);
-      item.querySelector('.ti-time').textContent = formatTime(new Date(rec.updatedAt));
-      item.querySelector('.ti-stale').innerHTML = staleBadge(rec.date);
+      item.querySelector('.ti-when').innerHTML = whenChipHtml(rec);
 
       const clEl = item.querySelector('.i-cl');
       if (confirmList.length) {
