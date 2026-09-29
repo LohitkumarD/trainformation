@@ -1850,7 +1850,12 @@ async function populateShareCapture(d) {
     ? `${d.fromStation} → ${d.toStation}`
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
-  const _rev = await getReversalStations(d.trainNo);
+  // Capped so a slow/offline Firestore read can't leave Share hanging;
+  // falls back to no reversal stations.
+  const _rev = await Promise.race([
+    getReversalStations(d.trainNo),
+    new Promise(res => setTimeout(() => res([]), 3000))
+  ]);
   renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation, true);
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
@@ -2357,9 +2362,19 @@ async function renderTrainsList() {
     });
 
     // Share
-    item.querySelector('.i-share').addEventListener('click', async () => {
-      await populateShareCapture(cur);
-      shareAsImage(cur.trainNo, cur.date);
+    item.querySelector('.i-share').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = '⏳ Preparing…';
+      try {
+        await populateShareCapture(cur);
+        await shareAsImage(cur.trainNo, cur.date);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
     });
 
     if (canEdit()) {
@@ -2849,7 +2864,14 @@ async function shareAsImage(trainNo, date) {
   genEl.style.display = 'block';
   brandEl.textContent = `Train ${trainNo} · coachformation.netlify.app`;
   try {
-    const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
+    // Only clone the capture card (plus <head> for styles): by default
+    // html2canvas clones the whole page — every train card and overlay —
+    // which on phones with a long list takes long enough to look frozen.
+    const keep = (el) => el === node || el.contains(node) || node.contains(el) || !!el.closest('head');
+    const canvas = await Promise.race([
+      html2canvas(node, { backgroundColor: '#1E2227', scale: 2, imageTimeout: 5000, logging: false, ignoreElements: el => !keep(el) }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('render timeout')), 20000))
+    ]);
     genEl.style.display = 'none';
     brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
