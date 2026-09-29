@@ -2252,7 +2252,8 @@ function logSearchDebounced(query) {
     // doesn't have it at all — let other users know. Shorter/longer digit
     // strings are almost always a partial/mid-typing search, not a real
     // train number, so they're ignored here to avoid noisy false requests.
-    if (found === false && /^\d{5}$/.test(q)) requestTrainAdd(q);
+    // (Not from My station: there "no match" just means it doesn't call there today.)
+    if (found === false && /^\d{5}$/.test(q) && activeTab !== 'mystn') requestTrainAdd(q);
   }, 800);
 }
 
@@ -2261,7 +2262,8 @@ $('stationCodeInput').addEventListener('input', () => {
   logSearchDebounced($('stationCodeInput').value);
 });
 $('listSearch').addEventListener('input', () => {
-  renderTrainsList();
+  if (activeTab === 'mystn') filterMyStationRows();
+  else renderTrainsList();
   logSearchDebounced($('listSearch').value);
 });
 
@@ -2282,7 +2284,9 @@ $('tabMyStn').addEventListener('click', () => {
   $('tabMyStn').classList.add('active');
   $('stationBar').classList.remove('visible');
   $('myStnBar').classList.add('visible');
-  $('listSearch').style.display = 'none';
+  $('listSearch').style.display = '';
+  $('listSearch').value = '';
+  $('listSearch').placeholder = "Search today's trains here — number, name or station…";
   $('selectToggle').style.display = 'none';
   $('myStnInput').value = getMyStation();
   renderMyStation();
@@ -2340,6 +2344,7 @@ async function renderMyStation() {
       : '<span class="stn-st st-sched">Scheduled only</span>';
     const row = document.createElement('div');
     row.className = 'train-item stn-row' + (nextIdx >= 0 && i < nextIdx ? ' stn-past' : '');
+    row.dataset.search = `${t.no} ${t.name} ${t.src} ${t.dst}`.toLowerCase();
     row.innerHTML = `
       <div class="train-item-head">
         <div class="stn-time">${escapeHtml(t.a || t.d || '')}</div>
@@ -2357,7 +2362,31 @@ async function renderMyStation() {
     });
     wrap.appendChild(row);
   });
-  if (nextIdx > 0) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+  wrap.insertAdjacentHTML('beforeend', '<div class="trains-empty stn-nomatch" style="display:none"></div>');
+  filterMyStationRows();
+  if (nextIdx > 0 && !$('listSearch').value.trim()) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+}
+
+// Filter today's list in place as the user types (no reload per keystroke).
+function filterMyStationRows() {
+  const rows = [...document.querySelectorAll('#trainsList .stn-row')];
+  if (!rows.length) return;
+  const q = ($('listSearch').value || '').trim().toLowerCase();
+  let shown = 0;
+  rows.forEach(r => {
+    const hit = !q || r.dataset.search.includes(q);
+    r.style.display = hit ? '' : 'none';
+    if (hit) shown++;
+  });
+  _lastSearchResultCount = shown;
+  $('listCount').textContent = q
+    ? `${shown} of ${rows.length} trains today`
+    : `${rows.length} train${rows.length === 1 ? '' : 's'} today`;
+  const none = document.querySelector('#trainsList .stn-nomatch');
+  if (none) {
+    none.style.display = q && !shown ? '' : 'none';
+    none.textContent = `No train matching "${q}" calls at ${getMyStation()} today.`;
+  }
 }
 
 // Expanded station row: the formation as it arrives HERE first, then the
