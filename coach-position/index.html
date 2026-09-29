@@ -617,6 +617,18 @@
   </div>
 </div>
 
+<!-- Share-image preview: fallback when the direct share is blocked because
+     the tap's user activation expired while the image was rendering -->
+<div class="overlay" id="shareImgOverlay">
+  <div class="sheet">
+    <button class="close" data-close="shareImgOverlay">✕</button>
+    <h3>Share coach position</h3>
+    <img id="shareImgPreview" alt="Coach position image" style="width:100%;max-height:55vh;object-fit:contain;border-radius:10px;display:block">
+    <button class="btn btn-primary btn-block" id="shareImgShareBtn">📤 Share image</button>
+    <button class="btn btn-secondary btn-block" id="shareImgSaveBtn">⬇ Save image</button>
+  </div>
+</div>
+
 <!-- Off-screen share capture (populated before html2canvas) -->
 <div id="shareCapture" class="share-offscreen">
   <div class="sc-banner">
@@ -2840,30 +2852,54 @@ async function shareAsImage(trainNo, date) {
     const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
     genEl.style.display = 'none';
     brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const fileName = `train-${trainNo}-${date}.png`;
-      const file = new File([blob], fileName, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({
-          files: [file],
-          title: `Train ${trainNo} coach position`,
-          text: `Train ${trainNo} coach position — check more trains:\nhttps://coachformation.netlify.app`
-        }).catch(() => {});
-        return;
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) { toast("Couldn't create image"); return; }
+    const fileName = `train-${trainNo}-${date}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+    const shareData = {
+      files: [file],
+      title: `Train ${trainNo} coach position`,
+      text: `Train ${trainNo} coach position — check more trains:\nhttps://coachformation.netlify.app`
+    };
+    const canShareFile = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    if (canShareFile) {
+      try { await navigator.share(shareData); return; }
+      catch (err) {
+        if (err && err.name === 'AbortError') return; // user closed the share sheet
+        // Usually NotAllowedError: the tap's user activation expired while the
+        // record lookup + html2canvas render ran. Fall through to the preview,
+        // whose Share button supplies a fresh tap.
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName; a.click();
-      URL.revokeObjectURL(url);
-      toast('Image saved — share it from your gallery');
-    });
+    }
+    openShareImagePreview(blob, fileName, canShareFile ? shareData : null);
   } catch (e) {
     genEl.style.display = 'none';
     brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
     toast("Couldn't create image");
   }
 }
+
+let _shareImg = null;
+function openShareImagePreview(blob, fileName, shareData) {
+  if (_shareImg) URL.revokeObjectURL(_shareImg.url);
+  _shareImg = { blob, fileName, shareData, url: URL.createObjectURL(blob) };
+  $('shareImgPreview').src = _shareImg.url;
+  $('shareImgShareBtn').style.display = shareData ? '' : 'none';
+  showOverlay('shareImgOverlay');
+}
+function saveShareImage() {
+  if (!_shareImg) return;
+  const a = document.createElement('a');
+  a.href = _shareImg.url; a.download = _shareImg.fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Image saved — share it from your gallery');
+}
+$('shareImgShareBtn').addEventListener('click', async () => {
+  if (!_shareImg || !_shareImg.shareData) return;
+  try { await navigator.share(_shareImg.shareData); hideOverlay('shareImgOverlay'); }
+  catch (err) { if (!err || err.name !== 'AbortError') { toast("Share failed — saving image instead"); saveShareImage(); } }
+});
+$('shareImgSaveBtn').addEventListener('click', saveShareImage);
 
 // ─── Submit sheet ─────────────────────────────────────────────────────────────
 function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
