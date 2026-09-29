@@ -297,8 +297,9 @@
       </div>
     </div>
     <div>
-      <label class="field-label">Date</label>
+      <label class="field-label">Journey date</label>
       <input type="date" id="sDate">
+      <p class="hint" id="sDateHint">The day the train left its origin station.</p>
     </div>
     <div>
       <label class="field-label">Formation seen at (station code)</label>
@@ -2379,18 +2380,21 @@ async function renderMyStation() {
   const dayStr = isoDate(day);
   const isToday = _myStnOffset === 0;
   wrap.innerHTML = `<div class="trains-empty">Loading trains at ${escapeHtml(code)}…</div>`;
-  const [board, dayRecs, latest] = await Promise.all([
+  // Positions are dated by journey date (day the train left its origin), so a
+  // train reaching here on day 2/3 of its run was entered 1–2 days earlier.
+  const recDates = [dayStr, addDays(dayStr, -1), addDays(dayStr, -2)];
+  const [board, latest, ...recLists] = await Promise.all([
     getStationBoard(code),
-    getRecordsForDate(dayStr),
     getAllTrains('').catch(() => []),
+    ...recDates.map(getRecordsForDate),
   ]);
   if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
   if (!board) {
     wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
     return;
   }
-  const recOnDay = {};
-  dayRecs.forEach(r => { recOnDay[r.trainNo] = r; });
+  const recOn = {}; // date → trainNo → record
+  recDates.forEach((d, i) => { recOn[d] = {}; recLists[i].forEach(r => { recOn[d][r.trainNo] = r; }); });
   const lastRec = {};
   latest.forEach(r => { if (r.date <= dayStr) lastRec[r.trainNo] = r; });
   const list = trainsOnDate(board, day);
@@ -2405,10 +2409,11 @@ async function renderMyStation() {
   if (!list.length) { wrap.insertAdjacentHTML('beforeend', `<div class="trains-empty">No trains call here ${word}.</div>`); return; }
 
   list.forEach((t, i) => {
-    const rec = recOnDay[t.no] || null;
+    const jd = journeyDateFor(dayStr, t.ad || t.dd || 1);
+    const rec = (recOn[jd] && recOn[jd][t.no]) || null;
     const last = rec || lastRec[t.no] || null;
     const status = rec ? '<span class="stn-st st-today">✓ Position entered</span>'
-      : last ? `<span class="stn-st st-old">Last: ${formatDateOnly(last.date)}</span>`
+      : last ? `<span class="stn-st st-old">Last: ${relDayLabel(last.date)}</span>`
       : '<span class="stn-st st-sched">Scheduled only</span>';
     const row = document.createElement('div');
     row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '');
@@ -2426,13 +2431,23 @@ async function renderMyStation() {
       <div class="train-item-body stn-body"></div>`;
     row.querySelector('.train-item-head').addEventListener('click', () => {
       const open = row.classList.toggle('open');
-      if (open && !row.dataset.loaded) { row.dataset.loaded = '1'; fillStationTrain(row.querySelector('.stn-body'), t, rec, last, code, dayStr); }
+      if (open && !row.dataset.loaded) { row.dataset.loaded = '1'; fillStationTrain(row.querySelector('.stn-body'), t, rec, last, code, jd, dayStr); }
     });
     wrap.appendChild(row);
   });
   wrap.insertAdjacentHTML('beforeend', '<div class="trains-empty stn-nomatch" style="display:none"></div>');
   filterMyStationRows();
   if (nextIdx > 0 && !$('listSearch').value.trim()) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+}
+
+// "Today" / "Yesterday" / "Tomorrow" / "10 Sep" (year only if not this year).
+function relDayLabel(date) {
+  const today = todayStr();
+  if (date === today) return 'Today';
+  if (date === addDays(today, -1)) return 'Yesterday';
+  if (date === addDays(today, 1)) return 'Tomorrow';
+  const full = formatDateOnly(date);
+  return date.slice(0, 4) === today.slice(0, 4) ? full.replace(/ \d{4}$/, '') : full;
 }
 
 // Filter the day's list in place as the user types (no reload per keystroke).
@@ -2463,7 +2478,10 @@ function filterMyStationRows() {
 //   rec  — position saved for the chosen day (or null)
 //   last — the most recent saved position up to that day (shown when rec is
 //          missing, labelled with its date)
-async function fillStationTrain(body, t, rec, last, code, dayStr) {
+//   jd         — journey date of this run (day it left its origin)
+//   stationDay — the date it calls at this station (differs for overnight trains)
+async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
+  const dayStr = jd;
   body.innerHTML = '<div class="trains-empty" style="padding:14px 0">Loading formation…</div>';
   const [info, rev] = await Promise.all([getTrainInfo(t.no), getReversalStations(t.no).catch(() => [])]);
   const shown = rec || last;
@@ -2472,7 +2490,8 @@ async function fillStationTrain(body, t, rec, last, code, dayStr) {
   const model = buildLegsModel(rec ? base : { ...base, extras: [] }, rev || [], info, null);
   const halt = info && info.halts.find(h => h.c === code);
   body.innerHTML = '';
-  if (!rec && last) body.insertAdjacentHTML('beforeend', `<div class="stn-note">Showing the last saved position (${formatDateOnly(last.date)}) — nobody has entered ${formatDateOnly(dayStr)} yet.</div>`);
+  if (jd !== stationDay) body.insertAdjacentHTML('beforeend', `<div class="stn-journey-note">🌙 Journey started ${formatDateOnly(jd)} from ${escapeHtml(t.src)} · reaches ${escapeHtml(code)} ${formatDateOnly(stationDay)} at ${escapeHtml(t.a || t.d || '')}</div>`);
+  if (!rec && last) body.insertAdjacentHTML('beforeend', `<div class="stn-note">Showing the last saved position (${relDayLabel(last.date)}) — nobody has entered the ${formatDateOnly(jd)} journey yet.</div>`);
   if (!model.legs.length) {
     body.insertAdjacentHTML('beforeend', '<div class="trains-empty" style="padding:14px 0">No formation available yet.</div>');
   } else {
@@ -2514,11 +2533,13 @@ async function fillStationTrain(body, t, rec, last, code, dayStr) {
     btns.appendChild(b);
   }
   // Positions are entered for today or yesterday — not for a day that hasn't happened
-  if (canEdit() && _myStnOffset <= 0) {
+  // Positions can be entered once the journey has started (its journey date
+  // isn't in the future) — e.g. tomorrow's 00:15 arrival of tonight's train.
+  if (canEdit() && jd <= todayStr()) {
     const b = document.createElement('button');
     b.className = 'btn btn-primary';
-    const word = myStnDayWord();
-    b.textContent = rec ? `✎ Update ${word}'s position` : `+ Enter ${word}'s position`;
+    const when = jd === stationDay ? `${myStnDayWord()}'s` : `the ${formatDateOnly(jd).replace(/ \d{4}$/, '')} journey's`;
+    b.textContent = rec ? `✎ Update ${when} position` : `+ Enter ${when} position`;
     b.addEventListener('click', () => openSubmit(t.no, dayStr, t.name, rec ? rec.rawList : '', t.src, t.dst));
     btns.appendChild(b);
   }
@@ -2911,6 +2932,7 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   $('sTrainNo').value = trainNo || '';
   $('sTrainName').value = trainName || '';
   $('sDate').value = date || todayStr();
+  $('sDate').dataset.auto = date ? '' : '1'; // no date given → suggest the journey date
   $('sFromStation').value = fromStation || '';
   $('sToStation').value = toStation || '';
   $('sList').value = stripEngRaw(rawList || '');
@@ -2930,16 +2952,22 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
 let _submitInfo = null;
 async function loadSubmitRouteInfo() {
   const trainNo = $('sTrainNo').value.trim();
-  const date = $('sDate').value || todayStr();
   _submitInfo = null;
   $('sHaltList').innerHTML = '';
   updateSeenHint();
   if (!/^\d{5}$/.test(trainNo)) return;
-  const [info, existing] = await Promise.all([
-    getTrainInfo(trainNo).catch(() => null),
-    getTrainRecord(`${trainNo}_${date}`).catch(() => null),
-  ]);
+  const info = await getTrainInfo(trainNo).catch(() => null);
   if ($('sTrainNo').value.trim() !== trainNo) return; // form changed meanwhile
+  // Work out the "seen at" station before the date: an overnight train is
+  // dated by the day it left its origin, which depends on where it's seen.
+  if (!$('sSeenAt').value && info) {
+    const mine = (currentUser && currentUser.station || '').toUpperCase();
+    if (legOfStation(info, mine) !== null) $('sSeenAt').value = mine;
+  }
+  applySuggestedJourneyDate(info);
+  const date = $('sDate').value || todayStr();
+  const existing = await getTrainRecord(`${trainNo}_${date}`).catch(() => null);
+  if ($('sTrainNo').value.trim() !== trainNo) return;
   _submitInfo = info;
   if (info) {
     $('sHaltList').innerHTML = info.halts.map(h =>
@@ -2963,6 +2991,23 @@ async function loadSubmitRouteInfo() {
     $('sExtraBox').open = true;
   }
   updateSeenHint();
+}
+
+// Positions are dated by the journey date (day the train left its origin).
+// For a train that reaches the "seen at" station after midnight, pick the
+// journey whose call there is nearest — unless the date was set explicitly.
+function applySuggestedJourneyDate(info) {
+  const at = $('sSeenAt').value.trim().toUpperCase();
+  const halt = info && info.halts.find(h => h.c === at);
+  const day = halt ? (halt.ad || halt.dd || 1) : 1;
+  const time = halt ? (halt.a || halt.d) : null;
+  if ($('sDate').dataset.auto === '1' && halt && day > 1) {
+    $('sDate').value = suggestJourneyDate(day, time);
+  }
+  const jd = $('sDate').value;
+  $('sDateHint').textContent = halt && day > 1 && jd
+    ? `Journey started ${formatDateOnly(jd)} from ${info.src} · reaches ${at} on ${formatDateOnly(addDays(jd, day - 1))} at ${time}`
+    : 'The day the train left its origin station.';
 }
 
 // Which leg the "seen at" station is on — RailRadar's route first, then the
@@ -2990,9 +3035,11 @@ function updateSeenHint() {
   }
   $('sSeenHint').textContent = msg;
 }
-$('sSeenAt').addEventListener('input', updateSeenHint);
+$('sSeenAt').addEventListener('input', () => { updateSeenHint(); applySuggestedJourneyDate(_submitInfo); });
 $('sTrainNo').addEventListener('change', loadSubmitRouteInfo);
-$('sDate').addEventListener('change', loadSubmitRouteInfo);
+// A date picked by hand is kept as is
+$('sDate').addEventListener('input', () => { $('sDate').dataset.auto = ''; });
+$('sDate').addEventListener('change', () => { $('sDate').dataset.auto = ''; loadSubmitRouteInfo(); });
 $('fabAdd').addEventListener('click', () => openSubmit());
 $('sList').addEventListener('input', renderPreview);
 
