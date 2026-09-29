@@ -317,8 +317,6 @@
   .diff-line.diff-same{background:#DCFCE7;color:#166534;}
   .diff-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#DC2626;vertical-align:middle;margin-right:2px;}
   .share-offscreen .diff-line{font-size:15px;padding:8px 12px;margin-top:12px;}
-  .offline-bar{display:none;background:#374151;color:#fff;font-size:12.5px;font-weight:600;text-align:center;padding:7px 12px;}
-  .offline-bar.show{display:block;}
   .share-offscreen{
     position:fixed;left:-9999px;top:0;width:720px;
     background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
@@ -568,7 +566,6 @@
     </div>
     <button class="me" id="meBtn">👤 <span id="meLabel">...</span></button>
   </header>
-<div class="offline-bar" id="offlineBar">📴 Offline — showing trains saved on this phone. Updates will sync when you're back online.</div>
 
   <div class="list-header">
     <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
@@ -956,12 +953,6 @@ async function loadOpenTrainRequests() {
 }
 loadOpenTrainRequests();
 
-
-// ─── Offline banner ───────────────────────────────────────────────────────────
-function updateOfflineBar() { document.getElementById('offlineBar').classList.toggle('show', !navigator.onLine); }
-window.addEventListener('online', updateOfflineBar);
-window.addEventListener('offline', updateOfflineBar);
-updateOfflineBar();
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
 // Firestore's offline cache (enablePersistence) answers straight away when the
