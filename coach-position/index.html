@@ -310,6 +310,13 @@
   /* Shared image is laid out wide (720px) so each formation takes fewer rows:
      WhatsApp shrinks photos to ~1600px on the long side, so a tall, narrow
      card ends up only ~300px wide and blurry. */
+  .tcoach.tchg .t-pos{background:#DC2626;color:#fff;border-radius:6px;padding:2px 6px;}
+  .tcoach.tchg .t-body{box-shadow:0 0 0 2px #fff,0 0 0 4px #DC2626;}
+  .diff-line{font-size:12.5px;font-weight:700;border-radius:8px;padding:6px 10px;margin:4px 0 2px;}
+  .diff-line.diff-chg{background:#FEE2E2;color:#991B1B;}
+  .diff-line.diff-same{background:#DCFCE7;color:#166534;}
+  .diff-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#DC2626;vertical-align:middle;margin-right:2px;}
+  .share-offscreen .diff-line{font-size:15px;padding:8px 12px;margin-top:12px;}
   .offline-bar{display:none;background:#374151;color:#fff;font-size:12.5px;font-weight:600;text-align:center;padding:7px 12px;}
   .offline-bar.show{display:block;}
   .share-offscreen{
@@ -669,6 +676,7 @@
     <div class="sc-bsum" id="rSummary"></div>
   </div>
   <div class="sc-body">
+    <div class="diff-line" id="rDiff" style="display:none"></div>
     <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
     <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
     <div class="confirm-line" id="rConfirmLine"></div>
@@ -1353,7 +1361,7 @@ function engineSVG() {
   </svg>`;
 }
 
-function renderTrainStrip(container, codes) {
+function renderTrainStrip(container, codes, changed) {
   container.classList.add('train-strip');
   container.innerHTML = '';
   const mk = (html) => {
@@ -1379,7 +1387,7 @@ function renderTrainStrip(container, codes) {
       return;
     }
     container.appendChild(mk(
-      `<div class="tcoach ${classOf(code)}">
+      `<div class="tcoach ${classOf(code)}${changed && changed[i] ? ' tchg' : ''}">
         <div class="t-pos">${i + 1}</div>
         <div class="t-body"><div class="t-win"></div><div class="t-win"></div><div class="t-door"></div><div class="t-win"></div></div>
         <div class="t-wheels"><div class="t-wheel"></div><div class="t-wheel"></div></div>
@@ -1411,6 +1419,87 @@ function reverseFormation(codes) {
     : [...codes].reverse();
 }
 
+// Reverse a per-coach array (e.g. changed flags) exactly as reverseFormation
+// reverses the matching codes, so flags stay attached to their coaches.
+function reverseAligned(codes, arr) {
+  if (!arr) return arr;
+  return codes.length && String(codes[0]).toUpperCase() === 'ENG'
+    ? [arr[0], ...arr.slice(1).reverse()]
+    : [...arr].reverse();
+}
+
+// Which coaches in `curr` differ from `prev`. Uses the longest common
+// subsequence so one inserted/removed coach doesn't flag every coach after it.
+// Returns { changed: bool per coach in curr, removed: codes only in prev }.
+function lcsDiff(prev, curr) {
+  const a = prev.map(c => String(c).toUpperCase());
+  const b = curr.map(c => String(c).toUpperCase());
+  const n = a.length, m = b.length;
+  const L = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const changed = new Array(m).fill(false), removed = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { i++; j++; }
+    else if (L[i + 1][j] >= L[i][j + 1]) removed.push(prev[i++]);
+    else changed[j++] = true;
+  }
+  while (i < n) removed.push(prev[i++]);
+  while (j < m) changed[j++] = true;
+  return { changed, removed };
+}
+
+// Compare a formation with the previous one. If the same rake was simply
+// entered from the other end, report that instead of flagging every coach.
+function diffFormation(prev, curr) {
+  const direct = { ...lcsDiff(prev, curr), codes: curr };
+  const count = d => d.changed.filter(Boolean).length + d.removed.length;
+  if (count(direct) === 0) return { ...direct, same: true, reversed: false };
+  const rev = { ...lcsDiff(reverseFormation(prev), curr), codes: curr };
+  if (count(rev) === 0) return { ...rev, same: true, reversed: true };
+  return { ...direct, same: false, reversed: false };
+}
+
+// Most recent saved record for this train before `date` (looks back 10 days).
+const _prevCache = {};
+function getPreviousRecord(trainNo, date) {
+  const key = `${trainNo}_${date}`;
+  if (!_prevCache[key]) {
+    const [y, mo, d] = String(date).split('-').map(Number);
+    const keys = [];
+    for (let i = 1; i <= 10; i++) {
+      const dt = new Date(y, mo - 1, d - i);
+      keys.push(`${trainNo}_${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`);
+    }
+    _prevCache[key] = Promise.all(keys.map(k => getTrainRecord(k).catch(() => null)))
+      .then(recs => recs.find(r => r && r.parsedList && r.parsedList.length) || null);
+  }
+  return _prevCache[key];
+}
+
+// Fill a "changed since <date>" summary line; hidden when there's nothing to compare.
+function renderDiffLine(el, diff, prev) {
+  if (!el) return;
+  if (!diff || !prev) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const when = formatDateOnly(prev.date);
+  el.style.display = 'block';
+  if (diff.same) {
+    el.className = el.className.replace(/\bdiff-(same|chg)\b/g, '').trim() + ' diff-same';
+    el.textContent = diff.reversed
+      ? `✓ Same coaches as ${when}, entered from the other end`
+      : `✓ Same formation as ${when}`;
+    return;
+  }
+  el.className = el.className.replace(/\bdiff-(same|chg)\b/g, '').trim() + ' diff-chg';
+  const moved = diff.changed.map((c, i) => c ? diff.codes[i] : null).filter(Boolean);
+  const parts = [];
+  if (moved.length) parts.push(`new/moved: ${moved.map(escapeHtml).join(', ')}`);
+  if (diff.removed.length) parts.push(`removed: ${diff.removed.map(escapeHtml).join(', ')}`);
+  el.innerHTML = `<span class="diff-dot"></span> Changed since ${escapeHtml(when)} — ${parts.join(' · ')}`;
+}
+
 // Render formation with reversal stations into a container (NTES style):
 // first leg strip, then one highlighted collapsible block per reversal
 // station showing Arrival and Departure formations at that station.
@@ -1431,14 +1520,15 @@ const LEG0_COLOUR = { c: '#D97706', dark: '#92400E', soft: '#FEF3E2' };
 // divider between legs. Unlike the in-app view it doesn't repeat the arrival
 // formation (it's identical to the previous leg), so the image stays short.
 // Leg n+1 uses reversal station n's colour, matching the in-app blocks.
-function renderShareLegs(container, parsedList, revStations, fromStation, toStation) {
+function renderShareLegs(container, parsedList, revStations, fromStation, toStation, changed) {
   container.classList.remove('train-strip');
   container.innerHTML = '';
   const stops = [fromStation || 'ORIGIN', ...revStations, toStation || 'DESTINATION'];
-  let codes = parsedList;
+  let codes = parsedList, flags = changed;
   for (let i = 0; i < stops.length - 1; i++) {
     const col = i === 0 ? LEG0_COLOUR : REV_COLOURS[(i - 1) % REV_COLOURS.length];
     if (i > 0) {
+      flags = reverseAligned(codes, flags);
       codes = reverseFormation(codes);
       const div = document.createElement('div');
       div.className = 'sc-rev';
@@ -1452,23 +1542,23 @@ function renderShareLegs(container, parsedList, revStations, fromStation, toStat
     leg.style.setProperty('--rv-dark', col.dark);
     leg.style.setProperty('--rv-soft', col.soft);
     leg.innerHTML = `<div class="sc-leg-hd"><span class="sc-leg-no">LEG ${i + 1}</span><span class="sc-leg-route">${escapeHtml(stops[i])} → ${escapeHtml(stops[i + 1])}</span></div><div class="sc-leg-strip"></div>`;
-    renderTrainStrip(leg.querySelector('.sc-leg-strip'), codes);
+    renderTrainStrip(leg.querySelector('.sc-leg-strip'), codes, flags);
     container.appendChild(leg);
   }
 }
 
-function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll) {
+function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll, changed) {
   if (!revStations || !revStations.length) {
-    renderTrainStrip(container, parsedList);
+    renderTrainStrip(container, parsedList, changed);
     return;
   }
   container.classList.remove('train-strip');
   container.innerHTML = '';
 
-  const stripEl = (codes) => {
+  const stripEl = (codes, flags) => {
     const strip = document.createElement('div');
     strip.className = 'strip';
-    renderTrainStrip(strip, codes);
+    renderTrainStrip(strip, codes, flags);
     return strip;
   };
 
@@ -1477,14 +1567,15 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
   firstHd.className = 'seg-hd';
   firstHd.textContent = `${fromStation || 'ORIGIN'} → ${revStations[0]}`;
   container.appendChild(firstHd);
-  container.appendChild(stripEl(parsedList));
+  container.appendChild(stripEl(parsedList, changed));
 
   // One highlighted, collapsible block per reversal station, each in its own
   // colour so it's obvious which station a formation belongs to. Plain hex
   // values (no color-mix) so html2canvas renders them in the shared image.
-  let codes = parsedList;
+  let codes = parsedList, flags = changed;
   revStations.forEach((stn, i) => {
-    const before = codes;
+    const before = codes, beforeFlags = flags;
+    flags = reverseAligned(codes, flags);
     codes = reverseFormation(codes);
     const nextPoint = revStations[i + 1] || toStation || 'DESTINATION';
 
@@ -1507,8 +1598,8 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
         <div class="_rv-dep"></div>
       </div>
     `;
-    block.querySelector('._rv-arr').appendChild(stripEl(before));
-    block.querySelector('._rv-dep').appendChild(stripEl(codes));
+    block.querySelector('._rv-arr').appendChild(stripEl(before, beforeFlags));
+    block.querySelector('._rv-dep').appendChild(stripEl(codes, flags));
     block.querySelector('.rev-bar').addEventListener('click', (e) => {
       e.stopPropagation();
       block.classList.toggle('open');
@@ -1956,9 +2047,16 @@ async function populateShareCapture(d) {
     getReversalStations(d.trainNo),
     new Promise(res => setTimeout(() => res([]), 3000))
   ]);
+  const prev = await Promise.race([
+    getPreviousRecord(d.trainNo, d.date).catch(() => null),
+    new Promise(res => setTimeout(() => res(null), 3000))
+  ]);
+  const diff = prev ? diffFormation(prev.parsedList, d.parsedList || []) : null;
+  const chg = diff && !diff.same ? diff.changed : null;
+  renderDiffLine($('rDiff'), diff, prev);
   const strip = $('rStrip');
-  if (_rev && _rev.length) renderShareLegs(strip, d.parsedList || [], _rev, d.fromStation, d.toStation);
-  else renderFormationSegments(strip, d.parsedList || [], _rev, d.fromStation, d.toStation, true);
+  if (_rev && _rev.length) renderShareLegs(strip, d.parsedList || [], _rev, d.fromStation, d.toStation, chg);
+  else renderFormationSegments(strip, d.parsedList || [], _rev, d.fromStation, d.toStation, true, chg);
   const nCoaches = (d.parsedList || []).filter(c => String(c).toUpperCase() !== 'ENG').length;
   $('rSummary').textContent = `${nCoaches} coaches` +
     (_rev && _rev.length ? ` · reverses at ${_rev.join(', ')}` : '');
@@ -2347,6 +2445,7 @@ async function renderTrainsList() {
             </div>
             <div class="inline-date i-date">${formatDateOnly(cur.date)}</div>
           </div>
+          <div class="diff-line i-diff" style="display:none"></div>
           <div class="strip-wrap"><div class="strip i-strip"></div></div>
           <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
           <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
@@ -2373,12 +2472,22 @@ async function renderTrainsList() {
         ? `(${rec.submittedByPhone.slice(-4)})`
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
-      renderTrainStrip(item.querySelector('.i-strip'), rec.parsedList || []);
-      // Upgrade to multi-segment view if this train has reversal stations
-      getReversalStations(rec.trainNo).then(rev => {
-        if (!rev.length || cur !== rec) return;
-        renderFormationSegments(item.querySelector('.i-strip'), rec.parsedList || [], rev, rec.fromStation, rec.toStation);
-      });
+      // Draw now, then redraw once reversal stations and the comparison with
+      // the previous saved formation have loaded.
+      let rev = [], chg = null;
+      const draw = () => {
+        if (cur !== rec) return;
+        renderFormationSegments(item.querySelector('.i-strip'), rec.parsedList || [], rev, rec.fromStation, rec.toStation, false, chg);
+      };
+      draw();
+      getReversalStations(rec.trainNo).then(r => { if (r.length) { rev = r; draw(); } });
+      renderDiffLine(item.querySelector('.i-diff'), null, null);
+      getPreviousRecord(rec.trainNo, rec.date).then(prev => {
+        if (cur !== rec) return;
+        const diff = prev ? diffFormation(prev.parsedList, rec.parsedList || []) : null;
+        renderDiffLine(item.querySelector('.i-diff'), diff, prev);
+        if (diff && !diff.same) { chg = diff.changed; draw(); }
+      }).catch(() => {});
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;

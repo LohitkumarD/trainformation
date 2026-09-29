@@ -14,7 +14,7 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
-console.log('[sw] loaded, cache = coach-position-v64');
+console.log('[sw] loaded, cache = coach-position-v65');
 
 // Fires for every push the browser delivers, before Firebase's own handling —
 // confirms whether the push even reaches this worker at all.
@@ -43,7 +43,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v64';
+const CACHE = 'coach-position-v65';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 // Third-party scripts/fonts the app can't start without. Their URLs are
