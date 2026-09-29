@@ -498,3 +498,21 @@ select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);
 .st-cp-label.add{color:var(--teal);font-weight:600;}
 .scan-result-card{background:var(--surface-2);border-radius:8px;padding:10px;margin-bottom:8px;}
 
+
+/* ── Journey legs: where each formation came from, extra coaches ─────────── */
+.src-tag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:800;letter-spacing:.04em;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle;text-transform:none;}
+.src-seen{background:#DCFCE7;color:#166534;}
+.src-derived{background:#E0E7FF;color:#3730A3;}
+.src-sched{background:#F1F5F9;color:#475569;border:1px dashed #94A3B8;}
+.sc-leg-hd .src-tag{margin-left:auto;font-size:12px;}
+.extra-note{background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;border-radius:8px;font-size:12px;font-weight:700;padding:6px 10px;margin:8px 0;}
+.sc-extra-note{display:inline-block;margin-top:6px;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;border-radius:8px;font-size:13px;font-weight:700;padding:5px 12px;}
+/* Sick / repair / empty coaches: grey with a dashed outline (plain colours so
+   html2canvas paints them in the shared image) */
+.tcoach.xtra{--tc1:#CBD5E1;--tc2:#94A3B8;}
+.tcoach.xtra .t-body{border-style:dashed;}
+.tcoach.xtra .t-lbl{color:#64748B;}
+.extra-box{border:1px dashed var(--border, #CBD5E1);border-radius:10px;padding:8px 12px;}
+.extra-box summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);}
+.extra-box[open] summary{margin-bottom:8px;}
+.extra-box select{width:100%;}

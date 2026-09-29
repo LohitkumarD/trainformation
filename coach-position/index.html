@@ -290,6 +290,36 @@
       <label class="field-label">Date</label>
       <input type="date" id="sDate">
     </div>
+    <div>
+      <label class="field-label">Formation seen at (station code)</label>
+      <input id="sSeenAt" placeholder="e.g. RNR" autocomplete="off" list="sHaltList" style="text-transform:uppercase">
+      <p class="hint" id="sSeenHint">Enter coaches in the order you see them, starting from the engine.</p>
+    </div>
+    <datalist id="sHaltList"></datalist>
+    <details class="extra-box" id="sExtraBox">
+      <summary>➕ Extra coaches attached today? (sick / repair / empty)</summary>
+      <div class="row">
+        <div style="flex:1">
+          <label class="field-label">Attached at (station)</label>
+          <input id="sExtraAt" placeholder="e.g. UBL" autocomplete="off" list="sHaltList" style="text-transform:uppercase">
+        </div>
+        <div style="width:90px">
+          <label class="field-label">How many</label>
+          <input id="sExtraCount" type="number" min="0" max="10" value="0" inputmode="numeric">
+        </div>
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <label class="field-label">Where</label>
+          <select id="sExtraEnd"><option value="engine">Behind the engine</option><option value="rear">At the rear</option></select>
+        </div>
+        <div style="flex:1">
+          <label class="field-label">Type</label>
+          <select id="sExtraKind"><option value="SICK">Sick / repair</option><option value="EMPTY">Empty</option><option value="XTRA">Other (not for passengers)</option></select>
+        </div>
+      </div>
+      <p class="hint">These are added only for this date, from that station onward. Positions after them shift.</p>
+    </details>
     <!-- Copy from previous formation hint -->
     <div class="copy-box" id="sCopyBox">
       <div class="copy-box-label">📋 PREVIOUS FORMATION FOUND — <span id="sCopyDate"></span></div>
@@ -836,15 +866,64 @@ function renderTrainStrip(container, codes, changed) {
 // ENG never reverses — only the coaches from position 2 onwards flip at each
 // reversal station. Reversal stations are set per train in the admin panel.
 const _revCache = {};
+// Admin-set reversal stations win; otherwise RailRadar's (see getTrainInfo).
 async function getReversalStations(trainNo) {
   const key = String(trainNo);
   if (_revCache[key] !== undefined) return _revCache[key];
+  let admin = [];
   try {
     const doc = await getFast(db.collection('trains').doc(key));
     const d = doc.exists ? doc.data() : null;
-    _revCache[key] = (d && Array.isArray(d.reversalStations)) ? d.reversalStations : [];
-  } catch { _revCache[key] = []; }
-  return _revCache[key];
+    if (d && Array.isArray(d.reversalStations)) admin = d.reversalStations;
+  } catch { /* fall through to RailRadar */ }
+  if (!admin.length) {
+    const info = await getTrainInfo(key);
+    if (info && info.reversalStations.length) admin = info.reversalStations;
+  }
+  _revCache[key] = admin;
+  return admin;
+}
+
+// ─── RailRadar data (via the rail-info function + Firestore cache) ──────────
+// Reads the shared cache doc directly (fast, works offline once seen); only
+// asks the function — which refreshes the cache from RailRadar — when the
+// doc is missing or stale. One promise per key so parallel callers share it.
+const _rrCache = {};
+function getRailCached(collection, id, param, ttlDays) {
+  const key = `${collection}/${id}`;
+  if (_rrCache[key]) return _rrCache[key];
+  _rrCache[key] = (async () => {
+    let stale = null;
+    try {
+      const snap = await getFast(db.collection(collection).doc(id));
+      if (snap.exists) {
+        const d = snap.data();
+        const data = d.json ? JSON.parse(d.json) : null;
+        if (data && Date.now() - Number(d.fetchedAt || 0) < ttlDays * 86400000) return data;
+        stale = data;
+      }
+    } catch (_) { /* rules not deployed yet or offline — ask the function */ }
+    if (!navigator.onLine) return stale;
+    try {
+      const res = await fetch(`/.netlify/functions/rail-info?${param}=${encodeURIComponent(id)}`);
+      if (res.ok) {
+        const j = await res.json();
+        if (j && j.data) return j.data;
+      }
+    } catch (_) { /* network — use whatever we had */ }
+    return stale;
+  })();
+  // Don't pin a failure: let the next caller try again.
+  _rrCache[key].then(v => { if (!v) delete _rrCache[key]; });
+  return _rrCache[key];
+}
+function getTrainInfo(trainNo) {
+  const no = String(trainNo || '').trim();
+  return /^\d{5}$/.test(no) ? getRailCached('rr_trains', no, 'train', 30) : Promise.resolve(null);
+}
+function getStationBoard(code) {
+  const c = String(code || '').trim().toUpperCase();
+  return /^[A-Z]{2,7}$/.test(c) ? getRailCached('rr_stations', c, 'board', 7) : Promise.resolve(null);
 }
 
 
@@ -895,69 +974,123 @@ function renderDiffLine(el, diff, prev) {
 // No reversals → single strip, same as before.
 
 
-// Shared-image layout: one card per leg of the journey, with a "reverses at"
-// divider between legs. Unlike the in-app view it doesn't repeat the arrival
-// formation (it's identical to the previous leg), so the image stays short.
-// Leg n+1 uses reversal station n's colour, matching the in-app blocks.
-function renderShareLegs(container, parsedList, revStations, fromStation, toStation, changed) {
+// "Changed since last time" flags for a record, in the order it was entered.
+// Two days may have been entered on different legs (e.g. before and after a
+// reversal), so both are compared in first-leg order first.
+function changedFlagsFor(rec, prev) {
+  if (!prev || !prev.parsedList || !rec.parsedList) return { diff: null, flags: null };
+  const firstLeg = (r) => ((r.seenLeg || 0) % 2 ? reverseFormation(r.parsedList) : r.parsedList);
+  const cur0 = firstLeg(rec);
+  const diff = diffFormation(firstLeg(prev), cur0);
+  if (diff.same) return { diff, flags: null };
+  const flags = (rec.seenLeg || 0) % 2 ? reverseAligned(cur0, diff.changed) : diff.changed;
+  return { diff: { ...diff, changed: flags, codes: rec.parsedList }, flags };
+}
+
+// Build the per-leg formations for a record: RailRadar's schedule when we
+// have it (and it agrees with any admin-set reversal list), the staff entry
+// placed on the leg it was seen on, and today's extra coaches.
+function buildLegsModel(rec, rev, info, changed) {
+  const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+  const sched = info && (!rev.length || sameSet(rev, info.reversalStations)) ? info : null;
+  return computeLegs({
+    entry: rec.parsedList || [],
+    seenLeg: rec.seenLeg || 0,
+    sched,
+    revStations: rev || [],
+    from: rec.fromStation || (info && info.src) || '',
+    to: rec.toStation || (info && info.dst) || '',
+    changed,
+    extras: rec.extras || [],
+  });
+}
+
+// Small label saying where a leg's formation came from.
+function legSourceTag(leg, rec) {
+  if (!leg) return '';
+  if (leg.source === 'seen') return `<span class="src-tag src-seen">✓ Seen${rec && rec.seenAt ? ' at ' + escapeHtml(rec.seenAt) : ''}</span>`;
+  if (leg.source === 'derived') return `<span class="src-tag src-derived">Calculated</span>`;
+  return `<span class="src-tag src-sched">Scheduled</span>`;
+}
+
+function extrasNoteHtml(ex) {
+  const n = ex.count;
+  const kind = (EXTRA_KINDS[String(ex.kind || '').toUpperCase()] || 'Extra').toLowerCase();
+  const where = ex.end === 'rear' ? 'at the rear' : 'behind the engine';
+  const shift = ex.end === 'rear' ? '' : ` — coach positions shift back by ${n}`;
+  return `⚠ ${n} extra coach${n === 1 ? '' : 'es'} (${escapeHtml(kind)}, not for passengers) added ${where} at ${escapeHtml(ex.at)}${shift}`;
+}
+
+function boundaryLabel(b) {
+  const extra = b.extras && b.extras.length;
+  if (b.type === 'reversal') return { icon: '🔄', text: extra ? 'REVERSAL + EXTRA COACHES' : 'REVERSAL STATION' };
+  if (b.type === 'change') return { icon: '🔁', text: 'FORMATION CHANGE (SCHEDULED)' };
+  return { icon: '➕', text: 'EXTRA COACHES ADDED' };
+}
+
+// Shared-image layout: one card per leg of the journey, with a divider between
+// legs saying what happens there. Unlike the in-app view it doesn't repeat the
+// arrival formation (it's identical to the previous leg), so the image stays
+// short. Leg n+1 uses boundary n's colour, matching the in-app blocks.
+function renderLegsShare(container, model, rec) {
   container.classList.remove('train-strip');
   container.innerHTML = '';
-  const stops = [fromStation || 'ORIGIN', ...revStations, toStation || 'DESTINATION'];
-  let codes = parsedList, flags = changed;
-  for (let i = 0; i < stops.length - 1; i++) {
+  const { stops, legs, boundaries } = model;
+  legs.forEach((leg, i) => {
     const col = i === 0 ? LEG0_COLOUR : REV_COLOURS[(i - 1) % REV_COLOURS.length];
     if (i > 0) {
-      flags = reverseAligned(codes, flags);
-      codes = reverseFormation(codes);
+      const b = boundaries[i - 1];
       const div = document.createElement('div');
       div.className = 'sc-rev';
       div.style.setProperty('--rv', col.c);
-      div.innerHTML = `<span class="sc-rev-pill">🔄 Reverses at ${escapeHtml(stops[i])} · coach order flips</span>`;
+      const main = b.type === 'reversal' ? `🔄 Reverses at ${escapeHtml(b.station)} · coach order flips`
+        : b.type === 'change' ? `🔁 Formation changes at ${escapeHtml(b.station)} (scheduled)`
+        : `➕ Extra coaches at ${escapeHtml(b.station)}`;
+      div.innerHTML = `<span class="sc-rev-pill">${main}</span>` +
+        (b.extras || []).map(ex => `<div class="sc-extra-note">${extrasNoteHtml(ex)}</div>`).join('');
       container.appendChild(div);
     }
-    const leg = document.createElement('div');
-    leg.className = 'sc-leg';
-    leg.style.setProperty('--rv', col.c);
-    leg.style.setProperty('--rv-dark', col.dark);
-    leg.style.setProperty('--rv-soft', col.soft);
-    leg.innerHTML = `<div class="sc-leg-hd"><span class="sc-leg-no">LEG ${i + 1}</span><span class="sc-leg-route">${escapeHtml(stops[i])} → ${escapeHtml(stops[i + 1])}</span></div><div class="sc-leg-strip"></div>`;
-    renderTrainStrip(leg.querySelector('.sc-leg-strip'), codes, flags);
-    container.appendChild(leg);
-  }
+    const el = document.createElement('div');
+    el.className = 'sc-leg';
+    el.style.setProperty('--rv', col.c);
+    el.style.setProperty('--rv-dark', col.dark);
+    el.style.setProperty('--rv-soft', col.soft);
+    el.innerHTML = `<div class="sc-leg-hd"><span class="sc-leg-no">LEG ${i + 1}</span><span class="sc-leg-route">${escapeHtml(stops[i])} → ${escapeHtml(stops[i + 1])}</span>${legSourceTag(leg, rec)}</div><div class="sc-leg-strip"></div>`;
+    renderTrainStrip(el.querySelector('.sc-leg-strip'), leg.codes, leg.flags);
+    container.appendChild(el);
+  });
 }
 
-function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll, changed) {
-  if (!revStations || !revStations.length) {
-    renderTrainStrip(container, parsedList, changed);
+// In-app layout (NTES style): first leg, then one highlighted collapsible
+// block per change station showing the arrival and departure formations.
+function renderLegsInApp(container, model, rec, expandAll) {
+  const { stops, legs, boundaries } = model;
+  if (!legs.length) { renderTrainStrip(container, rec.parsedList || []); return; }
+  if (legs.length === 1) {
+    renderTrainStrip(container, legs[0].codes, legs[0].flags);
+    if (legs[0].source !== 'seen') container.insertAdjacentHTML('afterbegin', `<div class="seg-hd" style="width:100%">${legSourceTag(legs[0], rec)}</div>`);
     return;
   }
   container.classList.remove('train-strip');
   container.innerHTML = '';
-
-  const stripEl = (codes, flags) => {
+  const stripEl = (leg) => {
     const strip = document.createElement('div');
     strip.className = 'strip';
-    renderTrainStrip(strip, codes, flags);
+    renderTrainStrip(strip, leg.codes, leg.flags);
     return strip;
   };
-
-  // First leg — the formation as entered
   const firstHd = document.createElement('div');
   firstHd.className = 'seg-hd';
-  firstHd.textContent = `${fromStation || 'ORIGIN'} → ${revStations[0]}`;
+  firstHd.innerHTML = `${escapeHtml(stops[0])} → ${escapeHtml(stops[1])} ${legSourceTag(legs[0], rec)}`;
   container.appendChild(firstHd);
-  container.appendChild(stripEl(parsedList, changed));
+  container.appendChild(stripEl(legs[0]));
 
-  // One highlighted, collapsible block per reversal station, each in its own
-  // colour so it's obvious which station a formation belongs to. Plain hex
-  // values (no color-mix) so html2canvas renders them in the shared image.
-  let codes = parsedList, flags = changed;
-  revStations.forEach((stn, i) => {
-    const before = codes, beforeFlags = flags;
-    flags = reverseAligned(codes, flags);
-    codes = reverseFormation(codes);
-    const nextPoint = revStations[i + 1] || toStation || 'DESTINATION';
-
+  // Each change station in its own colour so it's obvious which station a
+  // formation belongs to. Plain hex values so html2canvas renders them.
+  boundaries.forEach((b, i) => {
+    const stn = escapeHtml(b.station);
+    const nextPoint = escapeHtml(stops[i + 2] || 'DESTINATION');
+    const lab = boundaryLabel(b);
     const block = document.createElement('div');
     block.className = 'rev-block' + (expandAll ? ' open' : '');
     const col = REV_COLOURS[i % REV_COLOURS.length];
@@ -966,23 +1099,26 @@ function renderFormationSegments(container, parsedList, revStations, fromStation
     block.style.setProperty('--rv-soft', col.soft);
     block.innerHTML = `
       <div class="rev-bar">
-        <span class="rev-star">🔄</span>
-        <span><span class="rev-no">${i + 1}</span> ${stn} — REVERSAL STATION</span>
+        <span class="rev-star">${lab.icon}</span>
+        <span><span class="rev-no">${i + 1}</span> ${stn} — ${lab.text}</span>
         <span class="rev-chev">▼</span>
       </div>
       <div class="rev-body">
-        <div class="rev-sub arr">⬇ Arrival at <b>${stn}</b></div>
+        <div class="rev-sub arr">⬇ Arrival at <b>${stn}</b></div> ${legSourceTag(legs[i], rec)}
         <div class="_rv-arr"></div>
-        <div class="rev-sub dep">⬆ Departure from <b>${stn}</b> → ${nextPoint}</div>
+        ${(b.extras || []).map(ex => `<div class="extra-note">${extrasNoteHtml(ex)}</div>`).join('')}
+        <div class="rev-sub dep">⬆ Departure from <b>${stn}</b> → ${nextPoint}</div> ${legSourceTag(legs[i + 1], rec)}
         <div class="_rv-dep"></div>
       </div>
     `;
-    block.querySelector('._rv-arr').appendChild(stripEl(before, beforeFlags));
-    block.querySelector('._rv-dep').appendChild(stripEl(codes, flags));
+    block.querySelector('._rv-arr').appendChild(stripEl(legs[i]));
+    block.querySelector('._rv-dep').appendChild(stripEl(legs[i + 1]));
     block.querySelector('.rev-bar').addEventListener('click', (e) => {
       e.stopPropagation();
       block.classList.toggle('open');
     });
+    // Extra coaches are today's news — show them without a tap
+    if (b.extras && b.extras.length) block.classList.add('open');
     container.appendChild(block);
   });
 }
@@ -1422,23 +1558,24 @@ async function populateShareCapture(d) {
   $('rRoute').textContent = fromTo;
   // Capped so a slow/offline Firestore read can't leave Share hanging;
   // falls back to no reversal stations.
-  const _rev = await Promise.race([
-    getReversalStations(d.trainNo),
-    new Promise(res => setTimeout(() => res([]), 3000))
+  const capped = (p, fallback) => Promise.race([p.catch(() => fallback), new Promise(res => setTimeout(() => res(fallback), 3000))]);
+  const [_rev, info, prev] = await Promise.all([
+    capped(getReversalStations(d.trainNo), []),
+    capped(getTrainInfo(d.trainNo), null),
+    capped(getPreviousRecord(d.trainNo, d.date), null),
   ]);
-  const prev = await Promise.race([
-    getPreviousRecord(d.trainNo, d.date).catch(() => null),
-    new Promise(res => setTimeout(() => res(null), 3000))
-  ]);
-  const diff = prev ? diffFormation(prev.parsedList, d.parsedList || []) : null;
-  const chg = diff && !diff.same ? diff.changed : null;
+  const { diff, flags } = changedFlagsFor(d, prev);
   renderDiffLine($('rDiff'), diff, prev);
+  const model = buildLegsModel(d, _rev || [], info, flags);
   const strip = $('rStrip');
-  if (_rev && _rev.length) renderShareLegs(strip, d.parsedList || [], _rev, d.fromStation, d.toStation, chg);
-  else renderFormationSegments(strip, d.parsedList || [], _rev, d.fromStation, d.toStation, true, chg);
-  const nCoaches = (d.parsedList || []).filter(c => String(c).toUpperCase() !== 'ENG').length;
+  if (model.legs.length > 1) renderLegsShare(strip, model, d);
+  else renderLegsInApp(strip, model, d, true);
+  const nCoaches = (d.parsedList || []).filter(c => String(c).toUpperCase() !== 'ENG' && !isExtraCode(c)).length;
+  const revs = model.boundaries.filter(b => b.type === 'reversal').map(b => b.station);
+  const extras = model.boundaries.flatMap(b => b.extras || []);
   $('rSummary').textContent = `${nCoaches} coaches` +
-    (_rev && _rev.length ? ` · reverses at ${_rev.join(', ')}` : '');
+    (revs.length ? ` · reverses at ${revs.join(', ')}` : '') +
+    (extras.length ? ` · +${extras.reduce((n, e) => n + e.count, 0)} extra at ${extras.map(e => e.at).join(', ')}` : '');
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -1851,21 +1988,22 @@ async function renderTrainsList() {
         ? `(${rec.submittedByPhone.slice(-4)})`
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
-      // Draw now, then redraw once reversal stations and the comparison with
-      // the previous saved formation have loaded.
-      let rev = [], chg = null;
+      // Draw now, then redraw once reversal stations, RailRadar's schedule and
+      // the comparison with the previous saved formation have loaded.
+      let rev = [], info = null, chg = null;
       const draw = () => {
         if (cur !== rec) return;
-        renderFormationSegments(item.querySelector('.i-strip'), rec.parsedList || [], rev, rec.fromStation, rec.toStation, false, chg);
+        renderLegsInApp(item.querySelector('.i-strip'), buildLegsModel(rec, rev, info, chg), rec, false);
       };
       draw();
-      getReversalStations(rec.trainNo).then(r => { if (r.length) { rev = r; draw(); } });
+      Promise.all([getReversalStations(rec.trainNo).catch(() => []), getTrainInfo(rec.trainNo).catch(() => null)])
+        .then(([r, i]) => { rev = r || []; info = i; if (rev.length || info) draw(); });
       renderDiffLine(item.querySelector('.i-diff'), null, null);
       getPreviousRecord(rec.trainNo, rec.date).then(prev => {
         if (cur !== rec) return;
-        const diff = prev ? diffFormation(prev.parsedList, rec.parsedList || []) : null;
+        const { diff, flags } = changedFlagsFor(rec, prev);
         renderDiffLine(item.querySelector('.i-diff'), diff, prev);
-        if (diff && !diff.same) { chg = diff.changed; draw(); }
+        if (flags) { chg = flags; draw(); }
       }).catch(() => {});
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -1982,9 +2120,11 @@ async function renderTrainsList() {
         const existing = await getTrainRecord(key);
         await saveTrainRecord(key, {
           trainNo: cur.trainNo, trainName: cur.trainName || '', date: today,
-          rawList: cur.rawList || (cur.parsedList || []).join(','),
-          parsedList: cur.parsedList || [],
+          // Same rake as that day, minus its one-day extra (sick/empty) coaches
+          rawList: (cur.parsedList || []).filter(c => !isExtraCode(c)).join(','),
+          parsedList: (cur.parsedList || []).filter(c => !isExtraCode(c)),
           fromStation: cur.fromStation || '', toStation: cur.toStation || '',
+          seenAt: cur.seenAt || '', seenLeg: cur.seenLeg || 0, extras: [],
           submittedByName: identity.name,
           submittedByEmail: identity.email || '',
           submittedByPhone: identity.phone || '',
@@ -2506,9 +2646,85 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   $('sFromStation').value = fromStation || '';
   $('sToStation').value = toStation || '';
   $('sList').value = stripEngRaw(rawList || '');
+  $('sSeenAt').value = '';
+  $('sExtraAt').value = '';
+  $('sExtraCount').value = '0';
+  $('sExtraEnd').value = 'engine';
+  $('sExtraKind').value = 'SICK';
+  $('sExtraBox').open = false;
   renderPreview();
   showOverlay('submitOverlay');
+  loadSubmitRouteInfo();
 }
+
+// Fill the "seen at" stop list from RailRadar, default it to the staff
+// member's station, and bring in anything already saved for that date.
+let _submitInfo = null;
+async function loadSubmitRouteInfo() {
+  const trainNo = $('sTrainNo').value.trim();
+  const date = $('sDate').value || todayStr();
+  _submitInfo = null;
+  $('sHaltList').innerHTML = '';
+  updateSeenHint();
+  if (!/^\d{5}$/.test(trainNo)) return;
+  const [info, existing] = await Promise.all([
+    getTrainInfo(trainNo).catch(() => null),
+    getTrainRecord(`${trainNo}_${date}`).catch(() => null),
+  ]);
+  if ($('sTrainNo').value.trim() !== trainNo) return; // form changed meanwhile
+  _submitInfo = info;
+  if (info) {
+    $('sHaltList').innerHTML = info.halts.map(h =>
+      `<option value="${escapeHtml(h.c)}">${escapeHtml(h.n || h.c)} · leg ${h.leg + 1}${h.pf ? ' · PF ' + escapeHtml(h.pf) : ''}</option>`).join('');
+    if (!$('sTrainName').value) $('sTrainName').value = info.name;
+    if (!$('sFromStation').value) $('sFromStation').value = info.src;
+    if (!$('sToStation').value) $('sToStation').value = info.dst;
+  }
+  if (!$('sSeenAt').value) {
+    const mine = (currentUser && currentUser.station || '').toUpperCase();
+    $('sSeenAt').value = (existing && existing.seenAt)
+      || (info && legOfStation(info, mine) !== null ? mine : '')
+      || (info ? info.src : '');
+  }
+  const ex = existing && existing.extras && existing.extras[0];
+  if (ex && $('sExtraCount').value === '0') {
+    $('sExtraAt').value = ex.at || '';
+    $('sExtraCount').value = String(ex.count || 0);
+    $('sExtraEnd').value = ex.end === 'rear' ? 'rear' : 'engine';
+    $('sExtraKind').value = EXTRA_KINDS[ex.kind] ? ex.kind : 'XTRA';
+    $('sExtraBox').open = true;
+  }
+  updateSeenHint();
+}
+
+// Which leg the "seen at" station is on — RailRadar's route first, then the
+// admin reversal list (a reversal station starts the leg after it).
+function seenLegFor(seenAt, info, rev) {
+  if (!seenAt) return 0;
+  if (info) { const L = legOfStation(info, seenAt); if (L !== null) return L; }
+  const i = (rev || []).indexOf(seenAt);
+  return i >= 0 ? i + 1 : 0;
+}
+
+function updateSeenHint() {
+  const at = $('sSeenAt').value.trim().toUpperCase();
+  const info = _submitInfo;
+  let msg = 'Enter coaches in the order you see them, starting from the engine.';
+  if (at && info) {
+    const L = legOfStation(info, at);
+    if (L === null) msg = `${at} isn't a stop of this train in RailRadar's route — check the code.`;
+    else if (info.legs.length > 1) {
+      const rv = info.reversalStations;
+      msg = `${at} is on leg ${L + 1} of ${info.legs.length}` +
+        (L > 0 ? ` (after reversal at ${rv[L - 1]})` : rv.length ? ` (before reversal at ${rv[0]})` : '') +
+        '. Enter coaches as you see them from the engine — the other legs are worked out.';
+    }
+  }
+  $('sSeenHint').textContent = msg;
+}
+$('sSeenAt').addEventListener('input', updateSeenHint);
+$('sTrainNo').addEventListener('change', loadSubmitRouteInfo);
+$('sDate').addEventListener('change', loadSubmitRouteInfo);
 $('fabAdd').addEventListener('click', () => openSubmit());
 $('sList').addEventListener('input', renderPreview);
 
@@ -2565,10 +2781,18 @@ $('sSaveBtn').addEventListener('click', async () => {
   const parsedList = parseCompressed(rawList);
   const key = `${trainNo}_${date}`;
   const existing = await getTrainRecord(key);
+  const seenAt = $('sSeenAt').value.trim().toUpperCase();
+  const info = _submitInfo && _submitInfo.no === trainNo ? _submitInfo : await getTrainInfo(trainNo).catch(() => null);
+  const seenLeg = seenLegFor(seenAt, info, await getReversalStations(trainNo).catch(() => []));
+  const exCount = Math.max(0, Math.min(10, parseInt($('sExtraCount').value, 10) || 0));
+  const exAt = $('sExtraAt').value.trim().toUpperCase();
+  if (exCount && !exAt) { toast('Enter the station where the extra coaches were attached'); return; }
+  const extras = exCount ? [{ at: exAt, end: $('sExtraEnd').value, count: exCount, kind: $('sExtraKind').value }] : [];
 
   await saveTrainRecord(key, {
     trainNo, trainName, date, rawList, parsedList,
     fromStation, toStation,
+    seenAt, seenLeg, extras,
     submittedByName: identity.name,
     submittedByEmail: identity.email || '',
     submittedByPhone: identity.phone || '',
