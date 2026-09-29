@@ -1,6 +1,10 @@
 [build]
   base = "coach-position"
   publish = "."
+  # coach-position is plain static files — no build step. Set explicitly so
+  # Netlify doesn't fall back to a UI/auto-detected `npm run build` (the repo
+  # root is a Next.js app), which fails in this folder: it has no package.json.
+  command = "echo 'static site, no build step'"
 
 [build.environment]
   NETLIFY_NEXT_PLUGIN_SKIP = "true"

@@ -19,476 +19,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
-<style>
-  :root{
-    --bg:#F0F2F7;
-    --surface:#FFFFFF;
-    --surface-2:#E8EBF4;
-    --line:#D3D7E6;
-    --text:#111827;
-    --muted:#5C6475;
-    --amber:#D97706;
-    --green:#16A34A;
-    --red:#DC2626;
-    --blue:#2563EB;
-    --teal:#0E7490;
-    --brown:#92400E;
-    --violet:#7C3AED;
-    --grey-blue:#475569;
-    --radius:10px;
-    --mono:'JetBrains Mono',ui-monospace,monospace;
-    --sans:'Inter',system-ui,sans-serif;
-  }
-  *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  body{margin:0;}
-  html,body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:var(--sans);
-    -webkit-tap-highlight-color:transparent;
-  }
-  button{font-family:inherit;}
-  .app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;}
-  header.bar{
-    padding:18px 18px 14px;
-    border-bottom:1px solid var(--line);
-    display:flex;justify-content:space-between;align-items:center;
-    position:sticky;top:0;background:var(--surface);z-index:20;
-    box-shadow:0 1px 6px rgba(0,0,0,.07);
-  }
-  .brand .title{font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.05em;color:var(--amber);}
-  .brand .sub{font-size:11px;color:var(--muted);margin-top:1px;}
-  .me{
-    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
-    padding:7px 12px;font-size:13px;cursor:pointer;color:var(--text);
-    white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;
-    transition:transform .12s ease;
-  }
-  .me:active{transform:scale(.96);}
-  main{flex:1;padding:0 16px 100px;display:flex;flex-direction:column;gap:8px;}
-  .list-header{padding:12px 16px 8px;display:flex;flex-direction:column;gap:10px;background:var(--bg);position:sticky;top:57px;z-index:15;}
-  .list-search{
-    width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;
-    color:var(--text);font-size:14px;font-family:var(--mono);
-    padding:12px 14px;outline:none;transition:border-color .15s ease, box-shadow .15s ease;
-    box-shadow:0 1px 3px rgba(0,0,0,.05);
-  }
-  .list-search:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
-  .tabs-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-  .tab, .select-toggle{
-    background:transparent;border:1.5px solid var(--line);border-radius:999px;
-    color:var(--muted);font-size:13px;font-weight:600;line-height:1.3;
-    padding:6px 14px;cursor:pointer;white-space:nowrap;
-    transition:all .15s ease;
-  }
-  .tab.active, .select-toggle.on{border-color:var(--amber);color:var(--amber);background:rgba(217,119,6,.08);}
-  .list-meta-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-  .list-count{font-size:12px;color:var(--muted);white-space:nowrap;}
-
-  /* Multi-select checkboxes on train items */
-  .sel-check{display:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700;}
-  body.select-mode .sel-check{display:flex;}
-  body.select-mode .star-btn{display:none;}
-  .train-item-head.sel-on .sel-check{background:var(--amber);border-color:var(--amber);}
-
-  /* Floating share-selected bar */
-  #selectBar{
-    position:fixed;left:0;right:0;bottom:0;z-index:60;
-    background:var(--surface);border-top:1px solid var(--line);
-    padding:12px 16px calc(12px + env(safe-area-inset-bottom));
-    display:none;align-items:center;gap:10px;
-    box-shadow:0 -4px 16px rgba(0,0,0,.08);
-  }
-  #selectBar.show{display:flex;}
-  #selectBar .sel-count{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
-  #selectBar .btn{padding:10px 14px;font-size:13px;}
-  /* Station search tab */
-  .station-bar{display:none;gap:8px;align-items:center;padding:0 0 4px;}
-  .station-bar.visible{display:flex;}
-  .station-input{
-    flex:1;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;
-    color:var(--text);font-size:14px;font-family:var(--mono);padding:10px 12px;
-    outline:none;text-transform:uppercase;transition:border-color .15s,box-shadow .15s;
-  }
-  .station-input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,116,144,.12);}
-  .station-search-btn{
-    background:var(--teal);color:#fff;border:none;border-radius:10px;
-    padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;
-    transition:opacity .15s;
-  }
-  .station-search-btn:active{opacity:.8;}
-  /* Trains tab results */
-  .st-train{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:4px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.05);}
-  .st-train.st-saved{border-color:var(--teal);background:rgba(14,116,144,.06);}
-  .st-train-no{font-family:var(--mono);font-size:16px;font-weight:700;letter-spacing:.06em;}
-  .st-train-name{font-size:12px;color:var(--muted);margin-top:1px;}
-  .st-days{font-size:11px;color:var(--muted);margin-top:4px;}
-  .st-timing{text-align:right;}
-  .st-dep{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--green);}
-  .st-arr{font-family:var(--mono);font-size:12px;color:var(--muted);}
-  .st-label{font-size:10px;color:var(--muted);text-align:right;}
-  .st-save-btn{background:none;border:none;cursor:pointer;font-size:20px;padding:4px 2px;line-height:1;flex-shrink:0;transition:transform .15s;}
-  .st-save-btn:active{transform:scale(1.3);}
-  .st-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
-  .st-classes{font-size:10px;color:var(--muted);text-align:right;}
-  .trains-empty{text-align:center;color:var(--muted);font-size:13px;padding:40px 0;}
-  input,textarea{
-    width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
-    padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);
-    outline:none;transition:border-color .15s ease, box-shadow .15s ease;
-  }
-  input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
-  .field-label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500;}
-  .row{display:flex;gap:10px;align-items:flex-start;}
-  .train-no{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.08em;}
-  /* Train item expandable rows */
-  .train-item{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
-  .train-item-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none;transition:background .1s;}
-  .train-item-head:active{background:var(--surface-2);}
-  .star-btn{background:transparent;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:0 2px;flex-shrink:0;line-height:1;transition:color .15s;}
-  .star-btn.starred{color:#D97706;}
-  .tno-badge{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--amber);background:rgba(217,119,6,.1);border-radius:8px;padding:5px 10px;flex-shrink:0;border:1px solid rgba(217,119,6,.2);}
-  .train-item-meta{flex:1;min-width:0;}
-  .ti-route{font-size:12px;color:var(--muted);font-family:var(--mono);}
-  .ti-name{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .ti-when{font-size:11px;color:var(--muted);font-family:var(--mono);text-align:right;flex-shrink:0;white-space:nowrap;line-height:1.6;}
-  .ti-chev{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .18s ease;}
-  .train-item.open .ti-chev{transform:rotate(180deg);}
-  .train-item-body{max-height:0;overflow:hidden;transition:max-height .32s ease;}
-  .train-item.open .train-item-body{max-height:8000px;}
-  .inline-card{padding:14px;border-top:1px solid var(--line);background:var(--surface-2);display:flex;flex-direction:column;gap:12px;}
-  .inline-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
-  .inline-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
-  .inline-tno{font-family:var(--mono);font-weight:700;font-size:20px;color:var(--amber);background:rgba(217,119,6,.1);border-radius:8px;padding:4px 10px;display:inline-block;border:1px solid rgba(217,119,6,.2);}
-  .inline-date{font-size:12px;color:var(--muted);font-family:var(--mono);}
-  .inline-name{font-size:14px;color:var(--text);}
-  .inline-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);}
-  .inline-route .arr{color:var(--muted);}
-  /* Chip redesign — number inside chip */
-  .tno{font-family:var(--mono);font-weight:700;font-size:22px;color:var(--amber);}
-  .tname{font-size:13px;color:var(--muted);margin-top:2px;}
-  .strip-wrap{padding:4px 0;}
-  .strip{display:flex;flex-wrap:wrap;gap:6px 8px;padding:2px 0;}
-  .chip{
-    font-family:var(--mono);border-radius:8px;
-    min-width:54px;height:60px;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:3px;text-align:center;padding:4px;
-  }
-  .chip-index{font-family:var(--mono);font-size:10px;opacity:.85;font-weight:400;line-height:1;}
-  .chip-code{font-size:14px;font-weight:700;line-height:1;}
-  .chip.eng  {background:#EF4444;color:#FFFFFF;}
-  .chip.eng-ghost{opacity:.45;border:2px dashed #EF4444;background:rgba(239,68,68,.08);color:#EF4444;}
-  .chip.sl   {background:#F97316;color:#FFFFFF;}
-  .chip.pwr  {background:#D97706;color:#FFFFFF;}
-  .chip.end  {background:#65A30D;color:#FFFFFF;}
-  .chip.gen  {background:#16A34A;color:#FFFFFF;}
-  .chip.ac2  {background:#0D9488;color:#FFFFFF;}
-  .chip.ac3e {background:#0891B2;color:#FFFFFF;}
-  .chip.d2s  {background:#0284C7;color:#FFFFFF;}
-  .chip.ac3  {background:#2563EB;color:#FFFFFF;}
-  .chip.ac1  {background:#4F46E5;color:#FFFFFF;}
-  .chip.cc   {background:#7C3AED;color:#FFFFFF;}
-  .chip.ec   {background:#C026D3;color:#FFFFFF;}
-  .chip.pc   {background:#E11D48;color:#FFFFFF;}
-  .chip.unk  {background:#64748B;color:#FFFFFF;}
-
-  /* ── Train view (display strips) ── */
-  .train-strip{display:flex;flex-wrap:wrap;gap:14px 8px;align-items:flex-end;padding:4px 0;}
-  .tcoach{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;}
-  .t-pos{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:2px;line-height:1;font-family:var(--mono);}
-  .t-body{
-    position:relative;width:66px;height:23px;border-radius:6px 6px 4px 4px;
-    background:linear-gradient(180deg,var(--tc1) 0%,var(--tc1) 62%,var(--tc2) 62%);
-    border:1.5px solid var(--tc2);
-    display:flex;align-items:flex-start;justify-content:center;gap:4px;padding-top:4px;
-  }
-  .t-win{width:10px;height:7px;border-radius:2px;background:rgba(255,255,255,.75);border:1px solid rgba(0,0,0,.18);}
-  .t-door{width:7px;height:12px;border-radius:2px;background:rgba(0,0,0,.22);}
-  .t-wheels{display:flex;justify-content:space-between;width:52px;margin-top:-4px;}
-  .t-wheel{width:10px;height:10px;border-radius:50%;background:#3A4150;border:2px solid #8B94A8;}
-  .t-lbl{font-size:15px;font-weight:900;margin-top:3px;letter-spacing:.02em;line-height:1;color:var(--text);}
-  .tcoach.tghost{opacity:.45;}
-  .tcoach svg{display:block;width:56px;height:auto;}
-  /* type colours (same classes as chips, distinct per type) */
-  .tcoach.eng {--tc1:#5B6579;--tc2:#414A5C;}
-  .tcoach.end {--tc1:#DB7C90;--tc2:#B25468;}  /* SLR/SLRD — rose */
-  .tcoach.pwr {--tc1:#C96A7D;--tc2:#A24A5D;}  /* LPR/EOG — maroon */
-  .tcoach.gen {--tc1:#8FCC71;--tc2:#66A648;}  /* GEN — green */
-  .tcoach.sl  {--tc1:#F8B366;--tc2:#D68B3A;}  /* Sleeper — orange */
-  .tcoach.ac3 {--tc1:#74A9EC;--tc2:#4A82C8;}  /* AC 3-tier — blue */
-  .tcoach.ac3e{--tc1:#AB92E3;--tc2:#8168C2;}  /* AC 3 economy — violet */
-  .tcoach.ac2 {--tc1:#55C2BA;--tc2:#329A93;}  /* AC 2-tier — teal */
-  .tcoach.ac1 {--tc1:#8385DB;--tc2:#5C5EB8;}  /* First AC — indigo */
-  .tcoach.cc  {--tc1:#EF98B8;--tc2:#C96A90;}  /* Chair car — pink */
-  .tcoach.ec  {--tc1:#C97BDB;--tc2:#A052B4;}  /* Executive CC — magenta */
-  .tcoach.d2s {--tc1:#6BB6E1;--tc2:#3F8DBB;}  /* 2S — sky */
-  .tcoach.pc  {--tc1:#CFA76E;--tc2:#A87F45;}  /* Pantry — brown */
-  .tcoach.unk {--tc1:#8A99AF;--tc2:#647289;}
-  /* reversal segments */
-  .seg-hd{font-size:11px;font-weight:800;font-family:var(--mono);letter-spacing:.06em;color:var(--amber);margin:10px 0 2px;display:flex;align-items:center;gap:6px;}
-  .seg-hd:first-child{margin-top:0;}
-  /* reversal station block (collapsible, highlighted) */
-  .rev-block{border:1.5px solid rgba(217,119,6,.45);border-radius:10px;overflow:hidden;margin:10px 0 0;background:var(--surface);}
-  .rev-bar{
-    background:linear-gradient(90deg,rgba(217,119,6,.16),rgba(217,119,6,.07));
-    padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
-    font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--amber);letter-spacing:.05em;
-  }
-  .rev-bar .rev-star{font-size:15px;}
-  .rev-bar .rev-chev{margin-left:auto;transition:transform .18s ease;font-size:12px;}
-  .rev-block.open .rev-bar .rev-chev{transform:rotate(180deg);}
-  .rev-body{display:none;padding:4px 12px 12px;}
-  .rev-block.open .rev-body{display:block;}
-  .rev-sub{
-    display:inline-flex;align-items:center;gap:5px;user-select:none;
-    font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
-    color:#fff;border-radius:7px;padding:5px 12px;margin:12px 0 6px;
-  }
-  .rev-sub b{color:#fff;}
-  .rev-sub.arr{background:#64748B;}
-  .rev-sub.dep{background:var(--amber);}
-  /* phones: fit 5 coaches per row */
-  @media (max-width:480px){
-    .train-strip{gap:12px 5px;}
-    .t-body{width:56px;height:20px;gap:3px;padding-top:3px;border-radius:5px 5px 4px 4px;}
-    .t-win{width:8px;height:6px;}
-    .t-door{width:6px;height:10px;}
-    .t-wheels{width:44px;}
-    .t-wheel{width:9px;height:9px;border-width:2px;}
-    .t-lbl{font-size:13px;}
-    .t-pos{font-size:10px;}
-    .tcoach svg{width:49px;height:auto;}
-  }
-
-  .meta-line{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;}
-  .meta-line b{color:var(--text);}
-  .hint{font-size:12px;color:var(--muted);margin:4px 0 0;}
-  .btn{
-    border:none;border-radius:8px;padding:12px 16px;font-weight:600;font-size:14px;
-    cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
-    transition:transform .12s ease, filter .12s ease;
-  }
-  .btn:active{transform:scale(.97);}
-  .btn-primary{background:var(--amber);color:#FFFFFF;}
-  .btn-primary:active{filter:brightness(.92);}
-  .btn-secondary{background:var(--surface-2);color:var(--text);border:1px solid var(--line);}
-  .btn-ghost{background:transparent;color:var(--text);border:1.5px solid var(--line);}
-  .btn-danger{background:transparent;color:var(--red);border:1px solid var(--red);}
-  .btn-block{width:100%;}
-  .btn-row{display:flex;gap:10px;}
-  .btn-row .btn{flex:1;}
-
-  /* CP card action row */
-  .card-actions{gap:8px;align-items:stretch;}
-  .card-actions .btn{flex:1;padding:11px 6px;font-size:13.5px;font-weight:700;border-radius:9px;white-space:nowrap;}
-  .card-actions .i-confirm{background:rgba(22,163,74,.09);color:var(--green);border:1.5px solid var(--green);}
-  .card-actions .i-confirm:active{background:rgba(22,163,74,.18);}
-  .card-actions .i-delete{
-    flex:0 0 42px;padding:0;font-size:15px;border-radius:9px;
-    background:transparent;color:var(--red);border:1.5px solid rgba(220,38,38,.45);
-  }
-  .card-actions .i-delete:active{background:rgba(220,38,38,.1);}
-
-  .preview-strip .chip{min-width:34px;height:38px;border-radius:5px;}
-  .preview-strip .chip-index{font-size:8px;}
-  .preview-strip .chip-code{font-size:10px;}
-  .tool-btn{background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:12px;font-family:var(--mono);cursor:pointer;padding:4px 10px;transition:all .12s ease;}
-  .tool-btn:active{background:var(--surface-2);}
-  .chip-edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:80;display:flex;align-items:center;justify-content:center;}
-  .chip-edit-box{background:var(--surface);border:1.5px solid var(--amber);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px;width:260px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,.14);}
-  .chip-edit-box h3{margin:0;font-size:15px;font-weight:700;}
-  .chip-edit-box input{text-transform:uppercase;font-family:var(--mono);font-size:16px;letter-spacing:.05em;}
-  .preview-strip .chip{cursor:pointer;}
-  .preview-strip .chip:active{opacity:.75;}
-  .share-offscreen{
-    position:fixed;left:-9999px;top:0;width:360px;
-    background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
-    padding:0 0 12px;display:flex;flex-direction:column;gap:10px;overflow:hidden;
-  }
-  .sc-banner{background:var(--amber);color:#fff;padding:12px 16px 13px;display:flex;flex-direction:column;gap:2px;}
-  .sc-banner .sc-label{color:#FFE8C7;margin-bottom:3px;}
-  .sc-banner-row{display:flex;align-items:baseline;gap:10px;}
-  .sc-bno{font-family:var(--mono);font-weight:800;font-size:27px;color:#fff;letter-spacing:.02em;}
-  .sc-bdate{margin-left:auto;font-family:var(--mono);font-size:12px;font-weight:700;color:#FFE8C7;}
-  .sc-bname{font-size:14px;font-weight:700;color:#fff;}
-  .sc-broute{font-family:var(--mono);font-size:13px;font-weight:700;color:#FFE8C7;letter-spacing:.04em;}
-  .sc-body{padding:0 14px;display:flex;flex-direction:column;gap:10px;}
-  .sc-label{font-size:10px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.1em;}
-  .sc-route{font-size:13px;font-family:var(--mono);font-weight:600;color:var(--text);margin-top:3px;}
-
-  .confirm-line{font-size:12px;color:var(--green);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .confirm-line b{color:var(--text);}
-  .share-footer{font-size:10px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.04em;}
-  .overlay{
-    position:fixed;inset:0;background:rgba(0,0,0,0);display:none;align-items:flex-end;
-    justify-content:center;z-index:50;transition:background .22s ease;
-  }
-  .overlay.show{display:flex;}
-  .overlay.open{background:rgba(0,0,0,.45);}
-  .sheet{
-    background:var(--surface);border-radius:var(--radius) var(--radius) 0 0;
-    border:1px solid var(--line);border-bottom:none;
-    padding:24px 20px 32px;width:100%;max-width:520px;
-    display:flex;flex-direction:column;gap:14px;
-    transform:translateY(100%);transition:transform .22s ease;
-    max-height:90vh;overflow-y:auto;
-    box-shadow:0 -4px 24px rgba(0,0,0,.1);
-  }
-  .overlay.open .sheet{transform:translateY(0);}
-  .close{
-    position:absolute;top:16px;right:16px;background:var(--surface-2);border:1px solid var(--line);
-    color:var(--muted);font-size:16px;cursor:pointer;padding:2px 8px;border-radius:6px;
-  }
-  .sheet{position:relative;}
-  .sheet h3{font-size:17px;font-weight:700;padding-right:32px;}
-  .legend-link{
-    background:transparent;border:none;color:var(--amber);font-size:12px;cursor:pointer;
-    text-decoration:underline;text-align:center;padding:8px;
-  }
-  .legend-grid{
-    display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;
-    align-items:center;
-  }
-  .legend-grid .code{
-    font-family:var(--mono);font-size:11px;background:var(--surface-2);
-    border-radius:4px;padding:2px 6px;color:var(--amber);white-space:nowrap;
-    border:1px solid var(--line);
-  }
-  .preview-strip .chip{font-size:10px;padding:4px 6px;}
-  .fab{position:fixed;bottom:20px;left:0;right:0;display:flex;justify-content:center;z-index:10;}
-  .fab .btn{box-shadow:0 4px 18px rgba(217,119,6,.4);}
-  .toast{
-    position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);
-    background:var(--green);color:#FFFFFF;padding:10px 18px;border-radius:999px;
-    font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:all .25s ease;z-index:60;
-    box-shadow:0 4px 12px rgba(22,163,74,.3);
-  }
-  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-
-  /* Prominent in-app banner for pushes received while the app is open */
-  .push-banner{
-    position:fixed;top:0;left:0;right:0;z-index:200;
-    max-width:520px;margin:0 auto;
-    background:var(--amber);color:#fff;
-    padding:14px 44px 14px 16px;border-radius:0 0 14px 14px;
-    box-shadow:0 6px 20px rgba(0,0,0,.25);
-    transform:translateY(-110%);transition:transform .3s ease;
-    cursor:pointer;
-  }
-  .push-banner.show{transform:translateY(0);}
-  .push-banner .pb-title{font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:7px;}
-  .push-banner .pb-body{font-size:13px;margin-top:3px;opacity:.95;}
-  /* Contribute / feedback call-to-action, sits right above the disclaimer */
-  .contribute-banner{
-    margin:14px 16px 6px;padding:16px 18px;border-radius:16px;
-    background:linear-gradient(135deg, rgba(14,116,144,.12), rgba(14,116,144,.03));
-    border:1.5px solid rgba(14,116,144,.28);text-align:center;
-  }
-  .contribute-banner .cb-title{font-weight:800;font-size:14.5px;color:var(--teal);margin-bottom:5px;}
-  .contribute-banner .cb-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px;}
-  .contribute-banner .btn{width:100%;}
-  /* "Enable notifications" reminder — amber-themed variant of the above */
-  .remind-banner{
-    margin:14px 16px 6px;padding:16px 18px;border-radius:16px;
-    background:linear-gradient(135deg, rgba(217,119,6,.12), rgba(217,119,6,.03));
-    border:1.5px solid rgba(217,119,6,.28);text-align:center;position:relative;
-  }
-  .remind-banner .rb-title{font-weight:800;font-size:14.5px;color:var(--amber);margin-bottom:5px;}
-  .remind-banner .rb-body{font-size:12.5px;color:var(--muted);line-height:1.55;margin-bottom:12px;}
-  .remind-banner .btn{width:100%;}
-  .remind-banner .rb-close{
-    position:absolute;top:10px;right:10px;background:none;border:none;
-    color:var(--muted);font-size:15px;line-height:1;padding:4px;cursor:pointer;
-  }
-  select{
-    width:100%;background:var(--surface);border:1.5px solid var(--line);border-radius:8px;
-    padding:10px 12px;color:var(--text);font-size:15px;font-family:var(--sans);outline:none;
-  }
-  select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);}
-  .fld-row{margin-bottom:14px;}
-
-  .push-banner .pb-close{
-    position:absolute;top:10px;right:10px;background:rgba(255,255,255,.2);
-    border:none;color:#fff;font-size:15px;line-height:1;border-radius:6px;
-    padding:5px 8px;cursor:pointer;
-  }
-  .section-title{font-size:13px;color:var(--muted);font-weight:600;}
-
-  /* auth overlay screens */
-  .auth-screen{display:none;flex-direction:column;gap:14px;}
-  .auth-screen.active{display:flex;}
-  .auth-logo{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--amber);letter-spacing:.05em;}
-  .auth-tagline{font-size:13px;color:var(--muted);}
-  .auth-divider{text-align:center;font-size:12px;color:var(--muted);margin:2px 0;}
-  .auth-back{
-    background:transparent;border:none;color:var(--muted);font-size:13px;cursor:pointer;
-    padding:4px 0;text-align:left;display:flex;align-items:center;gap:6px;
-  }
-  .verified-phone-label{
-    font-family:var(--mono);font-size:13px;color:var(--muted);
-    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
-    padding:10px 12px;
-  }
-  .sign-out-row{display:flex;align-items:center;justify-content:space-between;padding-top:4px;}
-  .sign-out-row span{font-size:12px;color:var(--muted);}
-  #authWorking{display:none;font-size:13px;color:var(--muted);text-align:center;}
-  .guest-badge{
-    font-size:11px;background:var(--surface-2);border:1px solid var(--line);
-    color:var(--muted);border-radius:6px;padding:2px 8px;font-family:var(--mono);
-  }
-  .pending-notice{
-    background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.35);border-radius:8px;
-    padding:10px 12px;font-size:13px;color:var(--brown);line-height:1.5;
-  }
-  .user-card{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px;}
-  .user-card .u-name{font-weight:600;font-size:14px;}
-  .user-card .u-meta{font-size:12px;color:var(--muted);margin-top:2px;}
-
-  /* stale badge */
-  .stale-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap;display:inline-block;margin-top:2px;}
-  .stale-badge.mild{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;}
-  .stale-badge.old{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;}
-
-  /* crowdsourced position-request row */
-  .request-banner{font-size:12px;line-height:1.5;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:9px 12px;margin:10px 0 0;}
-  .i-request-row .btn-block{margin-top:10px;}
-
-  /* date history tabs */
-  .date-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:0 0 8px;overflow-x:auto;}
-  .date-tab{font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--line);color:var(--muted);cursor:pointer;background:transparent;white-space:nowrap;flex-shrink:0;font-family:var(--mono);}
-  .date-tab.active{background:var(--amber);color:#FFFFFF;border-color:var(--amber);font-weight:700;}
-  .date-tab:hover:not(.active){border-color:var(--amber);color:var(--amber);}
-
-  /* offline banner */
-  .offline-banner{background:#FFFBEB;color:#92400E;border-bottom:1px solid #FDE68A;font-size:12px;text-align:center;padding:5px 12px;font-weight:600;letter-spacing:.02em;display:none;}
-  .offline-banner.show{display:block;}
-
-  /* copy-from-previous box in submit form */
-  .copy-box{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;display:none;flex-direction:column;gap:6px;}
-  .copy-box.show{display:flex;}
-  .copy-box-label{font-size:11px;color:var(--muted);font-weight:600;font-family:var(--mono);}
-
-  /* disclaimer */
-  .disclaimer-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
-  .disclaimer-box{background:var(--surface);border:1.5px solid rgba(217,119,6,.4);border-radius:12px;padding:22px 20px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.14);}
-  .disclaimer-box h2{font-size:14px;color:var(--amber);font-family:var(--mono);font-weight:700;letter-spacing:.08em;margin:0;}
-  .disclaimer-box p{font-size:13px;color:var(--text);line-height:1.6;margin:0;}
-  .disclaimer-box .disc-note{font-size:11px;color:var(--muted);line-height:1.5;background:var(--surface-2);border-radius:6px;padding:8px 10px;}
-  .app-disclaimer{font-size:10px;color:var(--muted);text-align:center;padding:8px 16px 80px;line-height:1.5;letter-spacing:.01em;}
-  .card-disclaimer{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4;padding:0 2px;}
-  .share-disclaimer{font-size:9px;color:var(--muted);text-align:center;font-family:var(--mono);letter-spacing:.03em;margin-top:2px;}
-
-  /* Trains tab — coach position on card */
-  .st-cp-strip{display:flex;flex-wrap:wrap;gap:3px;margin-top:7px;}
-  .st-cp-chip{font-family:var(--mono);font-size:9px;padding:2px 5px;border-radius:4px;color:#fff;font-weight:700;white-space:nowrap;}
-  .st-cp-label{font-size:10px;color:var(--muted);margin-top:5px;font-family:var(--mono);}
-  .st-cp-label.add{color:var(--teal);font-weight:600;}
-  .scan-result-card{background:var(--surface-2);border-radius:8px;padding:10px;margin-bottom:8px;}
-
-</style>
+<script src="lib.js"></script>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
 <!-- PWA install banner -->
@@ -540,7 +72,8 @@
     <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
     <div class="tabs-row">
       <button class="tab active" id="tabAll">All</button>
-      <button class="tab" id="tabFav">★ Favourites</button>
+      <button class="tab" id="tabMyStn">📍 Station</button>
+      <button class="tab" id="tabFav">★ Saved</button>
       <button class="tab" id="tabStation">🚆 Trains</button>
     </div>
     <div class="list-meta-row">
@@ -550,6 +83,15 @@
     <div class="station-bar" id="stationBar">
       <input class="station-input" id="stationCodeInput" placeholder="Search train no. or name…" autocomplete="off" spellcheck="false">
       <button class="station-search-btn" id="scanCpBtn" title="Scan coach position from WhatsApp image" style="font-size:18px;padding:9px 13px">📷</button>
+    </div>
+    <div class="station-bar" id="myStnBar">
+      <input class="station-input" id="myStnInput" placeholder="Your station code, e.g. RNR" maxlength="7" autocomplete="off" spellcheck="false" style="text-transform:uppercase">
+      <button class="station-search-btn" id="myStnSet">Show</button>
+    </div>
+    <div class="day-chips" id="myStnDays">
+      <button class="day-chip" data-off="-1">Yesterday</button>
+      <button class="day-chip active" data-off="0">Today</button>
+      <button class="day-chip" data-off="1">Tomorrow</button>
     </div>
     <input type="file" id="scanFileInput" accept="image/*" multiple style="display:none">
     <input type="file" id="scanCameraInput" accept="image/*" capture="environment" style="display:none">
@@ -617,6 +159,18 @@
   </div>
 </div>
 
+<!-- Share-image preview: fallback when the direct share is blocked because
+     the tap's user activation expired while the image was rendering -->
+<div class="overlay" id="shareImgOverlay">
+  <div class="sheet">
+    <button class="close" data-close="shareImgOverlay">✕</button>
+    <h3>Share coach position</h3>
+    <img id="shareImgPreview" alt="Coach position image" style="width:100%;max-height:55vh;object-fit:contain;border-radius:10px;display:block">
+    <button class="btn btn-primary btn-block" id="shareImgShareBtn">📤 Share image</button>
+    <button class="btn btn-secondary btn-block" id="shareImgSaveBtn">⬇ Save image</button>
+  </div>
+</div>
+
 <!-- Off-screen share capture (populated before html2canvas) -->
 <div id="shareCapture" class="share-offscreen">
   <div class="sc-banner">
@@ -627,8 +181,10 @@
     </div>
     <div class="sc-bname" id="rTrainName"></div>
     <div class="sc-broute" id="rRoute"></div>
+    <div class="sc-bsum" id="rSummary"></div>
   </div>
   <div class="sc-body">
+    <div class="diff-line" id="rDiff" style="display:none"></div>
     <div class="strip-wrap"><div class="strip" id="rStrip"></div></div>
     <div class="meta-line"><span class="dot"></span> Updated by <b id="rBy"></b> · <span id="rWhen"></span></div>
     <div class="confirm-line" id="rConfirmLine"></div>
@@ -744,6 +300,36 @@
       <label class="field-label">Date</label>
       <input type="date" id="sDate">
     </div>
+    <div>
+      <label class="field-label">Formation seen at (station code)</label>
+      <input id="sSeenAt" placeholder="e.g. RNR" autocomplete="off" list="sHaltList" style="text-transform:uppercase">
+      <p class="hint" id="sSeenHint">Enter coaches in the order you see them, starting from the engine.</p>
+    </div>
+    <datalist id="sHaltList"></datalist>
+    <details class="extra-box" id="sExtraBox">
+      <summary>➕ Extra coaches attached today? (sick / repair / empty)</summary>
+      <div class="row">
+        <div style="flex:1">
+          <label class="field-label">Attached at (station)</label>
+          <input id="sExtraAt" placeholder="e.g. UBL" autocomplete="off" list="sHaltList" style="text-transform:uppercase">
+        </div>
+        <div style="width:90px">
+          <label class="field-label">How many</label>
+          <input id="sExtraCount" type="number" min="0" max="10" value="0" inputmode="numeric">
+        </div>
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <label class="field-label">Where</label>
+          <select id="sExtraEnd"><option value="engine">Behind the engine</option><option value="rear">At the rear</option></select>
+        </div>
+        <div style="flex:1">
+          <label class="field-label">Type</label>
+          <select id="sExtraKind"><option value="SICK">Sick / repair</option><option value="EMPTY">Empty</option><option value="XTRA">Other (not for passengers)</option></select>
+        </div>
+      </div>
+      <p class="hint">These are added only for this date, from that station onward. Positions after them shift.</p>
+    </details>
     <!-- Copy from previous formation hint -->
     <div class="copy-box" id="sCopyBox">
       <div class="copy-box-label">📋 PREVIOUS FORMATION FOUND — <span id="sCopyDate"></span></div>
@@ -910,9 +496,28 @@ loadOpenTrainRequests();
 
 
 // ─── Firestore storage ────────────────────────────────────────────────────────
+// Firestore's offline cache (enablePersistence) answers straight away when the
+// phone knows it's offline, but on a weak platform signal a server read can
+// hang ~10s before falling back. Give the server 4s, then answer from the
+// on-device cache if it has the data; otherwise keep waiting for the server.
+async function getFast(ref) {
+  const server = ref.get();
+  const timedOut = await Promise.race([
+    server.then(() => false, () => false),
+    new Promise(res => setTimeout(() => res(true), 4000))
+  ]);
+  if (timedOut) {
+    try {
+      const cached = await ref.get({ source: 'cache' });
+      if (cached.exists || (cached.docs && cached.docs.length)) return cached;
+    } catch (_) { /* not cached — fall through to the server read */ }
+  }
+  return server;
+}
+
 async function getTrainRecord(key) {
   try {
-    const snap = await db.collection('trains').doc(key).get();
+    const snap = await getFast(db.collection('trains').doc(key));
     return snap.exists ? snap.data() : null;
   } catch (e) {
     // Fallback: local cache
@@ -1063,10 +668,9 @@ async function resolveTrainRequest(trainNo) {
 
 async function getAllTrains(filterStr) {
   try {
-    const snap = await db.collection('trains')
+    const snap = await getFast(db.collection('trains')
       .orderBy('updatedAt', 'desc')
-      .limit(400)
-      .get();
+      .limit(400));
     const all = snap.docs.map(d => d.data());
 
     // Deduplicate: one entry per trainNo — prefer today's, else most recent
@@ -1162,67 +766,10 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
-function pad2(n) { return String(n).padStart(2, '0'); }
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function formatDateOnly(iso) {
-  const [y, m, dd] = iso.split('-');
-  return `${parseInt(dd,10)} ${MONTHS[parseInt(m,10)-1]} ${y}`;
-}
-function formatTime(date) {
-  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
-}
-function formatDateTime(date) {
-  return `${parseInt(date.getDate(),10)} ${MONTHS[date.getMonth()]} ${date.getFullYear()} ${formatTime(date)}`;
-}
 
 // ─── Coach parser + renderer ─────────────────────────────────────────────────
-function parseCompressed(input) {
-  // Commas AND spaces both separate coaches (pasted lists often use spaces)
-  const tokens = (input || '').split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(Boolean);
-  const out = [];
-  for (const tok of tokens) {
-    let m = tok.match(/^(\d+)([A-Z]+\d*)$/);
-    if (m) { for (let i = 0; i < parseInt(m[1], 10); i++) out.push(m[2]); continue; }
-    m = tok.match(/^([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)$/);
-    if (m) {
-      const prefix = m[1];
-      let s = parseInt(m[2], 10), e = parseInt(m[3], 10);
-      if (s <= e) { for (let i = s; i <= e; i++) out.push(prefix + i); }
-      else { for (let i = s; i >= e; i--) out.push(prefix + i); }
-      continue;
-    }
-    out.push(tok);
-  }
-  return out;
-}
 
-// ENG is implicit in the editors — engine is always position 1, never typed by staff
-function stripEngRaw(raw) {
-  const toks = (raw || '').split(/[\s,]+/).map(t => t.trim()).filter(Boolean);
-  while (toks.length && toks[0].toUpperCase() === 'ENG') toks.shift();
-  return toks.join(',');
-}
-function withEng(codes) {
-  return (codes.length && codes[0].toUpperCase() === 'ENG') ? codes : ['ENG', ...codes];
-}
 
-function classOf(code) {
-  if (code === 'ENG') return 'eng';
-  if (['LPR', 'VP', 'PWR', 'EOG', 'HOG'].includes(code)) return 'pwr';
-  if (/^(GEN|GS|UR)$/.test(code)) return 'gen';
-  // AC classes — order matters (most specific first)
-  if (/^(BE\d*|3E)$/.test(code)) return 'ac3e';        // 3AC Economy
-  if (/^(B\d*|3A)$/.test(code)) return 'ac3';           // 3AC sleeper
-  if (/^(A\d*|2A)$/.test(code)) return 'ac2';           // 2AC sleeper
-  if (/^(H\d+|HA\d*|1A|M\d*)$/.test(code)) return 'ac1'; // 1AC / composite
-  if (/^(E\d*|EC)$/.test(code)) return 'ec';            // Executive Chair Car
-  if (/^(C\d*|CC)$/.test(code)) return 'cc';            // AC Chair Car
-  if (/^(D\d*|2S)$/.test(code)) return 'd2s';           // 2nd Sitting / D-class
-  if (code === 'PC') return 'pc';
-  if (/^(S\d+|SL)$/.test(code)) return 'sl';            // Sleeper
-  if (/^(SLR|SLRD|LSLR|LSLRD)\d*$/.test(code)) return 'end';
-  return 'unk';
-}
 
 function renderStrip(container, codes, onChipClick) {
   container.innerHTML = '';
@@ -1289,7 +836,7 @@ function engineSVG() {
   </svg>`;
 }
 
-function renderTrainStrip(container, codes) {
+function renderTrainStrip(container, codes, changed) {
   container.classList.add('train-strip');
   container.innerHTML = '';
   const mk = (html) => {
@@ -1315,7 +862,7 @@ function renderTrainStrip(container, codes) {
       return;
     }
     container.appendChild(mk(
-      `<div class="tcoach ${classOf(code)}">
+      `<div class="tcoach ${classOf(code)}${changed && changed[i] ? ' tchg' : ''}">
         <div class="t-pos">${i + 1}</div>
         <div class="t-body"><div class="t-win"></div><div class="t-win"></div><div class="t-door"></div><div class="t-win"></div></div>
         <div class="t-wheels"><div class="t-wheel"></div><div class="t-wheel"></div></div>
@@ -1329,78 +876,259 @@ function renderTrainStrip(container, codes) {
 // ENG never reverses — only the coaches from position 2 onwards flip at each
 // reversal station. Reversal stations are set per train in the admin panel.
 const _revCache = {};
+// Admin-set reversal stations win; otherwise RailRadar's (see getTrainInfo).
 async function getReversalStations(trainNo) {
   const key = String(trainNo);
   if (_revCache[key] !== undefined) return _revCache[key];
+  let admin = [];
   try {
-    const doc = await db.collection('trains').doc(key).get();
+    const doc = await getFast(db.collection('trains').doc(key));
     const d = doc.exists ? doc.data() : null;
-    _revCache[key] = (d && Array.isArray(d.reversalStations)) ? d.reversalStations : [];
-  } catch { _revCache[key] = []; }
-  return _revCache[key];
+    if (d && Array.isArray(d.reversalStations)) admin = d.reversalStations;
+  } catch { /* fall through to RailRadar */ }
+  if (!admin.length) {
+    const info = await getTrainInfo(key);
+    if (info && info.reversalStations.length) admin = info.reversalStations;
+  }
+  _revCache[key] = admin;
+  return admin;
 }
 
-function reverseFormation(codes) {
-  if (!codes.length) return codes;
-  return codes[0].toUpperCase() === 'ENG'
-    ? [codes[0], ...codes.slice(1).reverse()]
-    : [...codes].reverse();
+// ─── RailRadar data (via the rail-info function + Firestore cache) ──────────
+// Reads the shared cache doc directly (fast, works offline once seen); only
+// asks the function — which refreshes the cache from RailRadar — when the
+// doc is missing or stale. One promise per key so parallel callers share it.
+const _rrCache = {};
+function getRailCached(collection, id, param, ttlDays) {
+  const key = `${collection}/${id}`;
+  if (_rrCache[key]) return _rrCache[key];
+  _rrCache[key] = (async () => {
+    let stale = null;
+    try {
+      const snap = await getFast(db.collection(collection).doc(id));
+      if (snap.exists) {
+        const d = snap.data();
+        const data = d.json ? JSON.parse(d.json) : null;
+        if (data && Date.now() - Number(d.fetchedAt || 0) < ttlDays * 86400000) return data;
+        stale = data;
+      }
+    } catch (_) { /* rules not deployed yet or offline — ask the function */ }
+    if (!navigator.onLine) return stale;
+    try {
+      const res = await fetch(`/.netlify/functions/rail-info?${param}=${encodeURIComponent(id)}`);
+      if (res.ok) {
+        const j = await res.json();
+        if (j && j.data) return j.data;
+      }
+    } catch (_) { /* network — use whatever we had */ }
+    return stale;
+  })();
+  // Don't pin a failure: let the next caller try again.
+  _rrCache[key].then(v => { if (!v) delete _rrCache[key]; });
+  return _rrCache[key];
+}
+function getTrainInfo(trainNo) {
+  const no = String(trainNo || '').trim();
+  return /^\d{5}$/.test(no) ? getRailCached('rr_trains', no, 'train', 90) : Promise.resolve(null);
+}
+function getStationBoard(code) {
+  const c = String(code || '').trim().toUpperCase();
+  return /^[A-Z]{2,7}$/.test(c) ? getRailCached('rr_stations', c, 'board', 60) : Promise.resolve(null);
+}
+
+
+
+
+
+// Most recent saved record for this train before `date` (looks back 10 days).
+const _prevCache = {};
+function getPreviousRecord(trainNo, date) {
+  const key = `${trainNo}_${date}`;
+  if (!_prevCache[key]) {
+    const [y, mo, d] = String(date).split('-').map(Number);
+    const keys = [];
+    for (let i = 1; i <= 10; i++) {
+      const dt = new Date(y, mo - 1, d - i);
+      keys.push(`${trainNo}_${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`);
+    }
+    _prevCache[key] = Promise.all(keys.map(k => getTrainRecord(k).catch(() => null)))
+      .then(recs => recs.find(r => r && r.parsedList && r.parsedList.length) || null);
+  }
+  return _prevCache[key];
+}
+
+// Fill a "changed since <date>" summary line; hidden when there's nothing to compare.
+function renderDiffLine(el, diff, prev) {
+  if (!el) return;
+  if (!diff || !prev) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const when = formatDateOnly(prev.date);
+  el.style.display = 'block';
+  if (diff.same) {
+    el.className = el.className.replace(/\bdiff-(same|chg)\b/g, '').trim() + ' diff-same';
+    el.textContent = diff.reversed
+      ? `✓ Same coaches as ${when}, entered from the other end`
+      : `✓ Same formation as ${when}`;
+    return;
+  }
+  el.className = el.className.replace(/\bdiff-(same|chg)\b/g, '').trim() + ' diff-chg';
+  const moved = diff.changed.map((c, i) => c ? diff.codes[i] : null).filter(Boolean);
+  const parts = [];
+  if (moved.length) parts.push(`new/moved: ${moved.map(escapeHtml).join(', ')}`);
+  if (diff.removed.length) parts.push(`removed: ${diff.removed.map(escapeHtml).join(', ')}`);
+  el.innerHTML = `<span class="diff-dot"></span> Changed since ${escapeHtml(when)} — ${parts.join(' · ')}`;
 }
 
 // Render formation with reversal stations into a container (NTES style):
 // first leg strip, then one highlighted collapsible block per reversal
 // station showing Arrival and Departure formations at that station.
 // No reversals → single strip, same as before.
-function renderFormationSegments(container, parsedList, revStations, fromStation, toStation, expandAll) {
-  if (!revStations || !revStations.length) {
-    renderTrainStrip(container, parsedList);
+
+
+// "Changed since last time" flags for a record, in the order it was entered.
+// Two days may have been entered on different legs (e.g. before and after a
+// reversal), so both are compared in first-leg order first.
+function changedFlagsFor(rec, prev) {
+  if (!prev || !prev.parsedList || !rec.parsedList) return { diff: null, flags: null };
+  const firstLeg = (r) => ((r.seenLeg || 0) % 2 ? reverseFormation(r.parsedList) : r.parsedList);
+  const cur0 = firstLeg(rec);
+  const diff = diffFormation(firstLeg(prev), cur0);
+  if (diff.same) return { diff, flags: null };
+  const flags = (rec.seenLeg || 0) % 2 ? reverseAligned(cur0, diff.changed) : diff.changed;
+  return { diff: { ...diff, changed: flags, codes: rec.parsedList }, flags };
+}
+
+// Build the per-leg formations for a record: RailRadar's schedule when we
+// have it (and it agrees with any admin-set reversal list), the staff entry
+// placed on the leg it was seen on, and today's extra coaches.
+function buildLegsModel(rec, rev, info, changed) {
+  const sameSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
+  const sched = info && (!rev.length || sameSet(rev, info.reversalStations)) ? info : null;
+  return computeLegs({
+    entry: rec.parsedList || [],
+    seenLeg: rec.seenLeg || 0,
+    sched,
+    revStations: rev || [],
+    from: rec.fromStation || (info && info.src) || '',
+    to: rec.toStation || (info && info.dst) || '',
+    changed,
+    extras: rec.extras || [],
+  });
+}
+
+// Small label saying where a leg's formation came from.
+function legSourceTag(leg, rec) {
+  if (!leg) return '';
+  if (leg.source === 'seen') return `<span class="src-tag src-seen">✓ Seen${rec && rec.seenAt ? ' at ' + escapeHtml(rec.seenAt) : ''}</span>`;
+  if (leg.source === 'derived') return `<span class="src-tag src-derived">Calculated</span>`;
+  return `<span class="src-tag src-sched">Scheduled</span>`;
+}
+
+function extrasNoteHtml(ex) {
+  const n = ex.count;
+  const kind = (EXTRA_KINDS[String(ex.kind || '').toUpperCase()] || 'Extra').toLowerCase();
+  const where = ex.end === 'rear' ? 'at the rear' : 'behind the engine';
+  const shift = ex.end === 'rear' ? '' : ` — coach positions shift back by ${n}`;
+  return `⚠ ${n} extra coach${n === 1 ? '' : 'es'} (${escapeHtml(kind)}, not for passengers) added ${where} at ${escapeHtml(ex.at)}${shift}`;
+}
+
+function boundaryLabel(b) {
+  const extra = b.extras && b.extras.length;
+  if (b.type === 'reversal') return { icon: '🔄', text: extra ? 'REVERSAL + EXTRA COACHES' : 'REVERSAL STATION' };
+  if (b.type === 'change') return { icon: '🔁', text: 'FORMATION CHANGE (SCHEDULED)' };
+  return { icon: '➕', text: 'EXTRA COACHES ADDED' };
+}
+
+// Shared-image layout: one card per leg of the journey, with a divider between
+// legs saying what happens there. Unlike the in-app view it doesn't repeat the
+// arrival formation (it's identical to the previous leg), so the image stays
+// short. Leg n+1 uses boundary n's colour, matching the in-app blocks.
+function renderLegsShare(container, model, rec) {
+  container.classList.remove('train-strip');
+  container.innerHTML = '';
+  const { stops, legs, boundaries } = model;
+  legs.forEach((leg, i) => {
+    const col = i === 0 ? LEG0_COLOUR : REV_COLOURS[(i - 1) % REV_COLOURS.length];
+    if (i > 0) {
+      const b = boundaries[i - 1];
+      const div = document.createElement('div');
+      div.className = 'sc-rev';
+      div.style.setProperty('--rv', col.c);
+      const main = b.type === 'reversal' ? `🔄 Reverses at ${escapeHtml(b.station)} · coach order flips`
+        : b.type === 'change' ? `🔁 Formation changes at ${escapeHtml(b.station)} (scheduled)`
+        : `➕ Extra coaches at ${escapeHtml(b.station)}`;
+      div.innerHTML = `<span class="sc-rev-pill">${main}</span>` +
+        (b.extras || []).map(ex => `<div class="sc-extra-note">${extrasNoteHtml(ex)}</div>`).join('');
+      container.appendChild(div);
+    }
+    const el = document.createElement('div');
+    el.className = 'sc-leg';
+    el.style.setProperty('--rv', col.c);
+    el.style.setProperty('--rv-dark', col.dark);
+    el.style.setProperty('--rv-soft', col.soft);
+    el.innerHTML = `<div class="sc-leg-hd"><span class="sc-leg-no">LEG ${i + 1}</span><span class="sc-leg-route">${escapeHtml(stops[i])} → ${escapeHtml(stops[i + 1])}</span>${legSourceTag(leg, rec)}</div><div class="sc-leg-strip"></div>`;
+    renderTrainStrip(el.querySelector('.sc-leg-strip'), leg.codes, leg.flags);
+    container.appendChild(el);
+  });
+}
+
+// In-app layout (NTES style): first leg, then one highlighted collapsible
+// block per change station showing the arrival and departure formations.
+function renderLegsInApp(container, model, rec, expandAll) {
+  const { stops, legs, boundaries } = model;
+  if (!legs.length) { renderTrainStrip(container, rec.parsedList || []); return; }
+  if (legs.length === 1) {
+    renderTrainStrip(container, legs[0].codes, legs[0].flags);
+    if (legs[0].source !== 'seen') container.insertAdjacentHTML('afterbegin', `<div class="seg-hd" style="width:100%">${legSourceTag(legs[0], rec)}</div>`);
     return;
   }
   container.classList.remove('train-strip');
   container.innerHTML = '';
-
-  const stripEl = (codes) => {
+  const stripEl = (leg) => {
     const strip = document.createElement('div');
     strip.className = 'strip';
-    renderTrainStrip(strip, codes);
+    renderTrainStrip(strip, leg.codes, leg.flags);
     return strip;
   };
-
-  // First leg — the formation as entered
   const firstHd = document.createElement('div');
   firstHd.className = 'seg-hd';
-  firstHd.textContent = `${fromStation || 'ORIGIN'} → ${revStations[0]}`;
+  firstHd.innerHTML = `${escapeHtml(stops[0])} → ${escapeHtml(stops[1])} ${legSourceTag(legs[0], rec)}`;
   container.appendChild(firstHd);
-  container.appendChild(stripEl(parsedList));
+  container.appendChild(stripEl(legs[0]));
 
-  // One highlighted, collapsible block per reversal station
-  let codes = parsedList;
-  revStations.forEach((stn, i) => {
-    const before = codes;
-    codes = reverseFormation(codes);
-    const nextPoint = revStations[i + 1] || toStation || 'DESTINATION';
-
+  // Each change station in its own colour so it's obvious which station a
+  // formation belongs to. Plain hex values so html2canvas renders them.
+  boundaries.forEach((b, i) => {
+    const stn = escapeHtml(b.station);
+    const nextPoint = escapeHtml(stops[i + 2] || 'DESTINATION');
+    const lab = boundaryLabel(b);
     const block = document.createElement('div');
     block.className = 'rev-block' + (expandAll ? ' open' : '');
+    const col = REV_COLOURS[i % REV_COLOURS.length];
+    block.style.setProperty('--rv', col.c);
+    block.style.setProperty('--rv-dark', col.dark);
+    block.style.setProperty('--rv-soft', col.soft);
     block.innerHTML = `
       <div class="rev-bar">
-        <span class="rev-star">🔄</span>
-        <span>${stn} — REVERSAL STATION</span>
+        <span class="rev-star">${lab.icon}</span>
+        <span><span class="rev-no">${i + 1}</span> ${stn} — ${lab.text}</span>
         <span class="rev-chev">▼</span>
       </div>
       <div class="rev-body">
-        <div class="rev-sub arr">⬇ Arrival at <b>${stn}</b></div>
+        <div class="rev-sub arr">⬇ Arrival at <b>${stn}</b></div> ${legSourceTag(legs[i], rec)}
         <div class="_rv-arr"></div>
-        <div class="rev-sub dep">⬆ Departure from <b>${stn}</b> → ${nextPoint}</div>
+        ${(b.extras || []).map(ex => `<div class="extra-note">${extrasNoteHtml(ex)}</div>`).join('')}
+        <div class="rev-sub dep">⬆ Departure from <b>${stn}</b> → ${nextPoint}</div> ${legSourceTag(legs[i + 1], rec)}
         <div class="_rv-dep"></div>
       </div>
     `;
-    block.querySelector('._rv-arr').appendChild(stripEl(before));
-    block.querySelector('._rv-dep').appendChild(stripEl(codes));
+    block.querySelector('._rv-arr').appendChild(stripEl(legs[i]));
+    block.querySelector('._rv-dep').appendChild(stripEl(legs[i + 1]));
     block.querySelector('.rev-bar').addEventListener('click', (e) => {
       e.stopPropagation();
       block.classList.toggle('open');
     });
+    // Extra coaches are today's news — show them without a tap
+    if (b.extras && b.extras.length) block.classList.add('open');
     container.appendChild(block);
   });
 }
@@ -1838,8 +1566,26 @@ async function populateShareCapture(d) {
     ? `${d.fromStation} → ${d.toStation}`
     : d.fromStation || d.toStation || '';
   $('rRoute').textContent = fromTo;
-  const _rev = await getReversalStations(d.trainNo);
-  renderFormationSegments($('rStrip'), d.parsedList || [], _rev, d.fromStation, d.toStation, true);
+  // Capped so a slow/offline Firestore read can't leave Share hanging;
+  // falls back to no reversal stations.
+  const capped = (p, fallback) => Promise.race([p.catch(() => fallback), new Promise(res => setTimeout(() => res(fallback), 3000))]);
+  const [_rev, info, prev] = await Promise.all([
+    capped(getReversalStations(d.trainNo), []),
+    capped(getTrainInfo(d.trainNo), null),
+    capped(getPreviousRecord(d.trainNo, d.date), null),
+  ]);
+  const { diff, flags } = changedFlagsFor(d, prev);
+  renderDiffLine($('rDiff'), diff, prev);
+  const model = buildLegsModel(d, _rev || [], info, flags);
+  const strip = $('rStrip');
+  if (model.legs.length > 1) renderLegsShare(strip, model, d);
+  else renderLegsInApp(strip, model, d, true);
+  const nCoaches = (d.parsedList || []).filter(c => String(c).toUpperCase() !== 'ENG' && !isExtraCode(c)).length;
+  const revs = model.boundaries.filter(b => b.type === 'reversal').map(b => b.station);
+  const extras = model.boundaries.flatMap(b => b.extras || []);
+  $('rSummary').textContent = `${nCoaches} coaches` +
+    (revs.length ? ` · reverses at ${revs.join(', ')}` : '') +
+    (extras.length ? ` · +${extras.reduce((n, e) => n + e.count, 0)} extra at ${extras.map(e => e.at).join(', ')}` : '');
   const stationPart = d.submittedByStation ? ` · ${d.submittedByStation}` : '';
   const idHint = d.submittedByPhone ? `(${d.submittedByPhone.slice(-4)})` : d.submittedByEmail ? `(${d.submittedByEmail.split('@')[0]})` : '';
   $('rBy').textContent = `${d.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
@@ -2109,6 +1855,33 @@ async function sendPush(token, title, body) {
 })();
 
 // ─── Stale badge ──────────────────────────────────────────────────────────────
+// Compact "when" label for a list row: "Today · 19:32", "Yesterday · 17:08",
+// "28 Sep · 17:08" — the year only when it isn't this year.
+function whenChipHtml(rec) {
+  const today = todayStr();
+  const d = new Date(today);
+  d.setDate(d.getDate() - 1);
+  const yest = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const time = rec.updatedAt ? formatTime(new Date(rec.updatedAt)) : '';
+  let label, cls;
+  if (rec.date === today) { label = 'Today'; cls = 'today'; }
+  else if (rec.date === yest) { label = 'Yesterday'; cls = 'recent'; }
+  else {
+    const full = formatDateOnly(rec.date);
+    const short = rec.date.slice(0, 4) === today.slice(0, 4) ? full.replace(/ \d{4}$/, '') : full;
+    const days = Math.round((new Date(today) - new Date(rec.date)) / 86400000);
+    // One chip, not two: older entries get a warning with their age
+    return `<span class="when-chip stale" title="${days} days old">⚠ ${short} · ${days}d</span>`;
+  }
+  return `<span class="when-chip ${cls}">${label}${time ? ' · ' + time : ''}</span>`;
+}
+
+// Hide placeholder names that came in from imports ("TRAIN NAME", "-").
+function cleanTrainName(name) {
+  const n = String(name || '').trim();
+  return /^(train\s*name|-+|—|n\/?a)$/i.test(n) ? '' : n;
+}
+
 function staleBadge(isoDate) {
   const today = todayStr();
   if (isoDate >= today) return '';
@@ -2145,6 +1918,10 @@ async function getMostRecentFormation(trainNo) {
 
 // ─── Trains list ──────────────────────────────────────────────────────────────
 async function renderTrainsList() {
+  if (activeTab === 'mystn') { renderMyStation(); return; }
+  $('tabMyStn').classList.remove('active');
+  $('myStnBar').classList.remove('visible');
+  $('myStnDays').classList.remove('visible');
   const filter = ($('listSearch').value || '').trim();
   let list = await getAllTrains(filter);
 
@@ -2203,13 +1980,11 @@ async function renderTrainsList() {
         <button class="star-btn${isFav ? ' starred' : ''}" data-train="${cur.trainNo}" aria-label="${isFav ? 'Remove from' : 'Add to'} favourites">${isFav ? '★' : '☆'}</button>
         <div class="tno-badge">${cur.trainNo}</div>
         <div class="train-item-meta">
-          ${fromTo ? `<div class="ti-route">${fromTo}</div>` : ''}
-          <div class="ti-name">${cur.trainName || '—'}</div>
-        </div>
-        <div class="ti-when">
-          <span class="ti-date">${formatDateOnly(cur.date)}</span><br>
-          <span class="ti-time">${formatTime(new Date(cur.updatedAt))}</span>
-          <span class="ti-stale">${staleBadge(cur.date)}</span>
+          <div class="ti-name">${escapeHtml(cleanTrainName(cur.trainName) || fromTo || 'Train ' + cur.trainNo)}</div>
+          <div class="ti-sub">
+            <span class="ti-route">${cleanTrainName(cur.trainName) ? escapeHtml(fromTo) : ''}</span>
+            <span class="ti-when">${whenChipHtml(cur)}</span>
+          </div>
         </div>
         <div class="ti-chev">▾</div>
       </div>
@@ -2225,6 +2000,7 @@ async function renderTrainsList() {
             </div>
             <div class="inline-date i-date">${formatDateOnly(cur.date)}</div>
           </div>
+          <div class="diff-line i-diff" style="display:none"></div>
           <div class="strip-wrap"><div class="strip i-strip"></div></div>
           <div class="card-disclaimer">⚠ Formation may change without notice. Verify before announcement / boarding.</div>
           <div class="meta-line"><span class="dot"></span> Updated by <b class="i-by"></b> · <span class="i-when"></span></div>
@@ -2251,18 +2027,27 @@ async function renderTrainsList() {
         ? `(${rec.submittedByPhone.slice(-4)})`
         : rec.submittedByEmail ? `(${rec.submittedByEmail.split('@')[0]})` : '';
 
-      renderTrainStrip(item.querySelector('.i-strip'), rec.parsedList || []);
-      // Upgrade to multi-segment view if this train has reversal stations
-      getReversalStations(rec.trainNo).then(rev => {
-        if (!rev.length || cur !== rec) return;
-        renderFormationSegments(item.querySelector('.i-strip'), rec.parsedList || [], rev, rec.fromStation, rec.toStation);
-      });
+      // Draw now, then redraw once reversal stations, RailRadar's schedule and
+      // the comparison with the previous saved formation have loaded.
+      let rev = [], info = null, chg = null;
+      const draw = () => {
+        if (cur !== rec) return;
+        renderLegsInApp(item.querySelector('.i-strip'), buildLegsModel(rec, rev, info, chg), rec, false);
+      };
+      draw();
+      Promise.all([getReversalStations(rec.trainNo).catch(() => []), getTrainInfo(rec.trainNo).catch(() => null)])
+        .then(([r, i]) => { rev = r || []; info = i; if (rev.length || info) draw(); });
+      renderDiffLine(item.querySelector('.i-diff'), null, null);
+      getPreviousRecord(rec.trainNo, rec.date).then(prev => {
+        if (cur !== rec) return;
+        const { diff, flags } = changedFlagsFor(rec, prev);
+        renderDiffLine(item.querySelector('.i-diff'), diff, prev);
+        if (flags) { chg = flags; draw(); }
+      }).catch(() => {});
       item.querySelector('.i-date').textContent = formatDateOnly(rec.date);
       item.querySelector('.i-by').textContent = `${rec.submittedByName || '—'}${idHint ? ' ' + idHint : ''}${stationPart}`;
       item.querySelector('.i-when').textContent = `${formatDateTime(new Date(rec.updatedAt))} · #${rec.updateCount || 1}`;
-      item.querySelector('.ti-date').textContent = formatDateOnly(rec.date);
-      item.querySelector('.ti-time').textContent = formatTime(new Date(rec.updatedAt));
-      item.querySelector('.ti-stale').innerHTML = staleBadge(rec.date);
+      item.querySelector('.ti-when').innerHTML = whenChipHtml(rec);
 
       const clEl = item.querySelector('.i-cl');
       if (confirmList.length) {
@@ -2345,9 +2130,19 @@ async function renderTrainsList() {
     });
 
     // Share
-    item.querySelector('.i-share').addEventListener('click', async () => {
-      await populateShareCapture(cur);
-      shareAsImage(cur.trainNo, cur.date);
+    item.querySelector('.i-share').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = '⏳ Preparing…';
+      try {
+        await populateShareCapture(cur);
+        await shareAsImage(cur.trainNo, cur.date);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
     });
 
     if (canEdit()) {
@@ -2362,9 +2157,11 @@ async function renderTrainsList() {
         const existing = await getTrainRecord(key);
         await saveTrainRecord(key, {
           trainNo: cur.trainNo, trainName: cur.trainName || '', date: today,
-          rawList: cur.rawList || (cur.parsedList || []).join(','),
-          parsedList: cur.parsedList || [],
+          // Same rake as that day, minus its one-day extra (sick/empty) coaches
+          rawList: (cur.parsedList || []).filter(c => !isExtraCode(c)).join(','),
+          parsedList: (cur.parsedList || []).filter(c => !isExtraCode(c)),
           fromStation: cur.fromStation || '', toStation: cur.toStation || '',
+          seenAt: cur.seenAt || '', seenLeg: cur.seenLeg || 0, extras: [],
           submittedByName: identity.name,
           submittedByEmail: identity.email || '',
           submittedByPhone: identity.phone || '',
@@ -2484,7 +2281,8 @@ function logSearchDebounced(query) {
     // doesn't have it at all — let other users know. Shorter/longer digit
     // strings are almost always a partial/mid-typing search, not a real
     // train number, so they're ignored here to avoid noisy false requests.
-    if (found === false && /^\d{5}$/.test(q)) requestTrainAdd(q);
+    // (Not from My station: there "no match" just means it doesn't call there today.)
+    if (found === false && /^\d{5}$/.test(q) && activeTab !== 'mystn') requestTrainAdd(q);
   }, 800);
 }
 
@@ -2493,9 +2291,239 @@ $('stationCodeInput').addEventListener('input', () => {
   logSearchDebounced($('stationCodeInput').value);
 });
 $('listSearch').addEventListener('input', () => {
-  renderTrainsList();
+  if (activeTab === 'mystn') filterMyStationRows();
+  else renderTrainsList();
   logSearchDebounced($('listSearch').value);
 });
+
+// ─── My station: today's trains calling at the user's station ───────────────
+function getMyStation() {
+  let v = '';
+  try { v = localStorage.getItem('cp_my_station') || ''; } catch (_) {}
+  return (v || (currentUser && currentUser.station) || '').toUpperCase();
+}
+function setMyStation(code) {
+  try { localStorage.setItem('cp_my_station', code); } catch (_) {}
+}
+
+$('tabMyStn').addEventListener('click', () => {
+  activeTab = 'mystn';
+  setSelectMode(false);
+  ['tabAll', 'tabFav', 'tabStation'].forEach(id => $(id).classList.remove('active'));
+  $('tabMyStn').classList.add('active');
+  $('stationBar').classList.remove('visible');
+  $('myStnBar').classList.add('visible');
+  $('myStnDays').classList.add('visible');
+  _myStnOffset = 0;
+  document.querySelectorAll('#myStnDays .day-chip').forEach(b => b.classList.toggle('active', b.dataset.off === '0'));
+  $('listSearch').style.display = '';
+  $('listSearch').value = '';
+  $('listSearch').placeholder = "Search trains here — number, name or station…";
+  $('selectToggle').style.display = 'none';
+  $('myStnInput').value = getMyStation();
+  renderMyStation();
+});
+// Leaving the tab via any other tab
+document.querySelector('.tabs-row').addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (!t || t.id === 'tabMyStn') return;
+  $('tabMyStn').classList.remove('active');
+  $('myStnBar').classList.remove('visible');
+  $('myStnDays').classList.remove('visible');
+}, true);
+$('myStnSet').addEventListener('click', () => {
+  const code = $('myStnInput').value.trim().toUpperCase();
+  if (!/^[A-Z]{2,7}$/.test(code)) { toast('Enter a station code, e.g. RNR'); return; }
+  setMyStation(code);
+  logUsage('my_station_set', { station: code });
+  renderMyStation();
+});
+$('myStnInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('myStnSet').click(); });
+
+let _myStnRenderSeq = 0;
+// Day shown in My station: -1 yesterday, 0 today, 1 tomorrow. Switching
+// days only re-filters the saved station board — no extra RailRadar calls.
+let _myStnOffset = 0;
+function myStnDate() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + _myStnOffset);
+}
+const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const myStnDayWord = () => ['yesterday', 'today', 'tomorrow'][_myStnOffset + 1];
+document.querySelectorAll('#myStnDays .day-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _myStnOffset = Number(btn.dataset.off);
+    document.querySelectorAll('#myStnDays .day-chip').forEach(b => b.classList.toggle('active', b === btn));
+    renderMyStation();
+  });
+});
+
+// Positions saved for one date (one Firestore query, cache-first on weak signal).
+async function getRecordsForDate(date) {
+  try {
+    const snap = await getFast(db.collection('trains').where('date', '==', date));
+    return snap.docs.map(d => d.data()).filter(r => r.trainNo && r.parsedList);
+  } catch (_) { return []; }
+}
+
+async function renderMyStation() {
+  const seq = ++_myStnRenderSeq;
+  const wrap = $('trainsList');
+  const code = getMyStation();
+  $('listCount').textContent = '';
+  if (!code) {
+    wrap.innerHTML = '<div class="trains-empty">Enter your station code above (e.g. RNR) to see the trains there.</div>';
+    return;
+  }
+  const day = myStnDate();
+  const dayStr = isoDate(day);
+  const isToday = _myStnOffset === 0;
+  wrap.innerHTML = `<div class="trains-empty">Loading trains at ${escapeHtml(code)}…</div>`;
+  const [board, dayRecs, latest] = await Promise.all([
+    getStationBoard(code),
+    getRecordsForDate(dayStr),
+    getAllTrains('').catch(() => []),
+  ]);
+  if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
+  if (!board) {
+    wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
+    return;
+  }
+  const recOnDay = {};
+  dayRecs.forEach(r => { recOnDay[r.trainNo] = r; });
+  const lastRec = {};
+  latest.forEach(r => { if (r.date <= dayStr) lastRec[r.trainNo] = r; });
+  const list = trainsOnDate(board, day);
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const minOf = (t) => { const [h, m] = String(t.a || t.d || '00:00').split(':').map(Number); return h * 60 + m; };
+  const nextIdx = isToday ? list.findIndex(t => minOf(t) >= nowMin - 5) : -1;
+  const pastAll = isToday && nextIdx === -1; // every train today has gone
+  const word = myStnDayWord();
+
+  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${word[0].toUpperCase() + word.slice(1)}, ${DAY_KEYS[day.getDay()].toUpperCase()} ${formatDateOnly(dayStr)}</div>`;
+  if (!list.length) { wrap.insertAdjacentHTML('beforeend', `<div class="trains-empty">No trains call here ${word}.</div>`); return; }
+
+  list.forEach((t, i) => {
+    const rec = recOnDay[t.no] || null;
+    const last = rec || lastRec[t.no] || null;
+    const status = rec ? '<span class="stn-st st-today">✓ Position entered</span>'
+      : last ? `<span class="stn-st st-old">Last: ${formatDateOnly(last.date)}</span>`
+      : '<span class="stn-st st-sched">Scheduled only</span>';
+    const row = document.createElement('div');
+    row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '');
+    row.dataset.search = `${t.no} ${t.name} ${t.src} ${t.dst}`.toLowerCase();
+    row.innerHTML = `
+      <div class="train-item-head">
+        <div class="stn-time">${escapeHtml(t.a || t.d || '')}</div>
+        <div class="tno-badge">${escapeHtml(t.no)}</div>
+        <div class="train-item-meta">
+          <div class="ti-route">${escapeHtml(t.src)} → ${escapeHtml(t.dst)}</div>
+          <div class="ti-name">${escapeHtml(t.name)}</div>
+        </div>
+        <div class="ti-when">${i === nextIdx ? '<span class="stn-next">NEXT</span><br>' : ''}${status}</div>
+      </div>
+      <div class="train-item-body stn-body"></div>`;
+    row.querySelector('.train-item-head').addEventListener('click', () => {
+      const open = row.classList.toggle('open');
+      if (open && !row.dataset.loaded) { row.dataset.loaded = '1'; fillStationTrain(row.querySelector('.stn-body'), t, rec, last, code, dayStr); }
+    });
+    wrap.appendChild(row);
+  });
+  wrap.insertAdjacentHTML('beforeend', '<div class="trains-empty stn-nomatch" style="display:none"></div>');
+  filterMyStationRows();
+  if (nextIdx > 0 && !$('listSearch').value.trim()) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+}
+
+// Filter the day's list in place as the user types (no reload per keystroke).
+function filterMyStationRows() {
+  const rows = [...document.querySelectorAll('#trainsList .stn-row')];
+  if (!rows.length) return;
+  const q = ($('listSearch').value || '').trim().toLowerCase();
+  let shown = 0;
+  rows.forEach(r => {
+    const hit = !q || r.dataset.search.includes(q);
+    r.style.display = hit ? '' : 'none';
+    if (hit) shown++;
+  });
+  _lastSearchResultCount = shown;
+  const word = myStnDayWord();
+  $('listCount').textContent = q
+    ? `${shown} of ${rows.length} trains ${word}`
+    : `${rows.length} train${rows.length === 1 ? '' : 's'} ${word}`;
+  const none = document.querySelector('#trainsList .stn-nomatch');
+  if (none) {
+    none.style.display = q && !shown ? '' : 'none';
+    none.textContent = `No train matching "${q}" calls at ${getMyStation()} ${word}.`;
+  }
+}
+
+// Expanded station row: the formation as it arrives HERE first, then the
+// whole journey, plus buttons to open the full card or enter the position.
+//   rec  — position saved for the chosen day (or null)
+//   last — the most recent saved position up to that day (shown when rec is
+//          missing, labelled with its date)
+async function fillStationTrain(body, t, rec, last, code, dayStr) {
+  body.innerHTML = '<div class="trains-empty" style="padding:14px 0">Loading formation…</div>';
+  const [info, rev] = await Promise.all([getTrainInfo(t.no), getReversalStations(t.no).catch(() => [])]);
+  const shown = rec || last;
+  const base = shown || { trainNo: t.no, trainName: t.name, parsedList: [], fromStation: t.src, toStation: t.dst };
+  // Extra coaches belong to their own date only
+  const model = buildLegsModel(rec ? base : { ...base, extras: [] }, rev || [], info, null);
+  const halt = info && info.halts.find(h => h.c === code);
+  body.innerHTML = '';
+  if (!rec && last) body.insertAdjacentHTML('beforeend', `<div class="stn-note">Showing the last saved position (${formatDateOnly(last.date)}) — nobody has entered ${formatDateOnly(dayStr)} yet.</div>`);
+  if (!model.legs.length) {
+    body.insertAdjacentHTML('beforeend', '<div class="trains-empty" style="padding:14px 0">No formation available yet.</div>');
+  } else {
+    // This station's leg = how many change stations (reversals, extra-coach
+    // stops) come at or before it on the route.
+    const order = info ? info.halts.map(h => h.c) : model.stops;
+    const pos = order.indexOf(code);
+    let li = 0;
+    if (pos !== -1) model.stops.slice(1, -1).forEach((stp, i) => {
+      const p2 = order.indexOf(stp);
+      if (p2 !== -1 && p2 <= pos) li = i + 1;
+    });
+    const leg = model.legs[li];
+    const hd = document.createElement('div');
+    hd.className = 'seg-hd';
+    hd.innerHTML = `At ${escapeHtml(code)}${model.legs.length > 1 ? ` · leg ${li + 1} of ${model.legs.length}` : ''}${halt && halt.pf ? ` · PF ${escapeHtml(halt.pf)}` : ''} ${legSourceTag(leg, base)}`;
+    body.appendChild(hd);
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    renderTrainStrip(strip, leg.codes, leg.flags);
+    body.appendChild(strip);
+    const warn = model.boundaries.slice(0, li).flatMap(b => b.extras || []);
+    warn.forEach(ex => body.insertAdjacentHTML('beforeend', `<div class="extra-note">${extrasNoteHtml(ex)}</div>`));
+    if (model.legs.length > 1) {
+      const more = document.createElement('details');
+      more.className = 'stn-journey';
+      more.innerHTML = '<summary>Show whole journey</summary><div class="strip"></div>';
+      renderLegsInApp(more.querySelector('.strip'), model, base, false);
+      body.appendChild(more);
+    }
+  }
+  const btns = document.createElement('div');
+  btns.className = 'stn-btns';
+  if (shown) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-secondary';
+    b.textContent = 'Open full card';
+    b.addEventListener('click', () => { $('tabAll').click(); $('listSearch').value = t.no; renderTrainsList(); });
+    btns.appendChild(b);
+  }
+  // Positions are entered for today or yesterday — not for a day that hasn't happened
+  if (canEdit() && _myStnOffset <= 0) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-primary';
+    const word = myStnDayWord();
+    b.textContent = rec ? `✎ Update ${word}'s position` : `+ Enter ${word}'s position`;
+    b.addEventListener('click', () => openSubmit(t.no, dayStr, t.name, rec ? rec.rawList : '', t.src, t.dst));
+    btns.appendChild(b);
+  }
+  if (btns.children.length) body.appendChild(btns);
+}
 
 // ─── Trains tab (local Firestore database) ────────────────────────────────────
 let _allTrains = null;
@@ -2778,31 +2806,6 @@ function fileToBase64(file) {
   });
 }
 
-// Expand shorthand coach notations returned by OCR:
-//   "7 GEN" → ["GEN","GEN","GEN","GEN","GEN","GEN","GEN"]
-//   "D5-D1" → ["D5","D4","D3","D2","D1"]
-//   "S1-S6" → ["S1","S2","S3","S4","S5","S6"]
-function expandCoaches(list) {
-  const out = [];
-  for (const raw of list) {
-    const c = String(raw).toUpperCase().trim();
-    const mul = c.match(/^(\d+)\s+([A-Z0-9]+)$/);
-    if (mul) {
-      const n = Math.min(parseInt(mul[1]), 30);
-      for (let i = 0; i < n; i++) out.push(mul[2]);
-      continue;
-    }
-    const rng = c.match(/^([A-Z]{1,3})(\d+)-([A-Z]{1,3})(\d+)$/);
-    if (rng && rng[1] === rng[3]) {
-      const prefix = rng[1], from = parseInt(rng[2]), to = parseInt(rng[4]);
-      const step = from <= to ? 1 : -1;
-      for (let i = from; i !== to + step; i += step) out.push(prefix + i);
-      continue;
-    }
-    out.push(c);
-  }
-  return out;
-}
 
 // Open the full submit form pre-filled from the Trains tab train database
 async function openSubmitForTrain(trainNo) {
@@ -2837,33 +2840,70 @@ async function shareAsImage(trainNo, date) {
   genEl.style.display = 'block';
   brandEl.textContent = `Train ${trainNo} · coachformation.netlify.app`;
   try {
-    const canvas = await html2canvas(node, { backgroundColor: '#1E2227', scale: 2 });
+    // Only clone the capture card (plus <head> for styles): by default
+    // html2canvas clones the whole page — every train card and overlay —
+    // which on phones with a long list takes long enough to look frozen.
+    const keep = (el) => el === node || el.contains(node) || node.contains(el) || !!el.closest('head');
+    // Render at up to 3x (2160px wide) for crisp coach labels, but cap the
+    // total pixel count so tall multi-reversal cards stay within phone
+    // canvas memory limits.
+    const MAX_PX = 12e6;
+    const area = Math.max(1, node.offsetWidth * node.offsetHeight);
+    const scale = Math.max(1.5, Math.min(3, Math.sqrt(MAX_PX / area)));
+    const canvas = await Promise.race([
+      html2canvas(node, { backgroundColor: '#1E2227', scale, imageTimeout: 5000, logging: false, ignoreElements: el => !keep(el) }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('render timeout')), 20000))
+    ]);
     genEl.style.display = 'none';
     brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const fileName = `train-${trainNo}-${date}.png`;
-      const file = new File([blob], fileName, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({
-          files: [file],
-          title: `Train ${trainNo} coach position`,
-          text: `Train ${trainNo} coach position — check more trains:\nhttps://coachformation.netlify.app`
-        }).catch(() => {});
-        return;
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) { toast("Couldn't create image"); return; }
+    const fileName = `train-${trainNo}-${date}.png`;
+    const file = new File([blob], fileName, { type: 'image/png' });
+    const shareData = {
+      files: [file],
+      title: `Train ${trainNo} coach position`,
+      text: `Train ${trainNo} coach position — check more trains:\nhttps://coachformation.netlify.app`
+    };
+    const canShareFile = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    if (canShareFile) {
+      try { await navigator.share(shareData); return; }
+      catch (err) {
+        if (err && err.name === 'AbortError') return; // user closed the share sheet
+        // Usually NotAllowedError: the tap's user activation expired while the
+        // record lookup + html2canvas render ran. Fall through to the preview,
+        // whose Share button supplies a fresh tap.
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fileName; a.click();
-      URL.revokeObjectURL(url);
-      toast('Image saved — share it from your gallery');
-    });
+    }
+    openShareImagePreview(blob, fileName, canShareFile ? shareData : null);
   } catch (e) {
     genEl.style.display = 'none';
     brandEl.textContent = `Train Coach Position · coachformation.netlify.app`;
     toast("Couldn't create image");
   }
 }
+
+let _shareImg = null;
+function openShareImagePreview(blob, fileName, shareData) {
+  if (_shareImg) URL.revokeObjectURL(_shareImg.url);
+  _shareImg = { blob, fileName, shareData, url: URL.createObjectURL(blob) };
+  $('shareImgPreview').src = _shareImg.url;
+  $('shareImgShareBtn').style.display = shareData ? '' : 'none';
+  showOverlay('shareImgOverlay');
+}
+function saveShareImage() {
+  if (!_shareImg) return;
+  const a = document.createElement('a');
+  a.href = _shareImg.url; a.download = _shareImg.fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Image saved — share it from your gallery');
+}
+$('shareImgShareBtn').addEventListener('click', async () => {
+  if (!_shareImg || !_shareImg.shareData) return;
+  try { await navigator.share(_shareImg.shareData); hideOverlay('shareImgOverlay'); }
+  catch (err) { if (!err || err.name !== 'AbortError') { toast("Share failed — saving image instead"); saveShareImage(); } }
+});
+$('shareImgSaveBtn').addEventListener('click', saveShareImage);
 
 // ─── Submit sheet ─────────────────────────────────────────────────────────────
 function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
@@ -2874,9 +2914,85 @@ function openSubmit(trainNo, date, trainName, rawList, fromStation, toStation) {
   $('sFromStation').value = fromStation || '';
   $('sToStation').value = toStation || '';
   $('sList').value = stripEngRaw(rawList || '');
+  $('sSeenAt').value = '';
+  $('sExtraAt').value = '';
+  $('sExtraCount').value = '0';
+  $('sExtraEnd').value = 'engine';
+  $('sExtraKind').value = 'SICK';
+  $('sExtraBox').open = false;
   renderPreview();
   showOverlay('submitOverlay');
+  loadSubmitRouteInfo();
 }
+
+// Fill the "seen at" stop list from RailRadar, default it to the staff
+// member's station, and bring in anything already saved for that date.
+let _submitInfo = null;
+async function loadSubmitRouteInfo() {
+  const trainNo = $('sTrainNo').value.trim();
+  const date = $('sDate').value || todayStr();
+  _submitInfo = null;
+  $('sHaltList').innerHTML = '';
+  updateSeenHint();
+  if (!/^\d{5}$/.test(trainNo)) return;
+  const [info, existing] = await Promise.all([
+    getTrainInfo(trainNo).catch(() => null),
+    getTrainRecord(`${trainNo}_${date}`).catch(() => null),
+  ]);
+  if ($('sTrainNo').value.trim() !== trainNo) return; // form changed meanwhile
+  _submitInfo = info;
+  if (info) {
+    $('sHaltList').innerHTML = info.halts.map(h =>
+      `<option value="${escapeHtml(h.c)}">${escapeHtml(h.n || h.c)} · leg ${h.leg + 1}${h.pf ? ' · PF ' + escapeHtml(h.pf) : ''}</option>`).join('');
+    if (!$('sTrainName').value) $('sTrainName').value = info.name;
+    if (!$('sFromStation').value) $('sFromStation').value = info.src;
+    if (!$('sToStation').value) $('sToStation').value = info.dst;
+  }
+  if (!$('sSeenAt').value) {
+    const mine = (currentUser && currentUser.station || '').toUpperCase();
+    $('sSeenAt').value = (existing && existing.seenAt)
+      || (info && legOfStation(info, mine) !== null ? mine : '')
+      || (info ? info.src : '');
+  }
+  const ex = existing && existing.extras && existing.extras[0];
+  if (ex && $('sExtraCount').value === '0') {
+    $('sExtraAt').value = ex.at || '';
+    $('sExtraCount').value = String(ex.count || 0);
+    $('sExtraEnd').value = ex.end === 'rear' ? 'rear' : 'engine';
+    $('sExtraKind').value = EXTRA_KINDS[ex.kind] ? ex.kind : 'XTRA';
+    $('sExtraBox').open = true;
+  }
+  updateSeenHint();
+}
+
+// Which leg the "seen at" station is on — RailRadar's route first, then the
+// admin reversal list (a reversal station starts the leg after it).
+function seenLegFor(seenAt, info, rev) {
+  if (!seenAt) return 0;
+  if (info) { const L = legOfStation(info, seenAt); if (L !== null) return L; }
+  const i = (rev || []).indexOf(seenAt);
+  return i >= 0 ? i + 1 : 0;
+}
+
+function updateSeenHint() {
+  const at = $('sSeenAt').value.trim().toUpperCase();
+  const info = _submitInfo;
+  let msg = 'Enter coaches in the order you see them, starting from the engine.';
+  if (at && info) {
+    const L = legOfStation(info, at);
+    if (L === null) msg = `${at} isn't a stop of this train in RailRadar's route — check the code.`;
+    else if (info.legs.length > 1) {
+      const rv = info.reversalStations;
+      msg = `${at} is on leg ${L + 1} of ${info.legs.length}` +
+        (L > 0 ? ` (after reversal at ${rv[L - 1]})` : rv.length ? ` (before reversal at ${rv[0]})` : '') +
+        '. Enter coaches as you see them from the engine — the other legs are worked out.';
+    }
+  }
+  $('sSeenHint').textContent = msg;
+}
+$('sSeenAt').addEventListener('input', updateSeenHint);
+$('sTrainNo').addEventListener('change', loadSubmitRouteInfo);
+$('sDate').addEventListener('change', loadSubmitRouteInfo);
 $('fabAdd').addEventListener('click', () => openSubmit());
 $('sList').addEventListener('input', renderPreview);
 
@@ -2933,10 +3049,18 @@ $('sSaveBtn').addEventListener('click', async () => {
   const parsedList = parseCompressed(rawList);
   const key = `${trainNo}_${date}`;
   const existing = await getTrainRecord(key);
+  const seenAt = $('sSeenAt').value.trim().toUpperCase();
+  const info = _submitInfo && _submitInfo.no === trainNo ? _submitInfo : await getTrainInfo(trainNo).catch(() => null);
+  const seenLeg = seenLegFor(seenAt, info, await getReversalStations(trainNo).catch(() => []));
+  const exCount = Math.max(0, Math.min(10, parseInt($('sExtraCount').value, 10) || 0));
+  const exAt = $('sExtraAt').value.trim().toUpperCase();
+  if (exCount && !exAt) { toast('Enter the station where the extra coaches were attached'); return; }
+  const extras = exCount ? [{ at: exAt, end: $('sExtraEnd').value, count: exCount, kind: $('sExtraKind').value }] : [];
 
   await saveTrainRecord(key, {
     trainNo, trainName, date, rawList, parsedList,
     fromStation, toStation,
+    seenAt, seenLeg, extras,
     submittedByName: identity.name,
     submittedByEmail: identity.email || '',
     submittedByPhone: identity.phone || '',
