@@ -14,7 +14,7 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
-console.log('[sw] loaded, cache = coach-position-v63');
+console.log('[sw] loaded, cache = coach-position-v64');
 
 // Fires for every push the browser delivers, before Firebase's own handling —
 // confirms whether the push even reaches this worker at all.
@@ -43,19 +43,41 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v63';
+const CACHE = 'coach-position-v64';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
+
+// Third-party scripts/fonts the app can't start without. Their URLs are
+// version-pinned, so cache-first is safe. Without these cached, going
+// offline left `firebase` undefined and the whole app failed to boot.
+const CDN_ASSETS = [
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js',
+  'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+];
+const CDN_CACHE = 'coach-position-cdn-v1';
+const isCachedCdn = (url) =>
+  url.startsWith('https://www.gstatic.com/firebasejs/10.7.1/') ||
+  url.startsWith('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/') ||
+  url.startsWith('https://fonts.googleapis.com/') ||
+  url.startsWith('https://fonts.gstatic.com/');
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) => cache.addAll(SHELL))
+      // Best-effort: a CDN hiccup shouldn't block the SW from installing;
+      // anything missed here is cached on first use by the fetch handler.
+      .then(() => caches.open(CDN_CACHE))
+      .then((cache) => Promise.all(CDN_ASSETS.map((u) => cache.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE && k !== CDN_CACHE && k !== 'cp-share-target').map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -82,7 +104,23 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) return;
+  if (request.method !== 'GET') return;
+
+  // Pinned CDN scripts + fonts: cache-first. The page loads them without
+  // CORS, so accept opaque responses too.
+  if (isCachedCdn(request.url)) {
+    event.respondWith(
+      caches.open(CDN_CACHE).then((cache) =>
+        cache.match(request).then((cached) => cached || fetch(request).then((response) => {
+          if (response.ok || response.type === 'opaque') cache.put(request, response.clone());
+          return response;
+        }))
+      )
+    );
+    return;
+  }
+
+  if (!request.url.startsWith(self.location.origin)) return;
 
   // HTML/navigation: always prefer a fresh network copy so deploys show up
   // immediately, falling back to cache only when offline.

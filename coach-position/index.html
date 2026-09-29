@@ -310,6 +310,8 @@
   /* Shared image is laid out wide (720px) so each formation takes fewer rows:
      WhatsApp shrinks photos to ~1600px on the long side, so a tall, narrow
      card ends up only ~300px wide and blurry. */
+  .offline-bar{display:none;background:#374151;color:#fff;font-size:12.5px;font-weight:600;text-align:center;padding:7px 12px;}
+  .offline-bar.show{display:block;}
   .share-offscreen{
     position:fixed;left:-9999px;top:0;width:720px;
     background:#FFFFFF;border:2px solid var(--amber);border-radius:12px;
@@ -559,6 +561,7 @@
     </div>
     <button class="me" id="meBtn">👤 <span id="meLabel">...</span></button>
   </header>
+<div class="offline-bar" id="offlineBar">📴 Offline — showing trains saved on this phone. Updates will sync when you're back online.</div>
 
   <div class="list-header">
     <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
@@ -946,10 +949,35 @@ async function loadOpenTrainRequests() {
 loadOpenTrainRequests();
 
 
+// ─── Offline banner ───────────────────────────────────────────────────────────
+function updateOfflineBar() { document.getElementById('offlineBar').classList.toggle('show', !navigator.onLine); }
+window.addEventListener('online', updateOfflineBar);
+window.addEventListener('offline', updateOfflineBar);
+updateOfflineBar();
+
 // ─── Firestore storage ────────────────────────────────────────────────────────
+// Firestore's offline cache (enablePersistence) answers straight away when the
+// phone knows it's offline, but on a weak platform signal a server read can
+// hang ~10s before falling back. Give the server 4s, then answer from the
+// on-device cache if it has the data; otherwise keep waiting for the server.
+async function getFast(ref) {
+  const server = ref.get();
+  const timedOut = await Promise.race([
+    server.then(() => false, () => false),
+    new Promise(res => setTimeout(() => res(true), 4000))
+  ]);
+  if (timedOut) {
+    try {
+      const cached = await ref.get({ source: 'cache' });
+      if (cached.exists || (cached.docs && cached.docs.length)) return cached;
+    } catch (_) { /* not cached — fall through to the server read */ }
+  }
+  return server;
+}
+
 async function getTrainRecord(key) {
   try {
-    const snap = await db.collection('trains').doc(key).get();
+    const snap = await getFast(db.collection('trains').doc(key));
     return snap.exists ? snap.data() : null;
   } catch (e) {
     // Fallback: local cache
@@ -1100,10 +1128,9 @@ async function resolveTrainRequest(trainNo) {
 
 async function getAllTrains(filterStr) {
   try {
-    const snap = await db.collection('trains')
+    const snap = await getFast(db.collection('trains')
       .orderBy('updatedAt', 'desc')
-      .limit(400)
-      .get();
+      .limit(400));
     const all = snap.docs.map(d => d.data());
 
     // Deduplicate: one entry per trainNo — prefer today's, else most recent
@@ -1370,7 +1397,7 @@ async function getReversalStations(trainNo) {
   const key = String(trainNo);
   if (_revCache[key] !== undefined) return _revCache[key];
   try {
-    const doc = await db.collection('trains').doc(key).get();
+    const doc = await getFast(db.collection('trains').doc(key));
     const d = doc.exists ? doc.data() : null;
     _revCache[key] = (d && Array.isArray(d.reversalStations)) ? d.reversalStations : [];
   } catch { _revCache[key] = []; }
