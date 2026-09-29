@@ -14,7 +14,7 @@ firebase.initializeApp({
 });
 const messaging = firebase.messaging();
 
-console.log('[sw] loaded, cache = coach-position-v73');
+console.log('[sw] loaded, cache = coach-position-v75');
 
 // Fires for every push the browser delivers, before Firebase's own handling —
 // confirms whether the push even reaches this worker at all.
@@ -43,7 +43,7 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-const CACHE = 'coach-position-v73';
+const CACHE = 'coach-position-v75';
 const SHELL = ['./', './index.html', './app.css', './lib.js', './manifest.json', './icon.svg'];
 
 // Third-party scripts/fonts the app can't start without. Their URLs are
@@ -102,6 +102,35 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+const SHELL_TIMEOUT = 3000;
+// When the page itself came from the cache, its CSS/JS come from the same
+// cache too, so the files always match each other.
+let _cachedShellAt = 0;
+function shellFetch(request, isPage) {
+  const fromCache = () => caches.match(request);
+  if (!isPage && Date.now() - _cachedShellAt < 15000) {
+    return fromCache().then((c) => c || fetch(request));
+  }
+  const network = fetch(request).then((response) => {
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  });
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (r) => { if (!settled) { settled = true; resolve(r); } };
+    const tryCache = (err) => fromCache().then((c) => {
+      if (c) { if (isPage) _cachedShellAt = Date.now(); finish(c); }
+      else if (err) { if (!settled) { settled = true; reject(err); } }
+      // no saved copy yet: keep waiting for the network
+    });
+    const timer = setTimeout(() => tryCache(null), SHELL_TIMEOUT);
+    network.then((r) => { clearTimeout(timer); finish(r); }, (err) => { clearTimeout(timer); tryCache(err); });
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -122,21 +151,16 @@ self.addEventListener('fetch', (event) => {
 
   if (!request.url.startsWith(self.location.origin)) return;
 
-  // HTML/navigation, plus the app's own CSS/JS that ship with it: always
-  // prefer a fresh network copy so a deploy never pairs a new index.html with
-  // an old lib.js/app.css; fall back to cache only when offline.
+  // HTML/navigation, plus the app's own CSS/JS that ship with it: prefer a
+  // fresh network copy so a deploy never pairs a new index.html with an old
+  // lib.js/app.css — but only wait SHELL_TIMEOUT for it. On weak signal
+  // (common on platforms) a stalled request used to leave a blank screen
+  // until it failed; now the saved copy opens and the fresh one is cached
+  // for next time.
   const path = new URL(request.url).pathname;
   if (request.mode === 'navigate' || path.endsWith('/index.html') ||
       path.endsWith('/app.css') || path.endsWith('/lib.js')) {
-    event.respondWith(
-      fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      }).catch(() => caches.match(request))
-    );
+    event.respondWith(shellFetch(request, request.mode === 'navigate' || path.endsWith('/index.html')));
     return;
   }
 
