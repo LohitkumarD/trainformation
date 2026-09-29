@@ -6,9 +6,9 @@
  *   GET ?train=17377   → normalised train info (route, legs, reversal
  *                         stations, scheduled formation per leg, halts +
  *                         platforms). Cached in rr_trains/{no}, refreshed
- *                         after 30 days.
+ *                         after 90 days.
  *   GET ?board=RNR     → normalised list of trains calling at a station.
- *                         Cached in rr_stations/{code}, refreshed after 7 days.
+ *                         Cached in rr_stations/{code}, refreshed after 60 days.
  *   &refresh=1         → force a RailRadar refetch (only if the cached copy
  *                         is over an hour old, so it can't burn the quota).
  *
@@ -28,7 +28,8 @@ const PROJECT_ID = 'coachposition';
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DAY = 24 * 60 * 60 * 1000;
-const TTL = { train: 30 * DAY, board: 7 * DAY };
+// Timetables and scheduled formations rarely change, so refresh rarely.
+const TTL = { train: 90 * DAY, board: 60 * DAY };
 const MIN_REFRESH_AGE = 60 * 60 * 1000;
 
 const HEADERS = {

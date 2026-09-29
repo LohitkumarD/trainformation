@@ -88,6 +88,11 @@
       <input class="station-input" id="myStnInput" placeholder="Your station code, e.g. RNR" maxlength="7" autocomplete="off" spellcheck="false" style="text-transform:uppercase">
       <button class="station-search-btn" id="myStnSet">Show</button>
     </div>
+    <div class="day-chips" id="myStnDays">
+      <button class="day-chip" data-off="-1">Yesterday</button>
+      <button class="day-chip active" data-off="0">Today</button>
+      <button class="day-chip" data-off="1">Tomorrow</button>
+    </div>
     <input type="file" id="scanFileInput" accept="image/*" multiple style="display:none">
     <input type="file" id="scanCameraInput" accept="image/*" capture="environment" style="display:none">
   </div>
@@ -924,11 +929,11 @@ function getRailCached(collection, id, param, ttlDays) {
 }
 function getTrainInfo(trainNo) {
   const no = String(trainNo || '').trim();
-  return /^\d{5}$/.test(no) ? getRailCached('rr_trains', no, 'train', 30) : Promise.resolve(null);
+  return /^\d{5}$/.test(no) ? getRailCached('rr_trains', no, 'train', 90) : Promise.resolve(null);
 }
 function getStationBoard(code) {
   const c = String(code || '').trim().toUpperCase();
-  return /^[A-Z]{2,7}$/.test(c) ? getRailCached('rr_stations', c, 'board', 7) : Promise.resolve(null);
+  return /^[A-Z]{2,7}$/.test(c) ? getRailCached('rr_stations', c, 'board', 60) : Promise.resolve(null);
 }
 
 
@@ -1889,6 +1894,7 @@ async function renderTrainsList() {
   if (activeTab === 'mystn') { renderMyStation(); return; }
   $('tabMyStn').classList.remove('active');
   $('myStnBar').classList.remove('visible');
+  $('myStnDays').classList.remove('visible');
   const filter = ($('listSearch').value || '').trim();
   let list = await getAllTrains(filter);
 
@@ -2284,9 +2290,12 @@ $('tabMyStn').addEventListener('click', () => {
   $('tabMyStn').classList.add('active');
   $('stationBar').classList.remove('visible');
   $('myStnBar').classList.add('visible');
+  $('myStnDays').classList.add('visible');
+  _myStnOffset = 0;
+  document.querySelectorAll('#myStnDays .day-chip').forEach(b => b.classList.toggle('active', b.dataset.off === '0'));
   $('listSearch').style.display = '';
   $('listSearch').value = '';
-  $('listSearch').placeholder = "Search today's trains here — number, name or station…";
+  $('listSearch').placeholder = "Search trains here — number, name or station…";
   $('selectToggle').style.display = 'none';
   $('myStnInput').value = getMyStation();
   renderMyStation();
@@ -2297,6 +2306,7 @@ document.querySelector('.tabs-row').addEventListener('click', (e) => {
   if (!t || t.id === 'tabMyStn') return;
   $('tabMyStn').classList.remove('active');
   $('myStnBar').classList.remove('visible');
+  $('myStnDays').classList.remove('visible');
 }, true);
 $('myStnSet').addEventListener('click', () => {
   const code = $('myStnInput').value.trim().toUpperCase();
@@ -2308,42 +2318,77 @@ $('myStnSet').addEventListener('click', () => {
 $('myStnInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('myStnSet').click(); });
 
 let _myStnRenderSeq = 0;
+// Day shown in My station: -1 yesterday, 0 today, 1 tomorrow. Switching
+// days only re-filters the saved station board — no extra RailRadar calls.
+let _myStnOffset = 0;
+function myStnDate() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + _myStnOffset);
+}
+const isoDate = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const myStnDayWord = () => ['yesterday', 'today', 'tomorrow'][_myStnOffset + 1];
+document.querySelectorAll('#myStnDays .day-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _myStnOffset = Number(btn.dataset.off);
+    document.querySelectorAll('#myStnDays .day-chip').forEach(b => b.classList.toggle('active', b === btn));
+    renderMyStation();
+  });
+});
+
+// Positions saved for one date (one Firestore query, cache-first on weak signal).
+async function getRecordsForDate(date) {
+  try {
+    const snap = await getFast(db.collection('trains').where('date', '==', date));
+    return snap.docs.map(d => d.data()).filter(r => r.trainNo && r.parsedList);
+  } catch (_) { return []; }
+}
+
 async function renderMyStation() {
   const seq = ++_myStnRenderSeq;
   const wrap = $('trainsList');
   const code = getMyStation();
   $('listCount').textContent = '';
   if (!code) {
-    wrap.innerHTML = '<div class="trains-empty">Enter your station code above (e.g. RNR) to see today\'s trains there.</div>';
+    wrap.innerHTML = '<div class="trains-empty">Enter your station code above (e.g. RNR) to see the trains there.</div>';
     return;
   }
+  const day = myStnDate();
+  const dayStr = isoDate(day);
+  const isToday = _myStnOffset === 0;
   wrap.innerHTML = `<div class="trains-empty">Loading trains at ${escapeHtml(code)}…</div>`;
-  const [board, records] = await Promise.all([getStationBoard(code), getAllTrains('').catch(() => [])]);
+  const [board, dayRecs, latest] = await Promise.all([
+    getStationBoard(code),
+    getRecordsForDate(dayStr),
+    getAllTrains('').catch(() => []),
+  ]);
   if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
   if (!board) {
     wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
     return;
   }
-  const today = todayStr();
-  const recByNo = {};
-  records.forEach(r => { recByNo[r.trainNo] = r; });
-  const list = trainsOnDate(board, new Date());
+  const recOnDay = {};
+  dayRecs.forEach(r => { recOnDay[r.trainNo] = r; });
+  const lastRec = {};
+  latest.forEach(r => { if (r.date <= dayStr) lastRec[r.trainNo] = r; });
+  const list = trainsOnDate(board, day);
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const minOf = (t) => { const [h, m] = String(t.a || t.d || '00:00').split(':').map(Number); return h * 60 + m; };
-  const nextIdx = list.findIndex(t => minOf(t) >= nowMin - 5);
-  $('listCount').textContent = `${list.length} train${list.length === 1 ? '' : 's'} today`;
+  const nextIdx = isToday ? list.findIndex(t => minOf(t) >= nowMin - 5) : -1;
+  const pastAll = isToday && nextIdx === -1; // every train today has gone
+  const word = myStnDayWord();
 
-  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${formatDateOnly(today)}</div>`;
-  if (!list.length) { wrap.insertAdjacentHTML('beforeend', '<div class="trains-empty">No trains call here today.</div>'); return; }
+  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${word[0].toUpperCase() + word.slice(1)}, ${DAY_KEYS[day.getDay()].toUpperCase()} ${formatDateOnly(dayStr)}</div>`;
+  if (!list.length) { wrap.insertAdjacentHTML('beforeend', `<div class="trains-empty">No trains call here ${word}.</div>`); return; }
 
   list.forEach((t, i) => {
-    const rec = recByNo[t.no];
-    const status = rec && rec.date === today ? '<span class="stn-st st-today">✓ Today\'s position</span>'
-      : rec ? `<span class="stn-st st-old">Last: ${formatDateOnly(rec.date)}</span>`
+    const rec = recOnDay[t.no] || null;
+    const last = rec || lastRec[t.no] || null;
+    const status = rec ? '<span class="stn-st st-today">✓ Position entered</span>'
+      : last ? `<span class="stn-st st-old">Last: ${formatDateOnly(last.date)}</span>`
       : '<span class="stn-st st-sched">Scheduled only</span>';
     const row = document.createElement('div');
-    row.className = 'train-item stn-row' + (nextIdx >= 0 && i < nextIdx ? ' stn-past' : '');
+    row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '');
     row.dataset.search = `${t.no} ${t.name} ${t.src} ${t.dst}`.toLowerCase();
     row.innerHTML = `
       <div class="train-item-head">
@@ -2358,7 +2403,7 @@ async function renderMyStation() {
       <div class="train-item-body stn-body"></div>`;
     row.querySelector('.train-item-head').addEventListener('click', () => {
       const open = row.classList.toggle('open');
-      if (open && !row.dataset.loaded) { row.dataset.loaded = '1'; fillStationTrain(row.querySelector('.stn-body'), t, rec, code); }
+      if (open && !row.dataset.loaded) { row.dataset.loaded = '1'; fillStationTrain(row.querySelector('.stn-body'), t, rec, last, code, dayStr); }
     });
     wrap.appendChild(row);
   });
@@ -2367,7 +2412,7 @@ async function renderMyStation() {
   if (nextIdx > 0 && !$('listSearch').value.trim()) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
 }
 
-// Filter today's list in place as the user types (no reload per keystroke).
+// Filter the day's list in place as the user types (no reload per keystroke).
 function filterMyStationRows() {
   const rows = [...document.querySelectorAll('#trainsList .stn-row')];
   if (!rows.length) return;
@@ -2379,28 +2424,34 @@ function filterMyStationRows() {
     if (hit) shown++;
   });
   _lastSearchResultCount = shown;
+  const word = myStnDayWord();
   $('listCount').textContent = q
-    ? `${shown} of ${rows.length} trains today`
-    : `${rows.length} train${rows.length === 1 ? '' : 's'} today`;
+    ? `${shown} of ${rows.length} trains ${word}`
+    : `${rows.length} train${rows.length === 1 ? '' : 's'} ${word}`;
   const none = document.querySelector('#trainsList .stn-nomatch');
   if (none) {
     none.style.display = q && !shown ? '' : 'none';
-    none.textContent = `No train matching "${q}" calls at ${getMyStation()} today.`;
+    none.textContent = `No train matching "${q}" calls at ${getMyStation()} ${word}.`;
   }
 }
 
 // Expanded station row: the formation as it arrives HERE first, then the
-// whole journey, plus buttons to open the full card or enter today's position.
-async function fillStationTrain(body, t, rec, code) {
+// whole journey, plus buttons to open the full card or enter the position.
+//   rec  — position saved for the chosen day (or null)
+//   last — the most recent saved position up to that day (shown when rec is
+//          missing, labelled with its date)
+async function fillStationTrain(body, t, rec, last, code, dayStr) {
   body.innerHTML = '<div class="trains-empty" style="padding:14px 0">Loading formation…</div>';
-  const today = todayStr();
   const [info, rev] = await Promise.all([getTrainInfo(t.no), getReversalStations(t.no).catch(() => [])]);
-  const base = rec || { trainNo: t.no, trainName: t.name, parsedList: [], fromStation: t.src, toStation: t.dst };
-  const model = buildLegsModel(base, rev || [], info, null);
+  const shown = rec || last;
+  const base = shown || { trainNo: t.no, trainName: t.name, parsedList: [], fromStation: t.src, toStation: t.dst };
+  // Extra coaches belong to their own date only
+  const model = buildLegsModel(rec ? base : { ...base, extras: [] }, rev || [], info, null);
   const halt = info && info.halts.find(h => h.c === code);
   body.innerHTML = '';
+  if (!rec && last) body.insertAdjacentHTML('beforeend', `<div class="stn-note">Showing the last saved position (${formatDateOnly(last.date)}) — nobody has entered ${formatDateOnly(dayStr)} yet.</div>`);
   if (!model.legs.length) {
-    body.innerHTML = '<div class="trains-empty" style="padding:14px 0">No formation available yet.</div>';
+    body.insertAdjacentHTML('beforeend', '<div class="trains-empty" style="padding:14px 0">No formation available yet.</div>');
   } else {
     // This station's leg = how many change stations (reversals, extra-coach
     // stops) come at or before it on the route.
@@ -2432,18 +2483,20 @@ async function fillStationTrain(body, t, rec, code) {
   }
   const btns = document.createElement('div');
   btns.className = 'stn-btns';
-  if (rec) {
+  if (shown) {
     const b = document.createElement('button');
     b.className = 'btn btn-secondary';
     b.textContent = 'Open full card';
     b.addEventListener('click', () => { $('tabAll').click(); $('listSearch').value = t.no; renderTrainsList(); });
     btns.appendChild(b);
   }
-  if (canEdit()) {
+  // Positions are entered for today or yesterday — not for a day that hasn't happened
+  if (canEdit() && _myStnOffset <= 0) {
     const b = document.createElement('button');
     b.className = 'btn btn-primary';
-    b.textContent = rec && rec.date === today ? '✎ Update today\'s position' : '+ Enter today\'s position';
-    b.addEventListener('click', () => openSubmit(t.no, today, t.name, rec && rec.date === today ? rec.rawList : '', t.src, t.dst));
+    const word = myStnDayWord();
+    b.textContent = rec ? `✎ Update ${word}'s position` : `+ Enter ${word}'s position`;
+    b.addEventListener('click', () => openSubmit(t.no, dayStr, t.name, rec ? rec.rawList : '', t.src, t.dst));
     btns.appendChild(b);
   }
   if (btns.children.length) body.appendChild(btns);
