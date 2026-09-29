@@ -3,7 +3,7 @@
  * Keeps the API key server-side; the PWA calls /.netlify/functions/train-schedule
  *
  * Netlify env var (required): RAILRADAR_API_KEY
- * Get a free key (300 req/day) at: https://railradar.in
+ * Get a free key at: https://railradar.in (free sandbox plan; check current limits there)
  *
  * Usage:
  *   ?station=RNR     →  live trains at station
@@ -27,7 +27,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 503,
       headers: CORS,
-      body: JSON.stringify({ error: 'RAILRADAR_API_KEY not set — register at railradar.in for a free key (300 req/day), then add it to Netlify environment variables.' }),
+      body: JSON.stringify({ error: 'RAILRADAR_API_KEY not set — register at railradar.in for a free key, then add it to Netlify environment variables.' }),
     };
   }
 
