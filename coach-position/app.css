@@ -516,3 +516,22 @@ select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);
 .extra-box summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);}
 .extra-box[open] summary{margin-bottom:8px;}
 .extra-box select{width:100%;}
+
+/* ── My station tab ─────────────────────────────────────────────────────── */
+.stn-head{font-size:13px;color:var(--muted);padding:2px 2px 10px;}
+.stn-row{position:relative;margin-bottom:10px;}
+.stn-row .train-item-head{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;}
+.stn-time{font-family:var(--mono);font-weight:800;font-size:16px;min-width:48px;}
+.stn-past{opacity:.55;}
+.stn-next{display:inline-block;margin-bottom:3px;background:var(--amber);color:#fff;font-size:10px;font-weight:800;letter-spacing:.08em;border-radius:6px;padding:1px 7px;}
+.stn-row .ti-when{text-align:right;}
+.stn-st{display:inline-block;font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;white-space:nowrap;}
+.st-today{background:#DCFCE7;color:#166534;}
+.st-old{background:#FEF3C7;color:#92400E;}
+.st-sched{background:#F1F5F9;color:#475569;}
+.stn-body{display:none;padding:4px 12px 12px;}
+.stn-row.open .stn-body{display:block;}
+.stn-journey{margin-top:10px;}
+.stn-journey summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--amber);}
+.stn-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.stn-btns .btn{flex:1 1 auto;}

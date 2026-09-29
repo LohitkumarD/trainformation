@@ -72,6 +72,7 @@
     <input class="list-search" id="listSearch" placeholder="Search train number or name…" autocomplete="off">
     <div class="tabs-row">
       <button class="tab active" id="tabAll">All</button>
+      <button class="tab" id="tabMyStn">📍 My station</button>
       <button class="tab" id="tabFav">★ Favourites</button>
       <button class="tab" id="tabStation">🚆 Trains</button>
     </div>
@@ -82,6 +83,10 @@
     <div class="station-bar" id="stationBar">
       <input class="station-input" id="stationCodeInput" placeholder="Search train no. or name…" autocomplete="off" spellcheck="false">
       <button class="station-search-btn" id="scanCpBtn" title="Scan coach position from WhatsApp image" style="font-size:18px;padding:9px 13px">📷</button>
+    </div>
+    <div class="station-bar" id="myStnBar">
+      <input class="station-input" id="myStnInput" placeholder="Your station code, e.g. RNR" maxlength="7" autocomplete="off" spellcheck="false" style="text-transform:uppercase">
+      <button class="station-search-btn" id="myStnSet">Show</button>
     </div>
     <input type="file" id="scanFileInput" accept="image/*" multiple style="display:none">
     <input type="file" id="scanCameraInput" accept="image/*" capture="environment" style="display:none">
@@ -1881,6 +1886,9 @@ async function getMostRecentFormation(trainNo) {
 
 // ─── Trains list ──────────────────────────────────────────────────────────────
 async function renderTrainsList() {
+  if (activeTab === 'mystn') { renderMyStation(); return; }
+  $('tabMyStn').classList.remove('active');
+  $('myStnBar').classList.remove('visible');
   const filter = ($('listSearch').value || '').trim();
   let list = await getAllTrains(filter);
 
@@ -2256,6 +2264,161 @@ $('listSearch').addEventListener('input', () => {
   renderTrainsList();
   logSearchDebounced($('listSearch').value);
 });
+
+// ─── My station: today's trains calling at the user's station ───────────────
+function getMyStation() {
+  let v = '';
+  try { v = localStorage.getItem('cp_my_station') || ''; } catch (_) {}
+  return (v || (currentUser && currentUser.station) || '').toUpperCase();
+}
+function setMyStation(code) {
+  try { localStorage.setItem('cp_my_station', code); } catch (_) {}
+}
+
+$('tabMyStn').addEventListener('click', () => {
+  activeTab = 'mystn';
+  setSelectMode(false);
+  ['tabAll', 'tabFav', 'tabStation'].forEach(id => $(id).classList.remove('active'));
+  $('tabMyStn').classList.add('active');
+  $('stationBar').classList.remove('visible');
+  $('myStnBar').classList.add('visible');
+  $('listSearch').style.display = 'none';
+  $('selectToggle').style.display = 'none';
+  $('myStnInput').value = getMyStation();
+  renderMyStation();
+});
+// Leaving the tab via any other tab
+document.querySelector('.tabs-row').addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (!t || t.id === 'tabMyStn') return;
+  $('tabMyStn').classList.remove('active');
+  $('myStnBar').classList.remove('visible');
+}, true);
+$('myStnSet').addEventListener('click', () => {
+  const code = $('myStnInput').value.trim().toUpperCase();
+  if (!/^[A-Z]{2,7}$/.test(code)) { toast('Enter a station code, e.g. RNR'); return; }
+  setMyStation(code);
+  logUsage('my_station_set', { station: code });
+  renderMyStation();
+});
+$('myStnInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('myStnSet').click(); });
+
+let _myStnRenderSeq = 0;
+async function renderMyStation() {
+  const seq = ++_myStnRenderSeq;
+  const wrap = $('trainsList');
+  const code = getMyStation();
+  $('listCount').textContent = '';
+  if (!code) {
+    wrap.innerHTML = '<div class="trains-empty">Enter your station code above (e.g. RNR) to see today\'s trains there.</div>';
+    return;
+  }
+  wrap.innerHTML = `<div class="trains-empty">Loading trains at ${escapeHtml(code)}…</div>`;
+  const [board, records] = await Promise.all([getStationBoard(code), getAllTrains('').catch(() => [])]);
+  if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
+  if (!board) {
+    wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
+    return;
+  }
+  const today = todayStr();
+  const recByNo = {};
+  records.forEach(r => { recByNo[r.trainNo] = r; });
+  const list = trainsOnDate(board, new Date());
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const minOf = (t) => { const [h, m] = String(t.a || t.d || '00:00').split(':').map(Number); return h * 60 + m; };
+  const nextIdx = list.findIndex(t => minOf(t) >= nowMin - 5);
+  $('listCount').textContent = `${list.length} train${list.length === 1 ? '' : 's'} today`;
+
+  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${formatDateOnly(today)}</div>`;
+  if (!list.length) { wrap.insertAdjacentHTML('beforeend', '<div class="trains-empty">No trains call here today.</div>'); return; }
+
+  list.forEach((t, i) => {
+    const rec = recByNo[t.no];
+    const status = rec && rec.date === today ? '<span class="stn-st st-today">✓ Today\'s position</span>'
+      : rec ? `<span class="stn-st st-old">Last: ${formatDateOnly(rec.date)}</span>`
+      : '<span class="stn-st st-sched">Scheduled only</span>';
+    const row = document.createElement('div');
+    row.className = 'train-item stn-row' + (nextIdx >= 0 && i < nextIdx ? ' stn-past' : '');
+    row.innerHTML = `
+      <div class="train-item-head">
+        <div class="stn-time">${escapeHtml(t.a || t.d || '')}</div>
+        <div class="tno-badge">${escapeHtml(t.no)}</div>
+        <div class="train-item-meta">
+          <div class="ti-route">${escapeHtml(t.src)} → ${escapeHtml(t.dst)}</div>
+          <div class="ti-name">${escapeHtml(t.name)}</div>
+        </div>
+        <div class="ti-when">${i === nextIdx ? '<span class="stn-next">NEXT</span><br>' : ''}${status}</div>
+      </div>
+      <div class="train-item-body stn-body"></div>`;
+    row.querySelector('.train-item-head').addEventListener('click', () => {
+      const open = row.classList.toggle('open');
+      if (open && !row.dataset.loaded) { row.dataset.loaded = '1'; fillStationTrain(row.querySelector('.stn-body'), t, rec, code); }
+    });
+    wrap.appendChild(row);
+  });
+  if (nextIdx > 0) wrap.querySelectorAll('.stn-row')[nextIdx].scrollIntoView({ block: 'nearest' });
+}
+
+// Expanded station row: the formation as it arrives HERE first, then the
+// whole journey, plus buttons to open the full card or enter today's position.
+async function fillStationTrain(body, t, rec, code) {
+  body.innerHTML = '<div class="trains-empty" style="padding:14px 0">Loading formation…</div>';
+  const today = todayStr();
+  const [info, rev] = await Promise.all([getTrainInfo(t.no), getReversalStations(t.no).catch(() => [])]);
+  const base = rec || { trainNo: t.no, trainName: t.name, parsedList: [], fromStation: t.src, toStation: t.dst };
+  const model = buildLegsModel(base, rev || [], info, null);
+  const halt = info && info.halts.find(h => h.c === code);
+  body.innerHTML = '';
+  if (!model.legs.length) {
+    body.innerHTML = '<div class="trains-empty" style="padding:14px 0">No formation available yet.</div>';
+  } else {
+    // This station's leg = how many change stations (reversals, extra-coach
+    // stops) come at or before it on the route.
+    const order = info ? info.halts.map(h => h.c) : model.stops;
+    const pos = order.indexOf(code);
+    let li = 0;
+    if (pos !== -1) model.stops.slice(1, -1).forEach((stp, i) => {
+      const p2 = order.indexOf(stp);
+      if (p2 !== -1 && p2 <= pos) li = i + 1;
+    });
+    const leg = model.legs[li];
+    const hd = document.createElement('div');
+    hd.className = 'seg-hd';
+    hd.innerHTML = `At ${escapeHtml(code)}${model.legs.length > 1 ? ` · leg ${li + 1} of ${model.legs.length}` : ''}${halt && halt.pf ? ` · PF ${escapeHtml(halt.pf)}` : ''} ${legSourceTag(leg, base)}`;
+    body.appendChild(hd);
+    const strip = document.createElement('div');
+    strip.className = 'strip';
+    renderTrainStrip(strip, leg.codes, leg.flags);
+    body.appendChild(strip);
+    const warn = model.boundaries.slice(0, li).flatMap(b => b.extras || []);
+    warn.forEach(ex => body.insertAdjacentHTML('beforeend', `<div class="extra-note">${extrasNoteHtml(ex)}</div>`));
+    if (model.legs.length > 1) {
+      const more = document.createElement('details');
+      more.className = 'stn-journey';
+      more.innerHTML = '<summary>Show whole journey</summary><div class="strip"></div>';
+      renderLegsInApp(more.querySelector('.strip'), model, base, false);
+      body.appendChild(more);
+    }
+  }
+  const btns = document.createElement('div');
+  btns.className = 'stn-btns';
+  if (rec) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-secondary';
+    b.textContent = 'Open full card';
+    b.addEventListener('click', () => { $('tabAll').click(); $('listSearch').value = t.no; renderTrainsList(); });
+    btns.appendChild(b);
+  }
+  if (canEdit()) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-primary';
+    b.textContent = rec && rec.date === today ? '✎ Update today\'s position' : '+ Enter today\'s position';
+    b.addEventListener('click', () => openSubmit(t.no, today, t.name, rec && rec.date === today ? rec.rawList : '', t.src, t.dst));
+    btns.appendChild(b);
+  }
+  if (btns.children.length) body.appendChild(btns);
+}
 
 // ─── Trains tab (local Firestore database) ────────────────────────────────────
 let _allTrains = null;
