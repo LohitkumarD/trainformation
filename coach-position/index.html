@@ -2404,6 +2404,24 @@ async function getRecordsForDate(date) {
   } catch (_) { return []; }
 }
 
+// One background refresh per station+day, shared for a minute. Startup calls
+// renderTrainsList from several places (sign-in, open requests, tab restore);
+// each used to start its own fetch and throw away the previous one.
+const _myStnFetch = {};
+function fetchMyStationData(code, recDates) {
+  const key = `${code}|${recDates[0]}`;
+  const f = _myStnFetch[key];
+  if (f && Date.now() - f.at < 60000) return f.p;
+  const p = Promise.all([
+    getStationBoard(code),
+    getAllTrains('').catch(() => []),
+    ...recDates.map(getRecordsForDate),
+  ]);
+  _myStnFetch[key] = { at: Date.now(), p };
+  p.then(([board]) => { if (!board) delete _myStnFetch[key]; }, () => { delete _myStnFetch[key]; });
+  return p;
+}
+
 async function renderMyStation() {
   const seq = ++_myStnRenderSeq;
   const wrap = $('trainsList');
@@ -2431,11 +2449,7 @@ async function renderMyStation() {
   }
 
   // 2. Fresh data in the background; redraw only if something changed.
-  const [board, latest, ...recLists] = await Promise.all([
-    getStationBoard(code),
-    getAllTrains('').catch(() => []),
-    ...recDates.map(getRecordsForDate),
-  ]);
+  const [board, latest, ...recLists] = await fetchMyStationData(code, recDates);
   if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
   if (!board) {
     if (!wrap.querySelector('.stn-row')) {
