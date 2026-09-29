@@ -16,6 +16,9 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,OPTIONS',
     'Content-Type': 'application/json',
+    // Live/looked-up data and config errors must never be served from a
+    // browser or CDN cache (a stale "key not set" error hid a fixed key).
+    'Cache-Control': 'no-store',
   };
 
   if (event.httpMethod === 'OPTIONS') {
