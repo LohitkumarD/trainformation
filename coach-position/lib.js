@@ -241,6 +241,45 @@ function legOfStation(info, code) {
   return h ? h.leg : null;
 }
 
+// ─── Journey dates ───────────────────────────────────────────────────────────
+// Positions are dated by the day the train LEFT ITS ORIGIN (the railway
+// "journey date"), so an overnight run keeps one date along its whole route.
+// A train that reaches a station on day 2 of its run at 00:15 on 30 Sep
+// belongs to the journey that started on 29 Sep.
+
+// 'YYYY-MM-DD' shifted by n days (local calendar, no timezone drift).
+function addDays(iso, n) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+// Journey date of the run that calls at a station on stationDate, when the
+// station is reached on `day` of the run (1 = same day it left its origin).
+function journeyDateFor(stationDate, day) {
+  return addDays(stationDate, -Math.max(0, (parseInt(day, 10) || 1) - 1));
+}
+
+// Best journey date to enter "now" for a train reaching a station on `day`
+// of its run at `time` ('HH:MM'): the run whose call there is closest ahead,
+// allowing up to 6 h after it for late entries. E.g. day 2 at 00:15 —
+// at 21:00 on 29 Sep → 29 Sep (arrives in 3 h); at 01:00 on 30 Sep → 29 Sep
+// (arrived 45 min ago); at 20:00 on 30 Sep → 30 Sep (tonight's run).
+function suggestJourneyDate(day, time, now = new Date()) {
+  const k = Math.max(1, parseInt(day, 10) || 1);
+  const [hh, mm] = String(time || '00:00').split(':').map(Number);
+  const today = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  let best = today, bestGap = Infinity;
+  for (let off = -1; off <= k; off++) {
+    const jd = addDays(today, -off);
+    const [y, m, d] = addDays(jd, k - 1).split('-').map(Number);
+    const at = new Date(y, m - 1, d, hh || 0, mm || 0);
+    const gap = at - now;                           // >0: still to come
+    if (gap >= -6 * 3600e3 && gap < bestGap) { best = jd; bestGap = gap; }
+  }
+  return best;
+}
+
 // ─── Journey legs ────────────────────────────────────────────────────────────
 // Build the formation for every leg of a journey.
 //   entry:   staff-entered coaches (as seen) or null
@@ -345,5 +384,6 @@ const LEG0_COLOUR = { c: '#D97706', dark: '#92400E', soft: '#FEF3E2' };
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { pad2, MONTHS, formatDateOnly, formatTime, formatDateTime, parseCompressed, stripEngRaw, withEng, classOf, expandCoaches, reverseFormation, reverseAligned, lcsDiff, diffFormation, escapeHtml, REV_COLOURS, LEG0_COLOUR,
-    EXTRA_KINDS, isExtraCode, normalizeRailRadarTrain, normalizeRailRadarBoard, trainsOnDate, legOfStation, computeLegs };
+    EXTRA_KINDS, isExtraCode, normalizeRailRadarTrain, normalizeRailRadarBoard, trainsOnDate, legOfStation, computeLegs,
+    addDays, journeyDateFor, suggestJourneyDate };
 }

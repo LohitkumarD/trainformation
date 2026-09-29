@@ -168,3 +168,27 @@ test('normalizeRailRadarBoard + trainsOnDate', () => {
   const fri = lib.trainsOnDate(board, new Date(2026, 9, 2));
   assert.deepEqual(fri.map(t => t.no), ['12726', '17377']);
 });
+
+test('journey dates: addDays / journeyDateFor', () => {
+  assert.equal(lib.addDays('2026-09-30', -1), '2026-09-29');
+  assert.equal(lib.addDays('2026-10-01', -2), '2026-09-29');
+  assert.equal(lib.addDays('2026-12-31', 1), '2027-01-01');
+  // 17302 reaches RNR on day 2 → the 30 Sep call belongs to the 29 Sep journey
+  assert.equal(lib.journeyDateFor('2026-09-30', 2), '2026-09-29');
+  assert.equal(lib.journeyDateFor('2026-09-30', 1), '2026-09-30');
+  assert.equal(lib.journeyDateFor('2026-09-30', undefined), '2026-09-30');
+});
+
+test('suggestJourneyDate: overnight train reaching RNR at 00:15 on day 2 (17302)', () => {
+  const at = (d, h, m) => new Date(2026, 8, d, h, m);
+  assert.equal(lib.suggestJourneyDate(2, '00:15', at(29, 21, 0)), '2026-09-29', 'evening before: tonight\'s arrival');
+  assert.equal(lib.suggestJourneyDate(2, '00:15', at(30, 0, 5)), '2026-09-29', 'just before arrival');
+  assert.equal(lib.suggestJourneyDate(2, '00:15', at(30, 1, 0)), '2026-09-29', 'shortly after arrival');
+  assert.equal(lib.suggestJourneyDate(2, '00:15', at(30, 20, 0)), '2026-09-30', 'next evening: next journey');
+});
+
+test('suggestJourneyDate: same-day train (17377 at 22:53) keeps today', () => {
+  const at = (h, m) => new Date(2026, 8, 29, h, m);
+  assert.equal(lib.suggestJourneyDate(1, '22:53', at(10, 0)), '2026-09-29');
+  assert.equal(lib.suggestJourneyDate(1, '22:53', at(23, 30)), '2026-09-29');
+});

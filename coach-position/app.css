@@ -575,3 +575,4 @@ select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);
 .train-item-meta .ti-when{flex-direction:row;align-items:center;gap:5px;flex-shrink:0;}
 #trainsList > .train-item{margin-bottom:8px;}
 .when-chip.stale{background:#FEE2E2;color:#991B1B;}
+.stn-journey-note{font-size:12px;color:#3730A3;background:#E0E7FF;border-radius:8px;padding:6px 10px;margin:4px 0 8px;}
