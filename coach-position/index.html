@@ -2646,7 +2646,7 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
   }
   const btns = document.createElement('div');
   btns.className = 'stn-btns';
-  if (shown) {
+  if (shown && canEdit()) {
     const b = document.createElement('button');
     b.className = 'btn btn-secondary stn-open-card';
     b.textContent = 'Open full card';
@@ -2660,7 +2660,7 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
     actions.innerHTML = '<button class="btn btn-secondary stn-share">⬆ Share</button><button class="btn stn-confirm">✓ Confirm</button><button class="btn btn-secondary stn-edit">✎ Edit</button>';
     btns.appendChild(actions);
 
-    if (shown.date !== todayStr()) {
+    if (shown.date < todayStr()) {
       const same = document.createElement('button');
       same.className = 'btn btn-primary btn-block stn-same-position';
       same.textContent = '↻ Same coach position — save for today';
