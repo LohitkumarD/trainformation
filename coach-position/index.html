@@ -2382,6 +2382,7 @@ let _myStnRenderSeq = 0;
 // Day shown in My station: -1 yesterday, 0 today, 1 tomorrow. Switching
 // days only re-filters the saved station board — no extra RailRadar calls.
 let _myStnOffset = 0;
+let _myStnFilter = 'all';
 function myStnDate() {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + _myStnOffset);
@@ -2501,7 +2502,18 @@ function drawMyStation(seq, code, day, dayStr, board, recOn, latestByNo) {
   const pastAll = isToday && nextIdx === -1; // every train today has gone
   const word = myStnDayWord();
 
-  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${word[0].toUpperCase() + word.slice(1)}, ${DAY_KEYS[day.getDay()].toUpperCase()} ${formatDateOnly(dayStr)}</div>`;
+  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${word[0].toUpperCase() + word.slice(1)}, ${DAY_KEYS[day.getDay()].toUpperCase()} ${formatDateOnly(dayStr)}</div>
+    <div class="stn-filters" role="group" aria-label="Filter station trains">
+      <button class="stn-filter${_myStnFilter === 'all' ? ' active' : ''}" data-filter="all">All trains</button>
+      <button class="stn-filter${_myStnFilter === 'upcoming' ? ' active' : ''}" data-filter="upcoming">Upcoming</button>
+      <button class="stn-filter${_myStnFilter === 'missing' ? ' active' : ''}" data-filter="missing">Position needed</button>
+      <button class="stn-filter${_myStnFilter === 'entered' ? ' active' : ''}" data-filter="entered">Entered</button>
+    </div>`;
+  wrap.querySelectorAll('.stn-filter').forEach(btn => btn.addEventListener('click', () => {
+    _myStnFilter = btn.dataset.filter;
+    wrap.querySelectorAll('.stn-filter').forEach(b => b.classList.toggle('active', b === btn));
+    filterMyStationRows();
+  }));
   if (!list.length) { wrap.insertAdjacentHTML('beforeend', `<div class="trains-empty">No trains call here ${word}.</div>`); return; }
 
   list.forEach((t, i) => {
@@ -2515,6 +2527,8 @@ function drawMyStation(seq, code, day, dayStr, board, recOn, latestByNo) {
     row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '');
     row.dataset.no = t.no;
     row.dataset.search = `${t.no} ${t.name} ${t.src} ${t.dst}`.toLowerCase();
+    row.dataset.position = rec ? 'entered' : 'missing';
+    row.dataset.upcoming = String(isToday && nextIdx >= 0 && i >= nextIdx);
     row.innerHTML = `
       <div class="train-item-head">
         <div class="stn-time">${escapeHtml(t.a || t.d || '')}</div>
@@ -2560,7 +2574,11 @@ function filterMyStationRows() {
   const q = ($('listSearch').value || '').trim().toLowerCase();
   let shown = 0;
   rows.forEach(r => {
-    const hit = !q || r.dataset.search.includes(q);
+    const filterHit = _myStnFilter === 'all' ||
+      (_myStnFilter === 'upcoming' && r.dataset.upcoming === 'true') ||
+      (_myStnFilter === 'missing' && r.dataset.position === 'missing') ||
+      (_myStnFilter === 'entered' && r.dataset.position === 'entered');
+    const hit = filterHit && (!q || r.dataset.search.includes(q));
     r.style.display = hit ? '' : 'none';
     if (hit) shown++;
   });
