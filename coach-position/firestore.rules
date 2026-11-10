@@ -10,6 +10,18 @@ service cloud.firestore {
            in ['staff', 'admin'];
     }
 
+    // RailRadar cache (train info + station boards) — public read so the app
+    // can show it (and use it offline). Written only by the rail-info Netlify
+    // function with the service account, which bypasses these rules.
+    match /rr_trains/{trainNo} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /rr_stations/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Train timetable — public read; only GitHub Actions / admin can write
     match /timetable/{trainNo} {
       allow read: if true;

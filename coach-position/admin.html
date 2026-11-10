@@ -387,7 +387,21 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
         <input type="text" id="train-q" placeholder="Search train no or name…" oninput="renderTrains()">
         <div class="spacer"></div>
         <span class="chip-count" id="trains-count" style="font-size:13px;"></span>
+        <button class="btn btn-sm" onclick="rrSyncPreview()" title="Fill missing names, routes and reversal stations from RailRadar">🔄 Sync with RailRadar</button>
         <button class="btn btn-primary btn-sm" onclick="openTrainModal(null)">+ Add Train</button>
+      </div>
+      <div id="rr-sync" style="display:none;border:1px solid var(--line);border-radius:10px;padding:14px;margin:0 0 14px;background:var(--s2);">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <b>🔄 RailRadar sync</b>
+          <span id="rr-sync-status" style="font-size:13px;color:var(--muted);"></span>
+          <div class="spacer"></div>
+          <button class="btn btn-primary btn-sm" id="rr-sync-apply" style="display:none" onclick="rrSyncApply()">Apply changes</button>
+          <button class="btn btn-sm" onclick="document.getElementById('rr-sync').style.display='none'">Close</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:8px 0;">Only fills what's missing: train names (incl. "TRAIN NAME" placeholders), from/to stations and reversal stations. Reversal stations you set are kept; differences are listed for you to check. Coach lists are never changed.</p>
+        <div class="tbl-wrap" style="max-height:420px;overflow:auto;">
+          <table><thead><tr><th>Train</th><th>Changes</th><th>Note</th></tr></thead><tbody id="rr-sync-body"></tbody></table>
+        </div>
       </div>
       <div class="tbl-wrap">
         <table>
@@ -2076,6 +2090,128 @@ document.addEventListener('keydown', e => {
 });
 
 let _toastTimer;
+// ── RailRadar sync: fill gaps in saved trains from RailRadar ──────────────────
+// Looks every saved train up through the rail-info function (which serves its
+// Firestore cache first, so trains already looked up cost no API call), shows
+// a preview, and writes only after "Apply". Never overwrites what's there.
+let _rrPlan = [];
+const _rrEsc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const _rrBlank = (v) => /^(train\s*name|-+|—|n\/?a)?$/i.test(String(v ?? '').trim());
+
+async function rrSyncPreview() {
+  const box = document.getElementById('rr-sync');
+  const status = document.getElementById('rr-sync-status');
+  const body = document.getElementById('rr-sync-body');
+  const applyBtn = document.getElementById('rr-sync-apply');
+  box.style.display = '';
+  applyBtn.style.display = 'none';
+  body.innerHTML = '';
+  _rrPlan = [];
+  status.textContent = 'Reading saved trains…';
+
+  const snap = await db.collection('trains').get();
+  const masters = {}, records = {};
+  snap.docs.forEach(d => {
+    const x = d.data();
+    if (/^\d{5}$/.test(d.id)) { masters[d.id] = x; return; }
+    const m = d.id.match(/^(\d{5})_\d{4}-\d{2}-\d{2}$/);
+    if (m) (records[m[1]] = records[m[1]] || []).push({ id: d.id, ...x });
+  });
+  // Trains with saved positions first — they matter most
+  const nos = [...new Set([...Object.keys(records), ...Object.keys(masters)])];
+  if (!nos.length) { status.textContent = 'No saved trains found.'; return; }
+  if (!confirm(`Look up ${nos.length} saved trains on RailRadar?\n\nTrains looked up in the last 90 days come from the saved copy and don't use your RailRadar quota. Nothing is changed until you press "Apply changes".`)) {
+    status.textContent = 'Cancelled.'; return;
+  }
+
+  let done = 0, notFound = 0, failed = 0;
+  const rows = [];
+  const lookup = async (no) => {
+    let info = null, err = '';
+    try {
+      const res = await fetch(`/.netlify/functions/rail-info?train=${no}`);
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.data) info = j.data;
+      else if (res.status === 404) { err = 'Not found on RailRadar'; notFound++; }
+      else { err = j.error || `Error ${res.status}`; failed++; }
+    } catch (e) { err = e.message; failed++; }
+    done++;
+    status.textContent = `Looking up ${done} / ${nos.length}…`;
+
+    const changes = [], notes = err ? [err] : [];
+    if (info) {
+      const m = masters[no];
+      if (m) {
+        const upd = {};
+        if (_rrBlank(m.trainName) && _rrBlank(m.name) && info.name) { upd.trainName = info.name; if ('no' in m) upd.name = info.name; }
+        if (!m.sourceCode && !m.srcCode && info.src) { upd.sourceCode = info.src; if ('no' in m) upd.srcCode = info.src; }
+        if (!m.destinationCode && !m.dstCode && info.dst) { upd.destinationCode = info.dst; if ('no' in m) upd.dstCode = info.dst; }
+        const mine = Array.isArray(m.reversalStations) ? m.reversalStations : [];
+        if (!mine.length && info.reversalStations.length) {
+          upd.reversalStations = info.reversalStations;
+          upd.reversalSource = 'railradar';
+        } else if (mine.length && mine.join(',') !== info.reversalStations.join(',')) {
+          notes.push(`Reversals differ — yours: ${mine.join(' → ')}, RailRadar: ${info.reversalStations.join(' → ') || 'none'} (kept yours)`);
+        }
+        if (Object.keys(upd).length) {
+          changes.push({ id: no, upd, text: `Train details: ${Object.entries(upd).filter(([k]) => !['name', 'srcCode', 'dstCode', 'reversalSource'].includes(k)).map(([k, v]) => `${k} = ${Array.isArray(v) ? v.join(' → ') : v}`).join(', ')}` });
+        }
+      }
+      let recFixed = 0;
+      for (const r of (records[no] || [])) {
+        const upd = {};
+        if (_rrBlank(r.trainName) && info.name) upd.trainName = info.name;
+        if (!r.fromStation && info.src) upd.fromStation = info.src;
+        if (!r.toStation && info.dst) upd.toStation = info.dst;
+        if (Object.keys(upd).length) { changes.push({ id: r.id, upd, text: '' }); recFixed++; }
+      }
+      if (recFixed) changes.push({ id: null, text: `${recFixed} saved position${recFixed === 1 ? '' : 's'}: fill name / from → to (${_rrEsc(info.src)} → ${_rrEsc(info.dst)})` });
+    }
+    rows.push({ no, name: info ? info.name : ((masters[no] || {}).trainName || ''), changes, notes });
+    _rrPlan.push(...changes.filter(c => c.id));
+  };
+  // A few at a time so it's quick but gentle on the function
+  const queue = [...nos];
+  await Promise.all([0, 1, 2].map(async () => { while (queue.length) await lookup(queue.shift()); }));
+
+  rows.sort((a, b) => (b.changes.length + b.notes.length) - (a.changes.length + a.notes.length) || a.no.localeCompare(b.no));
+  body.innerHTML = rows.map(r => `<tr>
+      <td><span class="tno">${_rrEsc(r.no)}</span><div style="font-size:11px;color:var(--muted);">${_rrEsc(r.name)}</div></td>
+      <td style="font-size:12px;">${r.changes.filter(c => c.text).map(c => _rrEsc(c.text)).join('<br>') || '<span style="color:var(--muted)">Nothing to fill</span>'}</td>
+      <td style="font-size:12px;color:#92400E;">${r.notes.map(_rrEsc).join('<br>')}</td>
+    </tr>`).join('');
+  const nDocs = _rrPlan.length;
+  status.textContent = `${nos.length} trains checked · ${nDocs} record${nDocs === 1 ? '' : 's'} to update` +
+    (notFound ? ` · ${notFound} not on RailRadar` : '') + (failed ? ` · ${failed} failed (try again later)` : '');
+  applyBtn.style.display = nDocs ? '' : 'none';
+}
+
+async function rrSyncApply() {
+  if (!_rrPlan.length) return;
+  if (!confirm(`Update ${_rrPlan.length} records now?`)) return;
+  const status = document.getElementById('rr-sync-status');
+  const applyBtn = document.getElementById('rr-sync-apply');
+  applyBtn.disabled = true;
+  try {
+    for (let i = 0; i < _rrPlan.length; i += 400) {
+      const batch = db.batch();
+      _rrPlan.slice(i, i + 400).forEach(c => batch.set(db.collection('trains').doc(c.id), c.upd, { merge: true }));
+      await batch.commit();
+      status.textContent = `Saved ${Math.min(i + 400, _rrPlan.length)} / ${_rrPlan.length}…`;
+    }
+    toast(`Updated ${_rrPlan.length} records from RailRadar`, 'ok');
+    status.textContent = `✓ Updated ${_rrPlan.length} records.`;
+    _rrPlan = [];
+    applyBtn.style.display = 'none';
+    loadTrains();
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'err');
+    status.textContent = 'Save failed: ' + e.message;
+  } finally {
+    applyBtn.disabled = false;
+  }
+}
+
 function toast(msg, type='') {
   const el = document.getElementById('toast');
   el.textContent = msg; el.className = 'show' + (type ? ' '+type : '');
