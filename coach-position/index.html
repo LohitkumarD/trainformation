@@ -2635,6 +2635,74 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
     b.addEventListener('click', () => { $('tabAll').click(); $('listSearch').value = t.no; renderTrainsList(); });
     btns.appendChild(b);
   }
+  // Give each station-board train the same record actions as its All-tab card.
+  if (shown && canEdit()) {
+    const actions = document.createElement('div');
+    actions.className = 'btn-row card-actions';
+    actions.innerHTML = '<button class="btn btn-secondary stn-share">⬆ Share</button><button class="btn stn-confirm">✓ Confirm</button><button class="btn btn-secondary stn-edit">✎ Edit</button>';
+    btns.appendChild(actions);
+
+    if (shown.date !== todayStr()) {
+      const same = document.createElement('button');
+      same.className = 'btn btn-primary btn-block';
+      same.textContent = '↻ Same coach position — save for today';
+      same.addEventListener('click', async () => {
+        const identity = getIdentity();
+        if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+        const today = todayStr();
+        if (!confirm(`Save the same coach position for today (${formatDateOnly(today)})?`)) return;
+        const key = `${t.no}_${today}`;
+        const existing = await getTrainRecord(key);
+        const coaches = (shown.parsedList || []).filter(c => !isExtraCode(c));
+        await saveTrainRecord(key, {
+          trainNo: String(t.no), trainName: t.name || '', date: today,
+          rawList: coaches.join(','), parsedList: coaches,
+          fromStation: shown.fromStation || t.srcCode || '', toStation: shown.toStation || t.dstCode || '',
+          seenAt: shown.seenAt || '', seenLeg: shown.seenLeg || 0, extras: [],
+          submittedByName: identity.name, submittedByEmail: identity.email || '',
+          submittedByPhone: identity.phone || '', submittedByStation: identity.station || '',
+          submittedByUID: identity.uid || '', updatedAt: Date.now(),
+          updateCount: (existing?.updateCount || 0) + 1, confirmations: []
+        });
+        db.collection('trains').doc(String(t.no)).set({ coaches, cpUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+        sendCpNotification(String(t.no), t.name || '', coaches);
+        toast('Saved for today ✓');
+        renderMyStation();
+      });
+      btns.appendChild(same);
+    }
+
+    const reverse = document.createElement('button');
+    reverse.className = 'btn btn-secondary btn-block';
+    reverse.textContent = '↔ Reverse coach order';
+    reverse.addEventListener('click', () => {
+      const codes = shown.parsedList || [];
+      if (codes.length < 2) { toast('No coach formation to reverse'); return; }
+      const reversed = reverseFormation(codes);
+      openSubmit(String(t.no), jd, t.name, reversed.join(','), shown.fromStation || t.srcCode, shown.toStation || t.dstCode);
+    });
+    btns.appendChild(reverse);
+
+    actions.querySelector('.stn-share').addEventListener('click', async () => {
+      await populateShareCapture(shown);
+      await shareAsImage(String(t.no), shown.date);
+    });
+    actions.querySelector('.stn-confirm').addEventListener('click', async () => {
+      const identity = getIdentity();
+      if (!identity || !identity.name) { showOverlay('identityOverlay'); toast('Set your name first'); return; }
+      const key = `${t.no}_${shown.date}`;
+      const latest = await getTrainRecord(key);
+      if (!latest) return;
+      const confirmations = (latest.confirmations || []).filter(c => c.uid !== identity.uid);
+      confirmations.push({ name: identity.name, uid: identity.uid || '', station: identity.station || '', at: Date.now() });
+      latest.confirmations = confirmations;
+      await saveTrainRecord(key, latest);
+      toast('Marked as confirmed');
+      renderMyStation();
+    });
+    actions.querySelector('.stn-edit').addEventListener('click', () =>
+      openSubmit(String(t.no), shown.date, t.name, shown.rawList, shown.fromStation || t.srcCode, shown.toStation || t.dstCode));
+  }
   // Positions are entered for today or yesterday — not for a day that hasn't happened
   // Positions can be entered once the journey has started (its journey date
   // isn't in the future) — e.g. tomorrow's 00:15 arrival of tonight's train.
