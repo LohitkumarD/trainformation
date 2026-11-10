@@ -2646,9 +2646,9 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
   }
   const btns = document.createElement('div');
   btns.className = 'stn-btns';
-  if (shown) {
+  if (shown && canEdit()) {
     const b = document.createElement('button');
-    b.className = 'btn btn-secondary';
+    b.className = 'btn btn-secondary stn-open-card';
     b.textContent = 'Open full card';
     b.addEventListener('click', () => { $('tabAll').click(); $('listSearch').value = t.no; renderTrainsList(); });
     btns.appendChild(b);
@@ -2660,9 +2660,9 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
     actions.innerHTML = '<button class="btn btn-secondary stn-share">⬆ Share</button><button class="btn stn-confirm">✓ Confirm</button><button class="btn btn-secondary stn-edit">✎ Edit</button>';
     btns.appendChild(actions);
 
-    if (shown.date !== todayStr()) {
+    if (shown.date < todayStr()) {
       const same = document.createElement('button');
-      same.className = 'btn btn-primary btn-block';
+      same.className = 'btn btn-primary btn-block stn-same-position';
       same.textContent = '↻ Same coach position — save for today';
       same.addEventListener('click', async () => {
         const identity = getIdentity();
@@ -2691,8 +2691,8 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
     }
 
     const reverse = document.createElement('button');
-    reverse.className = 'btn btn-secondary btn-block';
-    reverse.textContent = '↔ Reverse coach order';
+    reverse.className = 'btn btn-secondary stn-reverse';
+    reverse.textContent = '↔ Reverse order';
     reverse.addEventListener('click', () => {
       const codes = shown.parsedList || [];
       if (codes.length < 2) { toast('No coach formation to reverse'); return; }
@@ -2726,7 +2726,7 @@ async function fillStationTrain(body, t, rec, last, code, jd, stationDay) {
   // isn't in the future) — e.g. tomorrow's 00:15 arrival of tonight's train.
   if (canEdit() && jd <= todayStr()) {
     const b = document.createElement('button');
-    b.className = 'btn btn-primary';
+    b.className = 'btn btn-primary stn-enter-position';
     const when = jd === stationDay ? `${myStnDayWord()}'s` : `the ${formatDateOnly(jd).replace(/ \d{4}$/, '')} journey's`;
     b.textContent = rec ? `✎ Update ${when} position` : `+ Enter ${when} position`;
     b.addEventListener('click', () => openSubmit(t.no, dayStr, t.name, rec ? rec.rawList : '', t.src, t.dst));
