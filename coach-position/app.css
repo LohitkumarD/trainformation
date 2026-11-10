@@ -707,3 +707,78 @@ main{padding:0 14px calc(120px + env(safe-area-inset-bottom));gap:10px;}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;}
 }
+
+/* ── Nightline: high-contrast rail operations interface ─────────────────── */
+:root{
+  color-scheme:dark;
+  --bg:#071321;--surface:#0D1D2D;--surface-2:#11263A;--line:#233C53;
+  --text:#EDF5FB;--muted:#A5B8CA;--amber:#FFAA52;--teal:#35D4D0;
+  --green:#55D6A0;--red:#FF7777;--blue:#69B8FF;--radius:17px;
+  --shadow-card:0 9px 24px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.025);
+}
+html,body{background:#071321;color:#EDF5FB;}
+body{background-image:radial-gradient(ellipse at 50% -18%,rgba(29,106,130,.23),transparent 55%),linear-gradient(180deg,#081727 0%,#071321 46%,#0A1929 100%);background-attachment:fixed;}
+.app{background:transparent;}
+header.bar{background:rgba(7,19,33,.92);border-bottom:1px solid rgba(53,212,208,.16);box-shadow:0 8px 24px rgba(0,0,0,.2);}
+.brand{display:flex;align-items:center;gap:11px;}
+.brand-mark{width:38px;height:38px;display:grid;place-items:center;border:1px solid rgba(53,212,208,.35);border-radius:12px;background:linear-gradient(145deg,rgba(53,212,208,.17),rgba(53,212,208,.035));box-shadow:inset 0 0 18px rgba(53,212,208,.08);}
+.brand-mark svg{width:25px;height:25px;fill:none;stroke:#54E0D9;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.brand-copy{display:flex;flex-direction:column;gap:3px;}
+.brand .title{font-size:13px;letter-spacing:.14em;color:#F4FAFF;}
+.brand .sub{display:flex;align-items:center;gap:6px;color:#89A6BA;font-size:9px;font-weight:750;letter-spacing:.15em;}
+.brand .sub i{width:6px;height:6px;border-radius:50%;background:#55D6A0;box-shadow:0 0 9px #55D6A0;}
+.me{color:#DBEAF5;background:#11263A;border-color:#29465D;}
+.list-header{background:rgba(7,19,33,.91);border-bottom:1px solid rgba(56,87,111,.23);}
+.list-search,.station-input,.sheet input,.sheet textarea,.sheet select,input,textarea,select{background:#0D2032;color:#EDF5FB;border-color:#284158;}
+.list-search::placeholder,.station-input::placeholder,input::placeholder,textarea::placeholder{color:#8298AC;}
+.tabs-row{background:#0C1C2C;border:1px solid #21394F;}
+.tabs-row .tab{color:#91A9BD;}
+.tabs-row .tab.active{background:linear-gradient(145deg,#17344A,#112638);color:#63E2DC;box-shadow:inset 0 0 0 1px rgba(53,212,208,.3),0 3px 12px rgba(0,0,0,.2);}
+.tab::before{display:inline-block;margin-right:5px;color:#56DAD5;font-size:10px;vertical-align:1px;}
+#tabAll::before{content:'◉';}#tabMyStn::before{content:'⌖';}#tabFav::before{content:'✦';}#tabStation::before{content:'▤';}
+.list-count,.field-label,.card-disclaimer{color:#9EB1C3;}
+.select-toggle{background:#0E2235;color:#AFC5D7;border-color:#2A455C;}
+.train-item,.st-train{background:linear-gradient(150deg,rgba(17,38,58,.98),rgba(12,29,46,.98));border-color:#264159;box-shadow:var(--shadow-card);}
+.train-item:active,.st-train:active{border-color:#39717A;}
+.train-item-head:active{background:rgba(53,212,208,.06);}
+.train-item-meta .ti-name,.inline-name,.inline-route,.st-train-no{color:#E9F3FA;}
+.train-item-meta .ti-route,.ti-when,.inline-date,.st-days,.st-arr,.st-label,.st-train-name{color:#9DB1C4;}
+.tno-badge,.inline-tno{color:#FFC27E;background:rgba(235,128,40,.12);border-color:rgba(255,170,82,.28);}
+.star-btn{color:#8DA4B8;}.star-btn.starred{color:#FFC86C;}
+.when-chip.today,.st-today{color:#72E3B1;background:rgba(36,174,111,.17);}
+.when-chip.recent,.st-old{color:#FFD08B;background:rgba(222,147,44,.16);}
+.when-chip.old,.st-sched{color:#B3C4D3;background:#1A3044;}
+.when-chip.stale{background:rgba(224,87,87,.18);color:#FF9C9C;}
+.inline-card,.stn-body{background:linear-gradient(160deg,#0B1B2B,#0D2031);border-color:#233B51;}
+.inline-label,.seg-hd{color:#56DAD5;}
+.diff-line{background:#102C2D;color:#86E3B2;}
+.src-seen{background:#11362D;color:#86E3B2;}.src-derived{background:#1B2F49;color:#A9CCFF;}.src-sched{background:#1B2B3A;color:#B4C4D2;border-color:#526779;}
+.stn-head,.stn-time{color:#D5E5F1;}
+.stn-row .ti-route{color:#9DB4C7;}.stn-row .ti-name{color:#D9E7F1;}
+.stn-filter{background:#102338;color:#AFC2D3;border-color:#28435A;}
+.stn-filter.active,.day-chip.active{background:rgba(53,212,208,.12);color:#67E5DE;border-color:#258B91;}
+.day-chip,.btn-secondary{background:#102338;color:#D6E4EE;border-color:#2B465C;}
+.stn-next{background:#159A9A;color:#04191F;box-shadow:0 0 12px rgba(53,212,208,.22);}
+.stn-journey summary{color:#64DDD8;}
+.stn-journey-note{background:#162842;color:#BBD3FF;}.stn-note{background:#382B1D;color:#FFD08B;}
+.st-train.st-saved{background:linear-gradient(145deg,#102D37,#102438);border-color:#277C78;}
+.st-dep,.station-search-btn{color:#64E3DD;}.station-search-btn{background:linear-gradient(135deg,#117D86,#0D6573);color:#F3FFFF;}
+.btn-primary{background:linear-gradient(135deg,#F59A3C,#DE6A21);color:#17100A;box-shadow:0 5px 16px rgba(226,112,33,.22);}
+.btn-secondary{border-color:#2B465C;}.btn-ghost{color:#B2C5D5;}
+.btn:disabled{opacity:.55;}
+.fab .btn{box-shadow:0 8px 26px rgba(0,0,0,.45),0 0 22px rgba(224,106,32,.12);}
+.toast{background:#EAF6F7;color:#0E2835;}
+.offline-banner{background:#603E1B;color:#FFE0AF;}
+.app-disclaimer{color:#91A7BA;}
+.disclaimer-modal{background:rgba(1,8,15,.76);}
+.disclaimer-box,.sheet,.chip-edit-box{background:#102338;color:#EAF3FA;border-color:#2B465C;box-shadow:0 25px 70px rgba(0,0,0,.55);}
+.sheet h3,.sheet .field-label{color:#E8F2F8;}
+.sheet .hint,.hint{color:#A5B8CA;}
+.date-tab{background:#102338;color:#C1D1DE;border-color:#2B465C;}
+.date-tab.active{background:#137D83;color:#fff;border-color:#35D4D0;}
+.stn-row.open{border-color:#35747A;box-shadow:0 0 0 1px rgba(53,212,208,.10),var(--shadow-card);}
+.train-item.open{border-color:#39717A;}
+.stn-row .train-item-head{background:linear-gradient(90deg,rgba(53,212,208,.045),transparent 42%);}
+.stn-time{font-variant-numeric:tabular-nums;}
+::selection{background:rgba(53,212,208,.3);color:#fff;}
+@media(max-width:380px){.brand-mark{width:34px;height:34px}.brand .title{font-size:12px}.tabs-row .tab::before{margin-right:3px}}
