@@ -129,3 +129,12 @@ test('reverseFormation matches RailRadar per-station formations (real trains)', 
     assert.deepEqual(lib.reverseFormation(D(before)), D(after), label);
   }
 });
+
+test('nextCoachCode: next number per class for the entry keypad', () => {
+  assert.equal(lib.nextCoachCode([], 'S'), 'S1');
+  assert.equal(lib.nextCoachCode(L('SLR,GEN,S1,S2,S3'), 'S'), 'S4');
+  assert.equal(lib.nextCoachCode(L('S1,S7,S3'), 'S'), 'S8');
+  assert.equal(lib.nextCoachCode(L('BE1,BE2,SLR'), 'B'), 'B1', 'BE coaches are not B');
+  assert.equal(lib.nextCoachCode(L('HA1,A1'), 'A'), 'A2');
+  assert.equal(lib.nextCoachCode(L('HA1'), 'H'), 'H1', 'HA1 is not H');
+});

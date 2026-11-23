@@ -747,3 +747,13 @@ main{padding:0 20px 26px;gap:0;}
 }
 .stn-row.stn-is-next .train-item-head{padding-left:10px;}
 .stn-row .ti-name{white-space:normal;overflow:hidden;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;}
+
+/* ── Entry form: coach keypad + Save always in reach ─────────────────────── */
+.coach-keys{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:8px;}
+.coach-keys button{min-height:44px;border:1px solid #D5CEC2;border-radius:5px;background:#FFFEFA;color:#26362F;font:700 13px var(--mono);cursor:pointer;touch-action:manipulation;}
+.coach-keys button:active{background:#ECE4D6;transform:scale(.97);}
+.coach-keys .ck-undo{color:#B84D25;font-size:17px;}
+.coach-keys .ck-clear{font:650 12px var(--sans);color:#6F756F;}
+.sheet-savebar{position:sticky;bottom:-32px;margin:4px -20px -32px;padding:10px 20px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--surface) 82%,rgba(255,254,250,0));z-index:2;}
+.sheet-savebar .btn{min-height:50px;font-size:14px;}
+.copy-box .btn-primary{min-height:46px;font-size:13px;}

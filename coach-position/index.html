@@ -335,13 +335,18 @@
     <div class="copy-box" id="sCopyBox">
       <div class="copy-box-label">📋 PREVIOUS FORMATION FOUND — <span id="sCopyDate"></span></div>
       <div class="strip-wrap"><div class="strip" id="sCopyStrip" style="min-height:44px"></div></div>
-      <button type="button" class="btn btn-ghost btn-block" id="sCopyBtn">Copy this formation into form</button>
+      <button type="button" class="btn btn-primary btn-block" id="sCopyBtn">Use this formation</button>
     </div>
 
     <div>
       <label class="field-label">Coach list (after engine — ENG is added automatically)</label>
       <textarea id="sList" rows="2" placeholder="LPR,2GEN,HA1,A1,B1-B3,PC,S1-S7,GEN,SLRD"></textarea>
       <p class="hint">Comma-separate. Use count prefix for repeats (2GEN) and dash for ranges (S1-S7). <button class="legend-link" id="legendLink">See standard codes →</button></p>
+      <div class="coach-keys" id="sKeys" aria-label="Add a coach">
+        <button type="button" data-k="GEN">GEN</button><button type="button" data-k="SLR">SLR</button><button type="button" data-k="SLRD">SLRD</button><button type="button" data-k="LPR">LPR</button><button type="button" data-k="PC">PC</button>
+        <button type="button" data-k="S+">S+</button><button type="button" data-k="B+">B+</button><button type="button" data-k="A+">A+</button><button type="button" data-k="H+">H+</button><button type="button" data-k="D+">D+</button>
+        <button type="button" data-k="C+">C+</button><button type="button" data-k="M+">M+</button><button type="button" data-k="EOG">EOG</button><button type="button" class="ck-undo" data-k="undo" aria-label="Remove last coach">⌫</button><button type="button" class="ck-clear" data-k="clear">Clear</button>
+      </div>
     </div>
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
@@ -350,7 +355,7 @@
       </div>
       <div class="strip-wrap"><div class="strip preview-strip" id="sPreview"></div></div>
     </div>
-    <button class="btn btn-primary btn-block" id="sSaveBtn">Save</button>
+    <div class="sheet-savebar"><button class="btn btn-primary btn-block" id="sSaveBtn">Save</button></div>
   </div>
 </div>
 
@@ -1225,6 +1230,8 @@ function showChipEditDialog(index, codes, onSave) {
 
 function renderPreview() {
   const codes = withEng(parseCompressed($('sList').value));
+  const n = codes.length - 1; // ENG not counted
+  $('sSaveBtn').textContent = n > 0 ? `Save · ${n} coach${n === 1 ? '' : 'es'}` : 'Save';
   renderStrip($('sPreview'), codes, (i, allCodes) => {
     showChipEditDialog(i, allCodes, (newCodes) => {
       $('sList').value = stripEngRaw(newCodes.join(','));
@@ -3269,6 +3276,21 @@ $('sTrainNo').addEventListener('input', () => {
   }, 600);
 });
 $('legendLink').addEventListener('click', () => showOverlay('legendOverlay'));
+// Coach keypad: build the list by tapping instead of typing on the phone
+// keyboard. "S+" adds the next sleeper number (S1, S2, …), ⌫ removes the last.
+$('sKeys').addEventListener('click', (e) => {
+  const k = e.target.closest('button') && e.target.closest('button').dataset.k;
+  if (!k) return;
+  let codes = parseCompressed(stripEngRaw($('sList').value));
+  if (k === 'undo') codes.pop();
+  else if (k === 'clear') { if (codes.length && !confirm('Clear all coaches?')) return; codes = []; }
+  else if (k.endsWith('+')) codes.push(nextCoachCode(codes, k[0]));
+  else codes.push(k);
+  $('sList').value = codes.join(',');
+  if (codes.length) $('sCopyBox').classList.remove('show'); // building their own list
+  renderPreview();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
 $('sReverseBtn').addEventListener('click', () => {
   // ENG is implicit and stays at position 1 — only coaches reverse
   const codes = parseCompressed(stripEngRaw($('sList').value));

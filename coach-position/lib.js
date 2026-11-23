@@ -382,8 +382,17 @@ const REV_COLOURS = [
 ];
 const LEG0_COLOUR = { c: '#D97706', dark: '#92400E', soft: '#FEF3E2' };
 
+// Next numbered coach of a class for the entry keypad: S1..S7 → S8, none → S1.
+// Only exact "<letter><number>" codes count, so BE1 or HA1 don't bump B or H.
+function nextCoachCode(codes, letter) {
+  const re = new RegExp('^' + letter + '(\\d+)$', 'i');
+  let max = 0;
+  (codes || []).forEach(c => { const m = re.exec(String(c)); if (m) max = Math.max(max, Number(m[1])); });
+  return letter.toUpperCase() + (max + 1);
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { pad2, MONTHS, formatDateOnly, formatTime, formatDateTime, parseCompressed, stripEngRaw, withEng, classOf, expandCoaches, reverseFormation, reverseAligned, lcsDiff, diffFormation, escapeHtml, REV_COLOURS, LEG0_COLOUR,
+  module.exports = { nextCoachCode, pad2, MONTHS, formatDateOnly, formatTime, formatDateTime, parseCompressed, stripEngRaw, withEng, classOf, expandCoaches, reverseFormation, reverseAligned, lcsDiff, diffFormation, escapeHtml, REV_COLOURS, LEG0_COLOUR,
     EXTRA_KINDS, isExtraCode, normalizeRailRadarTrain, normalizeRailRadarBoard, trainsOnDate, legOfStation, computeLegs,
     addDays, journeyDateFor, suggestJourneyDate };
 }
