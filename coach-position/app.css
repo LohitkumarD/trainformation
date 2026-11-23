@@ -757,3 +757,9 @@ main{padding:0 20px 26px;gap:0;}
 .sheet-savebar{position:sticky;bottom:-32px;margin:4px -20px -32px;padding:10px 20px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--surface) 82%,rgba(255,254,250,0));z-index:2;}
 .sheet-savebar .btn{min-height:50px;font-size:14px;}
 .copy-box .btn-primary{min-height:46px;font-size:13px;}
+
+/* ── Station: earlier trains folded, countdown on what's coming ─────────── */
+.stn-earlier-btn{display:block;width:100%;min-height:44px;margin:0;padding:10px 1px;border:0;border-bottom:1px solid #D8D0C3;background:transparent;color:#27675E;font:650 12.5px var(--sans);text-align:left;cursor:pointer;}
+.stn-eta{font-size:11.5px;font-weight:700;color:#27675E;white-space:nowrap;}
+.stn-is-next .stn-eta{color:#B84D25;}
+body.tab-mystn .list-meta-row{display:none;}
