@@ -702,3 +702,48 @@ main{padding:0 20px 26px;gap:0;}
   .stn-btns>.stn-enter-position{font-size:11px;}
 }
 @media(prefers-reduced-motion:reduce){.train-item-body{transition:none;}}
+
+/* ── Readability on the platform: larger small text, clearer next train ──── */
+.tabs-row .tab{font-size:13px;}
+.list-count{font-size:12px;}
+.select-toggle{font-size:12px;}
+.train-item-meta .ti-route,.stn-row .ti-route{font-size:12px;}
+.stn-row .ti-name{font-size:13.5px;}
+.ti-when,.when-chip{font-size:11.5px;}
+.stn-st{font-size:11.5px;}
+.stn-next{font-size:10.5px;font-weight:800;}
+.stn-filter{font-size:12px;min-height:36px;}
+.day-chip{font-size:13px;}
+.inline-label,.seg-hd{font-size:10.5px;}
+.card-disclaimer,.meta-line{font-size:11.5px;}
+.btn{font-size:13px;}
+.contribute-banner .cb-title{font-size:13px;}
+.contribute-banner .cb-body{font-size:12px;}
+.contribute-banner .btn{font-size:12px;}
+.app-disclaimer{font-size:10.5px;}
+.stn-journey-note,.stn-note{font-size:12px;}
+.stn-journey summary{font-size:12.5px;}
+.stn-btns>.stn-enter-position{font-size:13px;}
+.stn-btns>.stn-same-position,.stn-btns .card-actions .btn,.stn-btns>.stn-open-card,.stn-btns>.stn-reverse{font-size:12px;}
+/* Past trains: quieter, but still readable */
+.stn-past{opacity:.72;}
+/* The next train to arrive */
+.stn-row.stn-is-next{background:rgba(184,77,37,.06);box-shadow:inset 3px 0 0 #B84D25;}
+.stn-row.stn-is-next .stn-time{color:#B84D25;}
+/* Station header: name + date, with a quiet "Change station" */
+.stn-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 1px 6px;font-size:13px;}
+.stn-head-date{display:block;margin-top:2px;font-size:12px;color:#6F756F;}
+.stn-change{flex:0 0 auto;min-height:36px;padding:6px 0;border:0;background:transparent;color:#27675E;font:650 12px var(--sans);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}
+/* Open card in the list: the row above already shows number, name, route */
+#trainsList .train-item .inline-label,
+#trainsList .train-item .inline-tno,
+#trainsList .train-item .inline-name,
+#trainsList .train-item .inline-route{display:none;}
+#trainsList .train-item .inline-head{justify-content:flex-end;}
+@media(max-width:430px){
+  .tabs-row .tab{font-size:12.5px;}
+  .stn-btns .card-actions .btn{font-size:11.5px;}
+  .stn-btns>.stn-enter-position{font-size:12.5px;}
+}
+.stn-row.stn-is-next .train-item-head{padding-left:10px;}
+.stn-row .ti-name{white-space:normal;overflow:hidden;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25;}

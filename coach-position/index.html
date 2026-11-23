@@ -2341,7 +2341,7 @@ $('tabMyStn').addEventListener('click', () => {
   ['tabAll', 'tabFav', 'tabStation'].forEach(id => $(id).classList.remove('active'));
   $('tabMyStn').classList.add('active');
   $('stationBar').classList.remove('visible');
-  $('myStnBar').classList.add('visible');
+  $('myStnBar').classList.toggle('visible', !getMyStation());
   $('myStnDays').classList.add('visible');
   _myStnOffset = 0;
   document.querySelectorAll('#myStnDays .day-chip').forEach(b => b.classList.toggle('active', b.dataset.off === '0'));
@@ -2366,6 +2366,7 @@ $('myStnSet').addEventListener('click', () => {
   if (!/^[A-Z]{2,7}$/.test(code)) { toast('Enter a station code, e.g. RNR'); return; }
   setMyStation(code);
   logUsage('my_station_set', { station: code });
+  $('myStnBar').classList.remove('visible');
   renderMyStation();
 });
 $('myStnInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('myStnSet').click(); });
@@ -2454,6 +2455,7 @@ async function renderMyStation() {
   if (seq !== _myStnRenderSeq || activeTab !== 'mystn') return;
   if (!board) {
     if (!wrap.querySelector('.stn-row')) {
+      $('myStnBar').classList.add('visible'); // let them correct the code
       wrap.innerHTML = `<div class="trains-empty">Couldn't load trains for ${escapeHtml(code)}.<br><span style="font-size:11px">Check the station code, or try again when online.</span></div>`;
     }
     return;
@@ -2491,7 +2493,7 @@ function drawMyStation(seq, code, day, dayStr, board, recOn, latestByNo) {
     const r = (recOn[jd] && recOn[jd][t.no]) || lastRec[t.no];
     return [t.no, r ? r.date + ':' + (r.updatedAt || 0) : ''];
   })]);
-  if (wrap.dataset.sig === sig && wrap.querySelector('.stn-row')) return; // nothing new
+  if (wrap.dataset.sig === sig && wrap.querySelector('.stn-row')) { filterMyStationRows(); return; } // nothing new (refresh the count)
   const reopen = [...wrap.querySelectorAll('.stn-row.open')].map(r => r.dataset.no);
   const scrollY = window.scrollY;
   wrap.dataset.sig = sig;
@@ -2502,13 +2504,18 @@ function drawMyStation(seq, code, day, dayStr, board, recOn, latestByNo) {
   const pastAll = isToday && nextIdx === -1; // every train today has gone
   const word = myStnDayWord();
 
-  wrap.innerHTML = `<div class="stn-head">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)}) · ${word[0].toUpperCase() + word.slice(1)}, ${DAY_KEYS[day.getDay()].toUpperCase()} ${formatDateOnly(dayStr)}</div>
+  wrap.innerHTML = `<div class="stn-head"><div class="stn-head-txt">📍 <b>${escapeHtml(board.name)}</b> (${escapeHtml(board.code)})<span class="stn-head-date">${word[0].toUpperCase() + word.slice(1)} · ${DAY_KEYS[day.getDay()].toUpperCase()} ${formatDateOnly(dayStr)}</span></div><button class="stn-change" type="button">Change station</button></div>
     <div class="stn-filters" role="group" aria-label="Filter station trains">
       <button class="stn-filter${_myStnFilter === 'all' ? ' active' : ''}" data-filter="all">All trains</button>
       <button class="stn-filter${_myStnFilter === 'upcoming' ? ' active' : ''}" data-filter="upcoming">Upcoming</button>
       <button class="stn-filter${_myStnFilter === 'missing' ? ' active' : ''}" data-filter="missing">Position needed</button>
       <button class="stn-filter${_myStnFilter === 'entered' ? ' active' : ''}" data-filter="entered">Entered</button>
     </div>`;
+  wrap.querySelector('.stn-change').addEventListener('click', () => {
+    $('myStnBar').classList.add('visible');
+    $('myStnInput').value = '';
+    $('myStnInput').focus();
+  });
   wrap.querySelectorAll('.stn-filter').forEach(btn => btn.addEventListener('click', () => {
     _myStnFilter = btn.dataset.filter;
     wrap.querySelectorAll('.stn-filter').forEach(b => b.classList.toggle('active', b === btn));
@@ -2524,7 +2531,7 @@ function drawMyStation(seq, code, day, dayStr, board, recOn, latestByNo) {
       : last ? `<span class="stn-st st-old">Last: ${relDayLabel(last.date)}</span>`
       : '<span class="stn-st st-sched">Scheduled only</span>';
     const row = document.createElement('div');
-    row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '');
+    row.className = 'train-item stn-row' + ((nextIdx >= 0 && i < nextIdx) || pastAll || _myStnOffset < 0 ? ' stn-past' : '') + (i === nextIdx ? ' stn-is-next' : '');
     row.dataset.no = t.no;
     row.dataset.search = `${t.no} ${t.name} ${t.src} ${t.dst}`.toLowerCase();
     row.dataset.position = rec ? 'entered' : 'missing';
